@@ -1,0 +1,233 @@
+package cmd
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// chdir changes the process working directory to dir and restores it after the test.
+func chdir(t *testing.T, dir string) {
+	t.Helper()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(orig) })
+}
+
+func writeConfig(t *testing.T, dir, main string) {
+	t.Helper()
+	cfg := Config{Main: main, AuxDir: ".aux_dir"}
+	data, _ := json.MarshalIndent(cfg, "", "  ")
+	if err := os.WriteFile(filepath.Join(dir, ".el.json"), data, 0644); err != nil {
+		t.Fatalf("writeConfig: %v", err)
+	}
+}
+
+func skipIfToolMissing(t *testing.T, name string) {
+	t.Helper()
+	if _, err := findTool(name); err != nil {
+		t.Skipf("%s not available", name)
+	}
+}
+
+// --- Unit tests for detectBibTool ---
+
+func TestDetectBibTool_NoAuxFile(t *testing.T) {
+	tool, err := detectBibTool("main", t.TempDir())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tool != "" {
+		t.Errorf("tool = %q, want empty", tool)
+	}
+}
+
+func TestDetectBibTool_NoBib(t *testing.T) {
+	auxDir := t.TempDir()
+	os.WriteFile(filepath.Join(auxDir, "main.aux"), []byte(`\relax`), 0644)
+
+	tool, err := detectBibTool("main", auxDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tool != "" {
+		t.Errorf("tool = %q, want empty", tool)
+	}
+}
+
+func TestDetectBibTool_Bibtex(t *testing.T) {
+	auxDir := t.TempDir()
+	os.WriteFile(filepath.Join(auxDir, "main.aux"), []byte(`\bibdata{refs}`), 0644)
+
+	tool, err := detectBibTool("main", auxDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tool != "bibtex" {
+		t.Errorf("tool = %q, want %q", tool, "bibtex")
+	}
+}
+
+func TestDetectBibTool_Biber(t *testing.T) {
+	auxDir := t.TempDir()
+	os.WriteFile(filepath.Join(auxDir, "main.bcf"), []byte(`<?xml?>`), 0644)
+
+	tool, err := detectBibTool("main", auxDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tool != "biber" {
+		t.Errorf("tool = %q, want %q", tool, "biber")
+	}
+}
+
+func TestDetectBibTool_BcfTakesPrecedenceOverAux(t *testing.T) {
+	auxDir := t.TempDir()
+	// Both present: .bcf should win
+	os.WriteFile(filepath.Join(auxDir, "main.bcf"), []byte(`<?xml?>`), 0644)
+	os.WriteFile(filepath.Join(auxDir, "main.aux"), []byte(`\bibdata{refs}`), 0644)
+
+	tool, err := detectBibTool("main", auxDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tool != "biber" {
+		t.Errorf("tool = %q, want %q", tool, "biber")
+	}
+}
+
+// --- Error case tests (no pdflatex needed) ---
+
+func TestRunCompile_NotInitialized(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCompile(nil, nil); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestRunCompile_MissingMainFile(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "missing.tex")
+	os.MkdirAll(filepath.Join(dir, ".aux_dir"), 0755)
+	chdir(t, dir)
+
+	if err := runCompile(nil, nil); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// --- Integration tests ---
+
+const texNoBib = `\documentclass{article}
+\begin{document}
+Hello world.
+\end{document}
+`
+
+const texBibtex = `\documentclass{article}
+\begin{document}
+A citation~\cite{knuth1984}.
+\bibliographystyle{plain}
+\bibliography{refs}
+\end{document}
+`
+
+const texBiber = `\documentclass{article}
+\usepackage[backend=biber]{biblatex}
+\addbibresource{refs.bib}
+\begin{document}
+A citation~\cite{knuth1984}.
+\printbibliography
+\end{document}
+`
+
+const bibKnuth = `@book{knuth1984,
+  author    = {Donald E. Knuth},
+  title     = {The TeXbook},
+  year      = {1984},
+  publisher = {Addison-Wesley}
+}
+`
+
+func setupCompileDir(t *testing.T, texContent, bibContent string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "main.tex"), []byte(texContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if bibContent != "" {
+		if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(bibContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeConfig(t, dir, "main.tex")
+	os.MkdirAll(filepath.Join(dir, ".aux_dir"), 0755)
+	return dir
+}
+
+func assertPDFSymlink(t *testing.T) {
+	t.Helper()
+	info, err := os.Lstat("main.pdf")
+	if err != nil {
+		t.Fatalf("main.pdf not created: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Error("main.pdf is not a symlink")
+	}
+	target, _ := os.Readlink("main.pdf")
+	if !strings.Contains(target, ".aux_dir") {
+		t.Errorf("symlink target %q does not point into .aux_dir", target)
+	}
+}
+
+func assertBBLContains(t *testing.T, entry string) {
+	t.Helper()
+	bbl, err := os.ReadFile(filepath.Join(".aux_dir", "main.bbl"))
+	if err != nil {
+		t.Fatalf("main.bbl not found: %v", err)
+	}
+	if !strings.Contains(string(bbl), entry) {
+		t.Errorf("main.bbl does not contain %q", entry)
+	}
+}
+
+func TestRunCompile_NoBib(t *testing.T) {
+	skipIfToolMissing(t, "pdflatex")
+	chdir(t, setupCompileDir(t, texNoBib, ""))
+
+	if err := runCompile(nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertPDFSymlink(t)
+}
+
+func TestRunCompile_Bibtex(t *testing.T) {
+	skipIfToolMissing(t, "pdflatex")
+	skipIfToolMissing(t, "bibtex")
+	chdir(t, setupCompileDir(t, texBibtex, bibKnuth))
+
+	if err := runCompile(nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertPDFSymlink(t)
+	assertBBLContains(t, "knuth1984")
+}
+
+func TestRunCompile_Biber(t *testing.T) {
+	skipIfToolMissing(t, "pdflatex")
+	skipIfToolMissing(t, "biber")
+	chdir(t, setupCompileDir(t, texBiber, bibKnuth))
+
+	if err := runCompile(nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertPDFSymlink(t)
+	assertBBLContains(t, "knuth1984")
+}
