@@ -24,6 +24,13 @@ $ el compile
 Compiled successfully -> thesis.pdf
 ```
 
+If the document uses a bibliography, `el` automatically detects the required tool and runs the full compilation sequence:
+
+- `\bibliography{}` (natbib, plain bibtex) → `pdflatex` → `bibtex` → `pdflatex`
+- `\usepackage{biblatex}` → `pdflatex` → `biber` → `pdflatex`
+
+Detection is based on the auxiliary files produced by the first `pdflatex` pass (`.bcf` for biber, `\bibdata` in `.aux` for bibtex), so it works regardless of whether the bibliography is defined in a separate `.bib` file or embedded in the document.
+
 Use `-o` / `--open` to open the PDF immediately after compilation:
 
 ```
@@ -47,14 +54,14 @@ This places the `el` binary in `~/go/bin`. Make sure that directory is in your `
 export PATH="$HOME/go/bin:$PATH"
 ```
 
-### pdflatex not in PATH?
+### TeX tools not in PATH?
 
-On macOS, TeX Live installs `pdflatex` to `/Library/TeX/texbin/`. `el` checks this location automatically as a fallback, so it works even if you haven't added it to your `$PATH`.
+On macOS, TeX Live installs its binaries to `/Library/TeX/texbin/`. `el` checks this location automatically as a fallback for `pdflatex`, `bibtex`, and `biber`, so it works even if you haven't added it to your `$PATH`.
 
-## Project files
+## What `el` adds to your project
 
-| File | Description |
-|------|-------------|
-| `.el.json` | Project config (main tex file, aux dir). Commit this. |
-| `.aux_dir/` | pdflatex auxiliary files. Generated, do not commit. |
-| `thesis.pdf` | Symlink to `.aux_dir/thesis.pdf`. Generated, do not commit. |
+Running `el init` and `el compile` in a LaTeX project creates three things, all gitignored by default:
+
+- **`.el.json`** — stores which `.tex` file is the main document
+- **`.aux_dir/`** — all pdflatex/bibtex/biber intermediate files go here instead of cluttering the project root
+- **`<name>.pdf`** — a symlink pointing into `.aux_dir/`; named after your main `.tex` file; open this in your PDF viewer
