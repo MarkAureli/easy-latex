@@ -54,8 +54,12 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	stem := filepath.Base(strings.TrimSuffix(cfg.Main, ".tex"))
 
-	// First pdflatex pass
-	if err := runPdflatex(pdflatex, cfg); err != nil {
+	// First pdflatex pass — buffer output; only print if no bib tool runs,
+	// since bib-related warnings (undefined citations, references) are expected
+	// at this stage and will be resolved by the subsequent bib tool pass.
+	firstLines, err := runPdflatex(pdflatex, cfg)
+	if err != nil {
+		printLines(firstLines)
 		return err
 	}
 
@@ -69,9 +73,23 @@ func runCompile(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		// Second pdflatex pass to incorporate bibliography
-		if err := runPdflatex(pdflatex, cfg); err != nil {
+		secondLines, err := runPdflatex(pdflatex, cfg)
+		if err != nil {
+			printLines(secondLines)
 			return err
 		}
+		// If labels shifted, a third pass is needed to stabilize cross-references
+		if needsRerun(secondLines) {
+			thirdLines, err := runPdflatex(pdflatex, cfg)
+			printLines(thirdLines)
+			if err != nil {
+				return err
+			}
+		} else {
+			printLines(secondLines)
+		}
+	} else {
+		printLines(firstLines)
 	}
 
 	pdfName := stem + ".pdf"
@@ -92,7 +110,37 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runPdflatex(pdflatex string, cfg *Config) error {
+var rerunPattern = regexp.MustCompile(`(?i)rerun`)
+
+func needsRerun(lines []string) bool {
+	for _, line := range lines {
+		if rerunPattern.MatchString(line) {
+			return true
+		}
+	}
+	return false
+}
+
+func filterLines(output []byte) []string {
+	var lines []string
+	for _, line := range strings.Split(string(output), "\n") {
+		for _, pat := range keepPatterns {
+			if pat.MatchString(line) {
+				lines = append(lines, line)
+				break
+			}
+		}
+	}
+	return lines
+}
+
+func printLines(lines []string) {
+	for _, line := range lines {
+		fmt.Println(line)
+	}
+}
+
+func runPdflatex(pdflatex string, cfg *Config) ([]string, error) {
 	c := exec.Command(pdflatex,
 		"-interaction=nonstopmode",
 		"-file-line-error",
@@ -100,20 +148,11 @@ func runPdflatex(pdflatex string, cfg *Config) error {
 		cfg.Main,
 	)
 	output, runErr := c.CombinedOutput()
-
-	for _, line := range strings.Split(string(output), "\n") {
-		for _, pat := range keepPatterns {
-			if pat.MatchString(line) {
-				fmt.Println(line)
-				break
-			}
-		}
-	}
-
+	lines := filterLines(output)
 	if runErr != nil {
-		return fmt.Errorf("compilation failed")
+		return lines, fmt.Errorf("compilation failed")
 	}
-	return nil
+	return lines, nil
 }
 
 // detectBibTool inspects the aux directory after a pdflatex pass to determine
@@ -159,16 +198,7 @@ func runBibTool(tool, stem, auxDir string) error {
 	}
 
 	output, runErr := c.CombinedOutput()
-
-	for _, line := range strings.Split(string(output), "\n") {
-		for _, pat := range keepPatterns {
-			if pat.MatchString(line) {
-				fmt.Println(line)
-				break
-			}
-		}
-	}
-
+	printLines(filterLines(output))
 	if runErr != nil {
 		return fmt.Errorf("%s failed", tool)
 	}
