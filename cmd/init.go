@@ -65,7 +65,61 @@ func doInit(dir string, stdin io.Reader) error {
 		return fmt.Errorf("cannot write .el.json: %w", err)
 	}
 
+	if err := updateGitExclude(dir); err != nil {
+		return err
+	}
+
 	fmt.Printf("Initialized. Main file: %s\n", chosen)
+	return nil
+}
+
+// updateGitExclude appends .aux_dir and .el.json to .git/info/exclude if a
+// .git directory is present and the entries are not already listed.
+func updateGitExclude(dir string) error {
+	gitDir := filepath.Join(dir, ".git")
+	if _, err := os.Stat(gitDir); err != nil {
+		return nil // not a git repo, nothing to do
+	}
+
+	excludePath := filepath.Join(gitDir, "info", "exclude")
+
+	// Read existing entries to avoid duplicates
+	existing := map[string]bool{}
+	data, readErr := os.ReadFile(excludePath)
+	if readErr == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			existing[strings.TrimSpace(line)] = true
+		}
+	}
+
+	var toAdd []string
+	for _, entry := range []string{".aux_dir", ".el.json"} {
+		if !existing[entry] {
+			toAdd = append(toAdd, entry)
+		}
+	}
+	if len(toAdd) == 0 {
+		return nil
+	}
+
+	if err := os.MkdirAll(filepath.Join(gitDir, "info"), 0755); err != nil {
+		return fmt.Errorf("cannot create .git/info: %w", err)
+	}
+
+	f, err := os.OpenFile(excludePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("cannot open .git/info/exclude: %w", err)
+	}
+	defer f.Close()
+
+	// Ensure we start on a fresh line if the file already has content
+	if readErr == nil && len(data) > 0 && data[len(data)-1] != '\n' {
+		fmt.Fprintln(f)
+	}
+	for _, entry := range toAdd {
+		fmt.Fprintln(f, entry)
+	}
+
 	return nil
 }
 

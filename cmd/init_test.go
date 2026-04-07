@@ -146,6 +146,130 @@ func TestDoInit_Idempotent(t *testing.T) {
 	}
 }
 
+// --- Tests for updateGitExclude ---
+
+func makeGitRepo(t *testing.T, dir string) string {
+	t.Helper()
+	gitDir := filepath.Join(dir, ".git")
+	if err := os.MkdirAll(filepath.Join(gitDir, "info"), 0755); err != nil {
+		t.Fatalf("makeGitRepo: %v", err)
+	}
+	return gitDir
+}
+
+func readExclude(t *testing.T, gitDir string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(gitDir, "info", "exclude"))
+	if err != nil {
+		t.Fatalf("readExclude: %v", err)
+	}
+	return string(data)
+}
+
+func TestUpdateGitExclude_NoGitDir(t *testing.T) {
+	// Should succeed silently when there is no .git directory
+	if err := updateGitExclude(t.TempDir()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestUpdateGitExclude_AddsEntries(t *testing.T) {
+	dir := t.TempDir()
+	gitDir := makeGitRepo(t, dir)
+
+	if err := updateGitExclude(dir); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	content := readExclude(t, gitDir)
+	for _, entry := range []string{".aux_dir", ".el.json"} {
+		if !strings.Contains(content, entry) {
+			t.Errorf("exclude missing %q", entry)
+		}
+	}
+}
+
+func TestUpdateGitExclude_NoDuplicates(t *testing.T) {
+	dir := t.TempDir()
+	gitDir := makeGitRepo(t, dir)
+
+	// Pre-populate exclude with both entries
+	existing := ".aux_dir\n.el.json\n"
+	os.WriteFile(filepath.Join(gitDir, "info", "exclude"), []byte(existing), 0644)
+
+	if err := updateGitExclude(dir); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	content := readExclude(t, gitDir)
+	if strings.Count(content, ".aux_dir") != 1 {
+		t.Errorf(".aux_dir appears more than once in exclude:\n%s", content)
+	}
+	if strings.Count(content, ".el.json") != 1 {
+		t.Errorf(".el.json appears more than once in exclude:\n%s", content)
+	}
+}
+
+func TestUpdateGitExclude_AddsOnlyMissing(t *testing.T) {
+	dir := t.TempDir()
+	gitDir := makeGitRepo(t, dir)
+
+	// Pre-populate with only one entry
+	os.WriteFile(filepath.Join(gitDir, "info", "exclude"), []byte(".aux_dir\n"), 0644)
+
+	if err := updateGitExclude(dir); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	content := readExclude(t, gitDir)
+	if strings.Count(content, ".aux_dir") != 1 {
+		t.Errorf(".aux_dir appears more than once in exclude:\n%s", content)
+	}
+	if !strings.Contains(content, ".el.json") {
+		t.Errorf("exclude missing .el.json:\n%s", content)
+	}
+}
+
+func TestUpdateGitExclude_NoTrailingNewlineHandled(t *testing.T) {
+	dir := t.TempDir()
+	gitDir := makeGitRepo(t, dir)
+
+	// File exists but has no trailing newline
+	os.WriteFile(filepath.Join(gitDir, "info", "exclude"), []byte("# comment"), 0644)
+
+	if err := updateGitExclude(dir); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	content := readExclude(t, gitDir)
+	// Entries must appear as whole lines, not concatenated with "# comment"
+	for _, line := range strings.Split(content, "\n") {
+		if line == "# comment.aux_dir" || line == "# comment.el.json" {
+			t.Errorf("entry was concatenated with existing content: %q", line)
+		}
+	}
+	if !strings.Contains(content, ".aux_dir") {
+		t.Errorf("exclude missing .aux_dir")
+	}
+}
+
+func TestDoInit_UpdatesGitExclude(t *testing.T) {
+	dir := t.TempDir()
+	gitDir := makeGitRepo(t, dir)
+	writeTeX(t, dir, "main.tex", `\begin{document}`)
+
+	if err := doInit(dir, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	content := readExclude(t, gitDir)
+	for _, entry := range []string{".aux_dir", ".el.json"} {
+		if !strings.Contains(content, entry) {
+			t.Errorf("exclude missing %q after init", entry)
+		}
+	}
+}
+
 func TestHasBeginDocument(t *testing.T) {
 	dir := t.TempDir()
 
