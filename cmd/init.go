@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,7 +19,11 @@ var initCmd = &cobra.Command{
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	entries, err := os.ReadDir(".")
+	return doInit(".", os.Stdin)
+}
+
+func doInit(dir string, stdin io.Reader) error {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("cannot read current directory: %w", err)
 	}
@@ -27,7 +33,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tex") {
 			continue
 		}
-		if hasBeginDocument(e.Name()) {
+		if hasBeginDocument(filepath.Join(dir, e.Name())) {
 			matches = append(matches, e.Name())
 		}
 	}
@@ -39,13 +45,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 	case 1:
 		chosen = matches[0]
 	default:
-		chosen, err = pickFile(matches)
+		chosen, err = pickFile(matches, stdin)
 		if err != nil {
 			return err
 		}
 	}
 
-	if err := os.MkdirAll(".aux_dir", 0755); err != nil {
+	auxDir := filepath.Join(dir, ".aux_dir")
+	if err := os.MkdirAll(auxDir, 0755); err != nil {
 		return fmt.Errorf("cannot create .aux_dir: %w", err)
 	}
 
@@ -54,7 +61,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(".el.json", data, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".el.json"), data, 0644); err != nil {
 		return fmt.Errorf("cannot write .el.json: %w", err)
 	}
 
@@ -78,13 +85,13 @@ func hasBeginDocument(filename string) bool {
 	return false
 }
 
-func pickFile(files []string) (string, error) {
+func pickFile(files []string, stdin io.Reader) (string, error) {
 	fmt.Println("Found multiple .tex files with \\begin{document}:")
 	for i, f := range files {
 		fmt.Printf("  [%d] %s\n", i+1, f)
 	}
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := bufio.NewReader(stdin)
 	for {
 		fmt.Printf("Enter number (1-%d): ", len(files))
 		line, err := reader.ReadString('\n')
