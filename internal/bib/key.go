@@ -210,8 +210,8 @@ func firstAuthorLastName(s string) string {
 	s = strings.TrimSpace(s)
 
 	// "Last, First" — take everything before the comma.
-	if i := strings.Index(s, ","); i >= 0 {
-		return strings.TrimSpace(s[:i])
+	if last, _, ok := strings.Cut(s, ","); ok {
+		return strings.TrimSpace(last)
 	}
 
 	// "First Last" — take the last whitespace-separated token.
@@ -225,14 +225,23 @@ func firstAuthorLastName(s string) string {
 //
 //	{FirstAuthorLastNameCamelCase}{Year}{TitleCamelCase}
 //
+// For @unpublished entries, year is optional: if absent the key is
+// {LastName}{Title}. For all other known types all three components are
+// required; the entry's existing key is returned if any is empty.
 // LaTeX accents are resolved to ASCII; math mode and other special characters
-// are stripped. Falls back to the entry's existing key if any component is empty.
+// are stripped.
 func GenerateKey(e Entry) string {
 	lastName := toCamelCase(latexToASCII(firstAuthorLastName(FieldValue(e, "author"))))
 	year := reSplit.ReplaceAllString(FieldValue(e, "year"), "")
 	title := toCamelCase(latexToASCII(FieldValue(e, "title")))
 
-	if lastName == "" || year == "" || title == "" {
+	if lastName == "" || title == "" {
+		return e.Key
+	}
+	if e.Type == "unpublished" && year == "" {
+		return lastName + title
+	}
+	if year == "" {
 		return e.Key
 	}
 	return lastName + year + title

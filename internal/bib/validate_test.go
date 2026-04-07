@@ -416,9 +416,9 @@ func TestWarnMissingFields_OptionalFieldsAbsent(t *testing.T) {
 	}
 }
 
-// ── normalizeArticleFields ────────────────────────────────────────────────────
+// ── normalizeEntryFields ──────────────────────────────────────────────────────
 
-func TestNormalizeArticleFields_DropsUnknownFields(t *testing.T) {
+func TestNormalizeEntryFields_ArticleDropsUnknownFields(t *testing.T) {
 	e := Entry{
 		Type: "article",
 		Fields: []Field{
@@ -428,20 +428,21 @@ func TestNormalizeArticleFields_DropsUnknownFields(t *testing.T) {
 			{Name: "keywords", Value: "{foo, bar}"},
 		},
 	}
-	normalizeArticleFields(&e)
+	normalizeEntryFields(&e)
+	spec := entrySpecs["article"]
 	for _, f := range e.Fields {
-		if !articleAllowedFields[f.Name] {
+		if !spec.allowed[f.Name] {
 			t.Errorf("unexpected field %q kept after normalization", f.Name)
 		}
 	}
 }
 
-func TestNormalizeArticleFields_RenamesIssueToNumber(t *testing.T) {
+func TestNormalizeEntryFields_ArticleRenamesIssueToNumber(t *testing.T) {
 	e := Entry{
 		Type:   "article",
 		Fields: []Field{{Name: "issue", Value: "{3}"}},
 	}
-	normalizeArticleFields(&e)
+	normalizeEntryFields(&e)
 	if got := FieldValue(e, "number"); got != "3" {
 		t.Errorf("number = %q, want %q", got, "3")
 	}
@@ -452,7 +453,7 @@ func TestNormalizeArticleFields_RenamesIssueToNumber(t *testing.T) {
 	}
 }
 
-func TestNormalizeArticleFields_IssueDroppedWhenNumberPresent(t *testing.T) {
+func TestNormalizeEntryFields_ArticleIssueDroppedWhenNumberPresent(t *testing.T) {
 	e := Entry{
 		Type: "article",
 		Fields: []Field{
@@ -460,7 +461,7 @@ func TestNormalizeArticleFields_IssueDroppedWhenNumberPresent(t *testing.T) {
 			{Name: "issue", Value: "{3}"},
 		},
 	}
-	normalizeArticleFields(&e)
+	normalizeEntryFields(&e)
 	if got := FieldValue(e, "number"); got != "5" {
 		t.Errorf("number should be unchanged, got %q", got)
 	}
@@ -471,18 +472,18 @@ func TestNormalizeArticleFields_IssueDroppedWhenNumberPresent(t *testing.T) {
 	}
 }
 
-func TestNormalizeArticleFields_ConstructsURLFromDOI(t *testing.T) {
+func TestNormalizeEntryFields_ConstructsURLFromDOI(t *testing.T) {
 	e := Entry{
 		Type:   "article",
 		Fields: []Field{{Name: "doi", Value: "{10.1000/xyz}"}},
 	}
-	normalizeArticleFields(&e)
+	normalizeEntryFields(&e)
 	if got := FieldValue(e, "url"); got != "https://doi.org/10.1000/xyz" {
 		t.Errorf("url = %q, want %q", got, "https://doi.org/10.1000/xyz")
 	}
 }
 
-func TestNormalizeArticleFields_DoesNotOverwriteExistingURL(t *testing.T) {
+func TestNormalizeEntryFields_DoesNotOverwriteExistingURL(t *testing.T) {
 	e := Entry{
 		Type: "article",
 		Fields: []Field{
@@ -490,20 +491,68 @@ func TestNormalizeArticleFields_DoesNotOverwriteExistingURL(t *testing.T) {
 			{Name: "url", Value: "{https://example.com}"},
 		},
 	}
-	normalizeArticleFields(&e)
+	normalizeEntryFields(&e)
 	if got := FieldValue(e, "url"); got != "https://example.com" {
 		t.Errorf("url overwritten: got %q", got)
 	}
 }
 
-func TestNormalizeArticleFields_NonArticleUnchanged(t *testing.T) {
+func TestNormalizeEntryFields_UnknownTypeUnchanged(t *testing.T) {
 	e := Entry{
-		Type:   "book",
+		Type:   "unknown",
 		Fields: []Field{{Name: "note", Value: "{kept}"}},
 	}
-	normalizeArticleFields(&e)
+	normalizeEntryFields(&e)
 	if FieldValue(e, "note") != "kept" {
-		t.Error("non-article fields should not be stripped")
+		t.Error("unknown type fields should not be stripped")
+	}
+}
+
+func TestNormalizeEntryFields_MiscArxivNormalizesArchivePrefix(t *testing.T) {
+	e := Entry{
+		Type: "misc",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arxiv}"},
+		},
+	}
+	normalizeEntryFields(&e)
+	if got := FieldValue(e, "archiveprefix"); got != "arXiv" {
+		t.Errorf("archiveprefix = %q, want %q", got, "arXiv")
+	}
+}
+
+func TestNormalizeEntryFields_MiscArxivSetsArchivePrefixWhenAbsent(t *testing.T) {
+	e := Entry{
+		Type: "misc",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+		},
+	}
+	normalizeEntryFields(&e)
+	if got := FieldValue(e, "archiveprefix"); got != "arXiv" {
+		t.Errorf("archiveprefix = %q, want %q", got, "arXiv")
+	}
+}
+
+func TestNormalizeEntryFields_BookDropsUnknownFields(t *testing.T) {
+	e := Entry{
+		Type: "book",
+		Fields: []Field{
+			{Name: "author", Value: "{A}"},
+			{Name: "edition", Value: "{2nd}"},
+			{Name: "note", Value: "{some note}"},
+		},
+	}
+	normalizeEntryFields(&e)
+	spec := entrySpecs["book"]
+	for _, f := range e.Fields {
+		if !spec.allowed[f.Name] {
+			t.Errorf("unexpected field %q kept after book normalization", f.Name)
+		}
 	}
 }
 
@@ -566,10 +615,10 @@ func TestWarnMissingFields_MissingDOIAndURL(t *testing.T) {
 	}
 }
 
-func TestWarnMissingFields_NonArticleIgnored(t *testing.T) {
-	e := Entry{Type: "book", Fields: []Field{{Name: "title", Value: "{T}"}}}
+func TestWarnMissingFields_UnknownTypeIgnored(t *testing.T) {
+	e := Entry{Type: "unknown", Fields: []Field{{Name: "title", Value: "{T}"}}}
 	if got := warnMissingFields(e); got != "" {
-		t.Errorf("non-article entries should not be checked, got %q", got)
+		t.Errorf("unknown entry types should not be checked, got %q", got)
 	}
 }
 
@@ -579,8 +628,8 @@ func containsField(warn, field string) bool {
 
 // ── validateEntry ─────────────────────────────────────────────────────────────
 
-func TestValidateEntry_NoIDWarning(t *testing.T) {
-	e := Entry{Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
+func TestValidateEntry_NoIDWarning_ArticleWarns(t *testing.T) {
+	e := Entry{Type: "article", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
 	corrected, source, warn := validateEntry(e)
 	if corrected != nil {
 		t.Error("expected no correction")
@@ -589,7 +638,18 @@ func TestValidateEntry_NoIDWarning(t *testing.T) {
 		t.Errorf("source = %q, want %q", source, "no-id")
 	}
 	if warn == "" {
-		t.Error("expected a warning for no-id entry")
+		t.Error("expected a warning for article with no DOI or arXiv ID")
+	}
+}
+
+func TestValidateEntry_NoIDWarning_BookSuppressed(t *testing.T) {
+	e := Entry{Type: "book", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
+	_, source, warn := validateEntry(e)
+	if source != "no-id" {
+		t.Errorf("source = %q, want %q", source, "no-id")
+	}
+	if warn != "" {
+		t.Errorf("expected no warning for book without doi, got %q", warn)
 	}
 }
 

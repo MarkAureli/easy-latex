@@ -45,30 +45,51 @@ After each successful compilation, `el compile` formats and validates every regi
 - `LastName` is the first author's last name in CamelCase (e.g. `VanDerBerg` for a compound name, `GarciaLopez` for a hyphenated one)
 - `Year` is the four-digit publication year
 - `Title` is the title in CamelCase with math mode (`$…$`) and LaTeX commands stripped; accents are resolved to ASCII (`\"u` → `ue`, `\'e` → `e`, `ß` → `ss`)
+- For `@unpublished` entries `year` is optional; if absent the key is `{LastName}{Title}`
 - If two entries produce the same canonical key a lowercase letter suffix disambiguates them (`Smith2023Fooa`, `Smith2023Foob`, …)
 
 Example: an entry for "A Great Paper" by Smith in 2023 becomes `Smith2023AGreatPaper`.
 
-**Formatting** — `@article` entries are rewritten with a fixed field set in a fixed order:
+**Formatting** — every known entry type is rewritten with a fixed field set in a fixed order; all other fields are dropped. Values are normalised to `{braced}` form, field names are space-aligned, and a trailing comma follows the last field.
 
-```
-author, year, title, journal, volume, number, pages, doi, url
-```
+| Type | Field order |
+|---|---|
+| `@article` | `author, year, title, journal, volume, number, pages, doi, url` |
+| `@book` | `author, year, title, publisher, address, doi, url` |
+| `@incollection` | `author, year, title, booktitle, publisher, address, pages, doi, url` |
+| `@inproceedings` / `@conference` | `author, year, title, booktitle, pages, doi, url` |
+| `@phdthesis` / `@mastersthesis` | `author, year, title, school, doi, url` |
+| `@techreport` | `author, year, title, institution, doi, url` |
+| `@misc` | `author, year, title, doi, url` — or for arXiv entries: `author, year, title, eprint, archiveprefix, primaryclass` |
+| `@unpublished` | `author, year, title, doi, url, note` |
 
-- `volume`, `number`, and `pages` are always emitted (blank `{}` if absent) for compatibility with bib styles that require them
-- `url` is derived from `doi` as `https://doi.org/{doi}` if not otherwise present
-- `issue` is accepted as a synonym for `number`
-- All other fields (e.g. `note`, `abstract`, `keywords`) are dropped
-- Values are normalised to `{braced}` form; field names are space-aligned; a trailing comma follows the last field
-- A warning is printed for any mandatory field (`author`, `title`, `journal`, `year`, `doi`, `url`) that remains empty after validation
+Additional rules:
+
+- `@article`: `volume`, `number`, and `pages` are always emitted (blank `{}` if absent) for compatibility with bib styles that require them; `issue` is accepted as a synonym for `number`
+- `@misc` arXiv detection: an entry with `eprint` + `archiveprefix`/`eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org`, is treated as an arXiv entry; `archiveprefix` is always normalised to `{arXiv}`
+- For all types that include `doi` and `url`: `url` is derived from `doi` as `https://doi.org/{doi}` if not otherwise present
 
 The file is only rewritten if the content actually changes.
 
 **Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in `.aux_dir/bib_cache.json` and not re-fetched on subsequent compiles):
 
 - Entry has a `doi` field (or a `url` containing `doi.org`) → queried against the [Crossref API](https://api.crossref.org); mismatched fields are auto-corrected in place.
-- Entry has an `eprint` field with `archiveprefix = {arXiv}` / `eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org` → queried against the arXiv API; title, author, and year are auto-corrected if needed.
-- Entry has neither → a one-time warning is printed and the entry is skipped.
+- Entry has an `eprint` field with `archiveprefix`/`eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org` → queried against the arXiv API; title, author, and year are auto-corrected if needed.
+- Entry has neither → a one-time warning is printed for types where `doi` is mandatory (`@article`, `@inproceedings`, `@conference`, `@incollection`); silently skipped for all other types.
+
+Mandatory fields per type (a warning is printed for any that remain empty after validation):
+
+| Type | Mandatory fields |
+|---|---|
+| `@article` | `author, year, title, journal, doi, url` |
+| `@book` | `author, year, title, publisher` |
+| `@incollection` | `author, year, title, booktitle, publisher` |
+| `@inproceedings` / `@conference` | `author, year, title, booktitle, doi, url` |
+| `@phdthesis` / `@mastersthesis` | `author, year, title, school, url` |
+| `@techreport` | `author, year, title, institution, url` |
+| `@misc` (base) | `author, year, title, url` |
+| `@misc` (arXiv) | `author, year, title, eprint, archiveprefix` |
+| `@unpublished` | `author, title, note` |
 
 Corrections are reported on the terminal:
 

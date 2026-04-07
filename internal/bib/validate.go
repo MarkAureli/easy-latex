@@ -69,6 +69,15 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 
 	assignCanonicalKeys(items)
 
+	// pendingCache collects (itemIndex, source) for entries validated this run.
+	// Written to the cache after the second assignCanonicalKeys so the cache
+	// key matches the final canonical key.
+	type pendingEntry struct {
+		itemIdx int
+		source  string
+	}
+	var pending []pendingEntry
+
 	for i, item := range items {
 		if !item.IsEntry {
 			continue
@@ -84,12 +93,12 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 				e = *corrected
 			}
 			if source != "" {
-				c[e.Key] = source
+				pending = append(pending, pendingEntry{i, source})
 				cacheChanged = true
 			}
 		}
 
-		normalizeArticleFields(&e)
+		normalizeEntryFields(&e)
 
 		if warn := warnMissingFields(e); warn != "" {
 			fmt.Printf("[bib] %s: %s\n", e.Key, warn)
@@ -102,6 +111,15 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 		items[i].Entry = e
 	}
 
+	// Re-assign keys: Crossref/arXiv may have populated author, year, or title
+	// for entries that previously fell back to their original key.
+	assignCanonicalKeys(items)
+
+	// Flush pending cache entries under the final canonical keys.
+	for _, p := range pending {
+		c[items[p.itemIdx].Entry.Key] = p.source
+	}
+
 	formatted := renderItems(items)
 	if formatted != string(data) {
 		if err := os.WriteFile(path, []byte(formatted), 0644); err != nil {
@@ -111,21 +129,124 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 	return cacheChanged, nil
 }
 
-// articleMandatory lists fields that must be present (non-blank) in every
-// @article entry. volume, number, and pages are intentionally omitted because
-// they are legitimately absent for some articles.
-var articleMandatory = []string{"author", "title", "journal", "year", "doi", "url"}
+// ── entry specifications ───────────────────────────────────────────────────────
 
-// warnMissingFields returns a warning string if any mandatory fields are absent
-// from the entry, or an empty string if everything is present.
+// typeSpec describes the allowed and mandatory fields for a bib entry type.
+type typeSpec struct {
+	// mandatory lists field names that must be non-empty.
+	// A token of the form "a|b" means at least one of a or b must be present.
+	mandatory []string
+	// allowed is the complete set of fields kept during normalisation.
+	// Fields absent from this set are dropped.
+	allowed map[string]bool
+	// synonyms maps canonical field name -> accepted alias.
+	// When the canonical field is absent and the alias is present, the alias is renamed.
+	synonyms map[string]string
+	// arxivMandatory and arxivAllowed override mandatory/allowed when the entry
+	// contains an arXiv identifier. Only used by @misc.
+	arxivMandatory []string
+	arxivAllowed   map[string]bool
+}
+
+var entrySpecs = map[string]typeSpec{
+	"article": {
+		mandatory: []string{"author", "title", "journal", "year", "doi", "url"},
+		allowed: map[string]bool{
+			"author": true, "title": true, "journal": true, "year": true,
+			"volume": true, "number": true, "pages": true, "doi": true, "url": true,
+		},
+		synonyms: map[string]string{"number": "issue"},
+	},
+	"book": {
+		mandatory: []string{"author", "year", "title", "publisher"},
+		allowed: map[string]bool{
+			"author": true, "year": true, "title": true, "publisher": true,
+			"address": true, "doi": true, "url": true,
+		},
+	},
+	"incollection": {
+		mandatory: []string{"author", "year", "title", "booktitle", "publisher"},
+		allowed: map[string]bool{
+			"author": true, "year": true, "title": true, "booktitle": true,
+			"publisher": true, "address": true, "pages": true, "doi": true, "url": true,
+		},
+	},
+	"inproceedings": {
+		mandatory: []string{"author", "year", "title", "booktitle", "doi", "url"},
+		allowed: map[string]bool{
+			"author": true, "year": true, "title": true, "booktitle": true,
+			"pages": true, "doi": true, "url": true,
+		},
+	},
+	"conference": {
+		mandatory: []string{"author", "year", "title", "booktitle", "doi", "url"},
+		allowed: map[string]bool{
+			"author": true, "year": true, "title": true, "booktitle": true,
+			"pages": true, "doi": true, "url": true,
+		},
+	},
+	"phdthesis": {
+		mandatory: []string{"author", "year", "title", "school", "url"},
+		allowed: map[string]bool{
+			"author": true, "year": true, "title": true, "school": true,
+			"doi": true, "url": true,
+		},
+	},
+	"mastersthesis": {
+		mandatory: []string{"author", "year", "title", "school", "url"},
+		allowed: map[string]bool{
+			"author": true, "year": true, "title": true, "school": true,
+			"doi": true, "url": true,
+		},
+	},
+	"techreport": {
+		mandatory: []string{"author", "year", "title", "institution", "url"},
+		allowed: map[string]bool{
+			"author": true, "year": true, "title": true, "institution": true,
+			"doi": true, "url": true,
+		},
+	},
+	"misc": {
+		mandatory: []string{"author", "year", "title", "url"},
+		allowed: map[string]bool{
+			"author": true, "year": true, "title": true, "doi": true, "url": true,
+		},
+		arxivMandatory: []string{"author", "year", "title", "eprint", "archiveprefix"},
+		arxivAllowed: map[string]bool{
+			"author": true, "year": true, "title": true,
+			"eprint": true, "archiveprefix": true, "primaryclass": true,
+		},
+	},
+	"unpublished": {
+		mandatory: []string{"author", "title", "note"},
+		allowed: map[string]bool{
+			"author": true, "year": true, "title": true, "doi": true, "url": true, "note": true,
+		},
+	},
+}
+
+// warnMissingFields returns a warning string if any mandatory fields are absent,
+// or an empty string when all are present.
+// A mandatory token of the form "a|b" is satisfied when at least one of a or b is non-empty.
 func warnMissingFields(e Entry) string {
-	if e.Type != "article" {
+	spec, ok := entrySpecs[e.Type]
+	if !ok {
 		return ""
 	}
+	mandatory := spec.mandatory
+	if spec.arxivMandatory != nil && findArxivID(e) != "" {
+		mandatory = spec.arxivMandatory
+	}
 	var missing []string
-	for _, name := range articleMandatory {
-		if FieldValue(e, name) == "" {
-			missing = append(missing, name)
+	for _, token := range mandatory {
+		if a, b, ok := strings.Cut(token, "|"); ok {
+			if FieldValue(e, a) == "" && FieldValue(e, b) == "" {
+				missing = append(missing, token)
+			}
+		} else {
+			if FieldValue(e, token) == "" {
+				missing = append(missing, token)
+			}
 		}
 	}
 	if len(missing) > 0 {
@@ -134,34 +255,44 @@ func warnMissingFields(e Entry) string {
 	return ""
 }
 
-// articleAllowedFields is the complete set of fields kept in an @article entry.
-// Every other field is dropped during processing.
-var articleAllowedFields = map[string]bool{
-	"author": true, "title": true, "journal": true, "year": true,
-	"volume": true, "number": true, "pages": true, "doi": true, "url": true,
-}
-
-// normalizeArticleFields drops non-allowed fields from @article entries.
-// "issue" is treated as a synonym for "number": if "number" is absent, "issue"
-// is renamed to "number"; otherwise "issue" is simply dropped.
-func normalizeArticleFields(e *Entry) {
-	if e.Type != "article" {
+// normalizeEntryFields drops non-allowed fields, resolves field synonyms,
+// and derives url from doi if url is absent. Only acts on known entry types.
+func normalizeEntryFields(e *Entry) {
+	spec, ok := entrySpecs[e.Type]
+	if !ok {
 		return
 	}
-	if FieldValue(*e, "number") == "" {
-		if issue := FieldValue(*e, "issue"); issue != "" {
-			SetField(e, "number", "{"+issue+"}")
+
+	// Select the active allowed set: arXiv override takes precedence for @misc.
+	allowed := spec.allowed
+	isArxiv := spec.arxivAllowed != nil && findArxivID(*e) != ""
+	if isArxiv {
+		allowed = spec.arxivAllowed
+	}
+
+	// Resolve synonyms before filtering so the alias is not dropped first.
+	for canonical, alias := range spec.synonyms {
+		if FieldValue(*e, canonical) == "" {
+			if val := FieldValue(*e, alias); val != "" {
+				SetField(e, canonical, "{"+val+"}")
+			}
 		}
 	}
+	// Drop fields not in the allowed set (including consumed alias fields).
 	filtered := make([]Field, 0, len(e.Fields))
 	for _, f := range e.Fields {
-		if f.Name != "issue" && articleAllowedFields[f.Name] {
+		if allowed[f.Name] {
 			filtered = append(filtered, f)
 		}
 	}
 	e.Fields = filtered
-
-	if FieldValue(*e, "url") == "" {
+	// arXiv @misc entries always carry archiveprefix = {arXiv}.
+	if isArxiv {
+		SetField(e, "archiveprefix", "{arXiv}")
+	}
+	// Derive url from doi when the type supports both and url is absent.
+	// Not applied to arXiv @misc entries, which are identified by eprint.
+	if !isArxiv && allowed["url"] && FieldValue(*e, "url") == "" {
 		if doi := FieldValue(*e, "doi"); doi != "" {
 			SetField(e, "url", "{https://doi.org/"+doi+"}")
 		}
@@ -201,7 +332,25 @@ func validateEntry(e Entry) (corrected *Entry, source, warning string) {
 		return result, "arxiv", ""
 	}
 
-	return nil, "no-id", "no DOI or arXiv ID — skipping validation"
+	if doiIsMandatory(e.Type) {
+		return nil, "no-id", "no DOI or arXiv ID — skipping validation"
+	}
+	return nil, "no-id", ""
+}
+
+// doiIsMandatory reports whether "doi" is listed as a mandatory field for the
+// given entry type.
+func doiIsMandatory(entryType string) bool {
+	spec, ok := entrySpecs[entryType]
+	if !ok {
+		return false
+	}
+	for _, m := range spec.mandatory {
+		if m == "doi" {
+			return true
+		}
+	}
+	return false
 }
 
 func findDOI(e Entry) string {
@@ -209,8 +358,8 @@ func findDOI(e Entry) string {
 		return doi
 	}
 	u := FieldValue(e, "url")
-	if idx := strings.Index(u, "doi.org/"); idx >= 0 {
-		return u[idx+8:]
+	if _, after, ok := strings.Cut(u, "doi.org/"); ok {
+		return after
 	}
 	return ""
 }

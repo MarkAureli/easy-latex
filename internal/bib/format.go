@@ -14,33 +14,31 @@ var canonicalOrder = map[string][]string{
 		"volume", "number", "pages", "doi", "url",
 	},
 	"book": {
-		"author", "editor", "title", "publisher", "year",
-		"address", "edition", "doi", "url", "note",
+		"author", "year", "title", "publisher", "address", "doi", "url",
+	},
+	"incollection": {
+		"author", "year", "title", "booktitle", "publisher", "address", "pages", "doi", "url",
 	},
 	"inproceedings": {
-		"author", "title", "booktitle", "year",
-		"pages", "publisher", "address", "doi", "url", "note",
+		"author", "year", "title", "booktitle", "pages", "doi", "url",
 	},
 	"conference": {
-		"author", "title", "booktitle", "year",
-		"pages", "publisher", "address", "doi", "url", "note",
+		"author", "year", "title", "booktitle", "pages", "doi", "url",
 	},
 	"phdthesis": {
-		"author", "title", "school", "year", "doi", "url", "note",
+		"author", "year", "title", "school", "doi", "url",
 	},
 	"mastersthesis": {
-		"author", "title", "school", "year", "doi", "url", "note",
+		"author", "year", "title", "school", "doi", "url",
 	},
 	"techreport": {
-		"author", "title", "institution", "year",
-		"number", "doi", "url", "note",
+		"author", "year", "title", "institution", "doi", "url",
 	},
 	"misc": {
-		"author", "title", "howpublished", "year",
-		"note", "url", "doi",
+		"author", "year", "title", "eprint", "archiveprefix", "primaryclass", "doi", "url",
 	},
 	"unpublished": {
-		"author", "title", "note", "year", "url", "doi",
+		"author", "year", "title", "doi", "url", "note",
 	},
 }
 

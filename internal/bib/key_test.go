@@ -225,6 +225,51 @@ func TestGenerateKey_FallsBackWhenFieldsMissing(t *testing.T) {
 	}
 }
 
+func TestGenerateKey_UnpublishedWithYear(t *testing.T) {
+	e := Entry{
+		Type: "unpublished",
+		Key:  "old",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "title", Value: "{A Draft}"},
+			{Name: "note", Value: "{draft}"},
+		},
+	}
+	if got := GenerateKey(e); got != "Smith2023ADraft" {
+		t.Errorf("got %q, want %q", got, "Smith2023ADraft")
+	}
+}
+
+func TestGenerateKey_UnpublishedWithoutYear(t *testing.T) {
+	e := Entry{
+		Type: "unpublished",
+		Key:  "old",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "title", Value: "{A Draft}"},
+			{Name: "note", Value: "{draft}"},
+		},
+	}
+	if got := GenerateKey(e); got != "SmithADraft" {
+		t.Errorf("got %q, want %q", got, "SmithADraft")
+	}
+}
+
+func TestGenerateKey_NonUnpublishedFallsBackWithoutYear(t *testing.T) {
+	e := Entry{
+		Type: "book",
+		Key:  "original",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "title", Value: "{A Book}"},
+		},
+	}
+	if got := GenerateKey(e); got != "original" {
+		t.Errorf("should fall back to original key, got %q", got)
+	}
+}
+
 // ── assignCanonicalKeys ───────────────────────────────────────────────────────
 
 func makeArticleItem(key, author, year, title string) Item {
