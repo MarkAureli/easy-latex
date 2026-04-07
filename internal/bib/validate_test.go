@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -376,6 +377,204 @@ func TestQueryArxiv_ExtractsYearFromPublished(t *testing.T) {
 	if got := FieldValue(*result, "year"); got != "2019" {
 		t.Errorf("year = %q, want %q", got, "2019")
 	}
+}
+
+// ── warnMissingFields ─────────────────────────────────────────────────────────
+
+func TestWarnMissingFields_AllPresent(t *testing.T) {
+	e := Entry{
+		Type: "article",
+		Fields: []Field{
+			{Name: "author", Value: "{A}"},
+			{Name: "title", Value: "{T}"},
+			{Name: "journal", Value: "{J}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "doi", Value: "{10.1/x}"},
+			{Name: "url", Value: "{https://example.com}"},
+		},
+	}
+	if got := warnMissingFields(e); got != "" {
+		t.Errorf("expected empty warning, got %q", got)
+	}
+}
+
+func TestWarnMissingFields_OptionalFieldsAbsent(t *testing.T) {
+	// volume, number, pages are allowed to be absent — no warning expected
+	e := Entry{
+		Type: "article",
+		Fields: []Field{
+			{Name: "author", Value: "{A}"},
+			{Name: "title", Value: "{T}"},
+			{Name: "journal", Value: "{J}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "doi", Value: "{10.1/x}"},
+			{Name: "url", Value: "{https://example.com}"},
+		},
+	}
+	if got := warnMissingFields(e); got != "" {
+		t.Errorf("volume/number/pages should not trigger warning, got %q", got)
+	}
+}
+
+// ── normalizeArticleFields ────────────────────────────────────────────────────
+
+func TestNormalizeArticleFields_DropsUnknownFields(t *testing.T) {
+	e := Entry{
+		Type: "article",
+		Fields: []Field{
+			{Name: "author", Value: "{A}"},
+			{Name: "note", Value: "{some note}"},
+			{Name: "abstract", Value: "{long text}"},
+			{Name: "keywords", Value: "{foo, bar}"},
+		},
+	}
+	normalizeArticleFields(&e)
+	for _, f := range e.Fields {
+		if !articleAllowedFields[f.Name] {
+			t.Errorf("unexpected field %q kept after normalization", f.Name)
+		}
+	}
+}
+
+func TestNormalizeArticleFields_RenamesIssueToNumber(t *testing.T) {
+	e := Entry{
+		Type:   "article",
+		Fields: []Field{{Name: "issue", Value: "{3}"}},
+	}
+	normalizeArticleFields(&e)
+	if got := FieldValue(e, "number"); got != "3" {
+		t.Errorf("number = %q, want %q", got, "3")
+	}
+	for _, f := range e.Fields {
+		if f.Name == "issue" {
+			t.Error("issue field should have been removed")
+		}
+	}
+}
+
+func TestNormalizeArticleFields_IssueDroppedWhenNumberPresent(t *testing.T) {
+	e := Entry{
+		Type: "article",
+		Fields: []Field{
+			{Name: "number", Value: "{5}"},
+			{Name: "issue", Value: "{3}"},
+		},
+	}
+	normalizeArticleFields(&e)
+	if got := FieldValue(e, "number"); got != "5" {
+		t.Errorf("number should be unchanged, got %q", got)
+	}
+	for _, f := range e.Fields {
+		if f.Name == "issue" {
+			t.Error("issue field should have been dropped")
+		}
+	}
+}
+
+func TestNormalizeArticleFields_ConstructsURLFromDOI(t *testing.T) {
+	e := Entry{
+		Type:   "article",
+		Fields: []Field{{Name: "doi", Value: "{10.1000/xyz}"}},
+	}
+	normalizeArticleFields(&e)
+	if got := FieldValue(e, "url"); got != "https://doi.org/10.1000/xyz" {
+		t.Errorf("url = %q, want %q", got, "https://doi.org/10.1000/xyz")
+	}
+}
+
+func TestNormalizeArticleFields_DoesNotOverwriteExistingURL(t *testing.T) {
+	e := Entry{
+		Type: "article",
+		Fields: []Field{
+			{Name: "doi", Value: "{10.1000/xyz}"},
+			{Name: "url", Value: "{https://example.com}"},
+		},
+	}
+	normalizeArticleFields(&e)
+	if got := FieldValue(e, "url"); got != "https://example.com" {
+		t.Errorf("url overwritten: got %q", got)
+	}
+}
+
+func TestNormalizeArticleFields_NonArticleUnchanged(t *testing.T) {
+	e := Entry{
+		Type:   "book",
+		Fields: []Field{{Name: "note", Value: "{kept}"}},
+	}
+	normalizeArticleFields(&e)
+	if FieldValue(e, "note") != "kept" {
+		t.Error("non-article fields should not be stripped")
+	}
+}
+
+func TestEnsureArticleOptionalFields_AddsBlankPlaceholders(t *testing.T) {
+	e := Entry{Type: "article", Fields: []Field{{Name: "title", Value: "{T}"}}}
+	ensureArticleOptionalFields(&e)
+	for _, name := range []string{"volume", "number", "pages"} {
+		if FieldValue(e, name) != "" {
+			t.Errorf("%s should be blank placeholder, got %q", name, FieldValue(e, name))
+		}
+		found := false
+		for _, f := range e.Fields {
+			if f.Name == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("field %q not added", name)
+		}
+	}
+}
+
+func TestEnsureArticleOptionalFields_DoesNotOverwriteExisting(t *testing.T) {
+	e := Entry{
+		Type:   "article",
+		Fields: []Field{{Name: "pages", Value: "{100--200}"}},
+	}
+	ensureArticleOptionalFields(&e)
+	if got := FieldValue(e, "pages"); got != "100--200" {
+		t.Errorf("pages overwritten: got %q, want %q", got, "100--200")
+	}
+}
+
+func TestEnsureArticleOptionalFields_NonArticleUnchanged(t *testing.T) {
+	e := Entry{Type: "book", Fields: []Field{{Name: "title", Value: "{T}"}}}
+	before := len(e.Fields)
+	ensureArticleOptionalFields(&e)
+	if len(e.Fields) != before {
+		t.Error("non-article entry should not be modified")
+	}
+}
+
+func TestWarnMissingFields_MissingDOIAndURL(t *testing.T) {
+	e := Entry{
+		Type: "article",
+		Fields: []Field{
+			{Name: "author", Value: "{A}"},
+			{Name: "title", Value: "{T}"},
+			{Name: "journal", Value: "{J}"},
+			{Name: "year", Value: "{2023}"},
+		},
+	}
+	warn := warnMissingFields(e)
+	if warn == "" {
+		t.Fatal("expected warning for missing doi and url")
+	}
+	if !containsField(warn, "doi") || !containsField(warn, "url") {
+		t.Errorf("warning should mention doi and url, got %q", warn)
+	}
+}
+
+func TestWarnMissingFields_NonArticleIgnored(t *testing.T) {
+	e := Entry{Type: "book", Fields: []Field{{Name: "title", Value: "{T}"}}}
+	if got := warnMissingFields(e); got != "" {
+		t.Errorf("non-article entries should not be checked, got %q", got)
+	}
+}
+
+func containsField(warn, field string) bool {
+	return strings.Contains(warn, field)
 }
 
 // ── validateEntry ─────────────────────────────────────────────────────────────

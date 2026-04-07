@@ -16,7 +16,7 @@ func TestSortedFields_KnownType(t *testing.T) {
 		{Name: "journal", Value: "{Nature}"},
 	}
 	got := sortedFields("article", fields)
-	want := []string{"author", "title", "journal", "year", "doi"}
+	want := []string{"author", "year", "title", "journal", "doi"}
 	for i, f := range got {
 		if f.Name != want[i] {
 			t.Errorf("got[%d] = %q, want %q", i, f.Name, want[i])
@@ -156,9 +156,9 @@ func TestRenderItems_NonWhitespaceRawPreserved(t *testing.T) {
 func TestFormatIdempotent(t *testing.T) {
 	input := `@article{Smith2023,
   author  = {Smith, John},
+  year    = {2023},
   title   = {A Great Paper},
   journal = {Nature},
-  year    = {2023},
 }
 `
 	items := ParseFile(input)

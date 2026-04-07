@@ -10,8 +10,8 @@ import (
 // Fields not in the list are appended at the end in their original order.
 var canonicalOrder = map[string][]string{
 	"article": {
-		"author", "title", "journal", "year",
-		"volume", "number", "pages", "doi", "url", "note",
+		"author", "year", "title", "journal",
+		"volume", "number", "pages", "doi", "url",
 	},
 	"book": {
 		"author", "editor", "title", "publisher", "year",

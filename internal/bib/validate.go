@@ -67,6 +67,8 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 
 	items := ParseFile(string(data))
 
+	assignCanonicalKeys(items)
+
 	for i, item := range items {
 		if !item.IsEntry {
 			continue
@@ -87,6 +89,14 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 			}
 		}
 
+		normalizeArticleFields(&e)
+
+		if warn := warnMissingFields(e); warn != "" {
+			fmt.Printf("[bib] %s: %s\n", e.Key, warn)
+		}
+
+		ensureArticleOptionalFields(&e)
+
 		// Sort fields after validation so any newly added fields are ordered too.
 		e.Fields = sortedFields(e.Type, e.Fields)
 		items[i].Entry = e
@@ -99,6 +109,76 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 		}
 	}
 	return cacheChanged, nil
+}
+
+// articleMandatory lists fields that must be present (non-blank) in every
+// @article entry. volume, number, and pages are intentionally omitted because
+// they are legitimately absent for some articles.
+var articleMandatory = []string{"author", "title", "journal", "year", "doi", "url"}
+
+// warnMissingFields returns a warning string if any mandatory fields are absent
+// from the entry, or an empty string if everything is present.
+func warnMissingFields(e Entry) string {
+	if e.Type != "article" {
+		return ""
+	}
+	var missing []string
+	for _, name := range articleMandatory {
+		if FieldValue(e, name) == "" {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		return "missing mandatory fields: " + strings.Join(missing, ", ")
+	}
+	return ""
+}
+
+// articleAllowedFields is the complete set of fields kept in an @article entry.
+// Every other field is dropped during processing.
+var articleAllowedFields = map[string]bool{
+	"author": true, "title": true, "journal": true, "year": true,
+	"volume": true, "number": true, "pages": true, "doi": true, "url": true,
+}
+
+// normalizeArticleFields drops non-allowed fields from @article entries.
+// "issue" is treated as a synonym for "number": if "number" is absent, "issue"
+// is renamed to "number"; otherwise "issue" is simply dropped.
+func normalizeArticleFields(e *Entry) {
+	if e.Type != "article" {
+		return
+	}
+	if FieldValue(*e, "number") == "" {
+		if issue := FieldValue(*e, "issue"); issue != "" {
+			SetField(e, "number", "{"+issue+"}")
+		}
+	}
+	filtered := make([]Field, 0, len(e.Fields))
+	for _, f := range e.Fields {
+		if f.Name != "issue" && articleAllowedFields[f.Name] {
+			filtered = append(filtered, f)
+		}
+	}
+	e.Fields = filtered
+
+	if FieldValue(*e, "url") == "" {
+		if doi := FieldValue(*e, "doi"); doi != "" {
+			SetField(e, "url", "{https://doi.org/"+doi+"}")
+		}
+	}
+}
+
+// ensureArticleOptionalFields adds blank placeholders for volume, number, and
+// pages in @article entries if those fields are not already present.
+func ensureArticleOptionalFields(e *Entry) {
+	if e.Type != "article" {
+		return
+	}
+	for _, name := range []string{"volume", "number", "pages"} {
+		if FieldValue(*e, name) == "" {
+			SetField(e, name, "{}")
+		}
+	}
 }
 
 // validateEntry looks up the entry via Crossref or arXiv and returns a
