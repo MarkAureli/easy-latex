@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/MarkAureli/easy-latex/internal/texscan"
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +57,9 @@ func doInit(dir string, stdin io.Reader) error {
 		return fmt.Errorf("cannot create .aux_dir: %w", err)
 	}
 
-	cfg := Config{Main: chosen, AuxDir: ".aux_dir"}
+	bibFiles := texscan.FindBibFiles(chosen, dir)
+
+	cfg := Config{Main: chosen, AuxDir: ".aux_dir", BibFiles: bibFiles}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
@@ -70,6 +73,9 @@ func doInit(dir string, stdin io.Reader) error {
 	}
 
 	fmt.Printf("Initialized. Main file: %s\n", chosen)
+	if len(bibFiles) > 0 {
+		fmt.Printf("Bib files: %s\n", strings.Join(bibFiles, ", "))
+	}
 	return nil
 }
 

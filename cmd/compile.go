@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/MarkAureli/easy-latex/internal/bib"
 	"github.com/spf13/cobra"
 )
 
@@ -63,6 +64,14 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Update bib file list from artifacts if not already set by el init.
+	if len(cfg.BibFiles) == 0 {
+		if found := bibFilesFromArtifacts(stem, cfg.AuxDir); len(found) > 0 {
+			cfg.BibFiles = found
+			_ = saveConfig(cfg)
+		}
+	}
+
 	// Detect and run bibliography tool based on artifacts from first pass
 	bibTool, err := detectBibTool(stem, cfg.AuxDir)
 	if err != nil {
@@ -99,6 +108,10 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	_ = os.Remove(pdfName)
 	if err := os.Symlink(srcPDF, pdfName); err != nil {
 		return fmt.Errorf("cannot create symlink for %s: %w", pdfName, err)
+	}
+
+	if err := bib.ProcessBibFiles(cfg.BibFiles, cfg.AuxDir); err != nil {
+		return err
 	}
 
 	fmt.Printf("Compiled successfully -> %s\n", pdfName)
@@ -218,4 +231,42 @@ func findTool(name string) (string, error) {
 
 func findPdflatex() (string, error) {
 	return findTool("pdflatex")
+}
+
+var (
+	reBibData       = regexp.MustCompile(`\\bibdata\{([^}]+)\}`)
+	reBcfDatasource = regexp.MustCompile(`<bcf:datasource[^>]*datatype="bibtex"[^>]*>([^<]+)</bcf:datasource>`)
+)
+
+// bibFilesFromArtifacts discovers .bib file names from the .aux and .bcf
+// artifacts produced by pdflatex. Returns paths relative to the project root.
+func bibFilesFromArtifacts(stem, auxDir string) []string {
+	seen := map[string]bool{}
+	var files []string
+
+	add := func(name string) {
+		if !strings.HasSuffix(name, ".bib") {
+			name += ".bib"
+		}
+		if !seen[name] {
+			seen[name] = true
+			files = append(files, name)
+		}
+	}
+
+	if data, err := os.ReadFile(filepath.Join(auxDir, stem+".aux")); err == nil {
+		for _, m := range reBibData.FindAllStringSubmatch(string(data), -1) {
+			for _, name := range strings.Split(m[1], ",") {
+				add(strings.TrimSpace(name))
+			}
+		}
+	}
+
+	if data, err := os.ReadFile(filepath.Join(auxDir, stem+".bcf")); err == nil {
+		for _, m := range reBcfDatasource.FindAllStringSubmatch(string(data), -1) {
+			add(strings.TrimSpace(m[1]))
+		}
+	}
+
+	return files
 }

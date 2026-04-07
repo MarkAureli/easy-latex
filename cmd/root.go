@@ -10,8 +10,9 @@ import (
 
 // Config is the structure stored in .el.json
 type Config struct {
-	Main   string `json:"main"`
-	AuxDir string `json:"aux_dir"`
+	Main     string   `json:"main"`
+	AuxDir   string   `json:"aux_dir"`
+	BibFiles []string `json:"bib_files,omitempty"`
 }
 
 func loadConfig() (*Config, error) {
@@ -24,6 +25,14 @@ func loadConfig() (*Config, error) {
 		return nil, fmt.Errorf("corrupt .el.json: %w", err)
 	}
 	return &cfg, nil
+}
+
+func saveConfig(cfg *Config) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(".el.json", data, 0644)
 }
 
 var rootCmd = &cobra.Command{
