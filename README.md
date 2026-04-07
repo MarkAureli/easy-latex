@@ -40,11 +40,27 @@ If `el init` was run before any `.bib` files existed, `el compile` discovers the
 
 After each successful compilation, `el compile` formats and validates every registered `.bib` file:
 
-**Formatting** — entries are rewritten in a canonical style:
-- Fields sorted in a standard order per entry type (e.g. `author`, `title`, `journal`, `year`, `volume`, `number`, `pages`, `doi` for `@article`)
-- Values normalized to `{braced}` form
-- Field names aligned with spaces for readability
-- Trailing comma after the last field
+**Citation key normalisation** — each entry's key is rewritten to the canonical form `{LastName}{Year}{Title}`:
+
+- `LastName` is the first author's last name in CamelCase (e.g. `VanDerBerg` for a compound name, `GarciaLopez` for a hyphenated one)
+- `Year` is the four-digit publication year
+- `Title` is the title in CamelCase with math mode (`$…$`) and LaTeX commands stripped; accents are resolved to ASCII (`\"u` → `ue`, `\'e` → `e`, `ß` → `ss`)
+- If two entries produce the same canonical key a lowercase letter suffix disambiguates them (`Smith2023Fooa`, `Smith2023Foob`, …)
+
+Example: an entry for "A Great Paper" by Smith in 2023 becomes `Smith2023AGreatPaper`.
+
+**Formatting** — `@article` entries are rewritten with a fixed field set in a fixed order:
+
+```
+author, year, title, journal, volume, number, pages, doi, url
+```
+
+- `volume`, `number`, and `pages` are always emitted (blank `{}` if absent) for compatibility with bib styles that require them
+- `url` is derived from `doi` as `https://doi.org/{doi}` if not otherwise present
+- `issue` is accepted as a synonym for `number`
+- All other fields (e.g. `note`, `abstract`, `keywords`) are dropped
+- Values are normalised to `{braced}` form; field names are space-aligned; a trailing comma follows the last field
+- A warning is printed for any mandatory field (`author`, `title`, `journal`, `year`, `doi`, `url`) that remains empty after validation
 
 The file is only rewritten if the content actually changes.
 
@@ -57,8 +73,9 @@ The file is only rewritten if the content actually changes.
 Corrections are reported on the terminal:
 
 ```
-[bib] Smith2023: corrected title, pages
-[bib] Jones2021: no DOI or arXiv ID — skipping validation
+[bib] Smith2023AGreatPaper: corrected title, pages
+[bib] Jones2021Work: no DOI or arXiv ID — skipping validation
+[bib] Brown2020Study: missing mandatory fields: doi, url
 ```
 
 Use `-o` / `--open` to open the PDF immediately after compilation:
