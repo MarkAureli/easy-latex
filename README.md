@@ -15,6 +15,8 @@ Initialized. Main file: thesis.tex
 
 If multiple eligible `.tex` files are found, you will be prompted to pick one.
 
+If the project is a git repository, `el init` also appends `.aux_dir` and `.el.json` to `.git/info/exclude` (local-only gitignore) so generated files are never accidentally committed.
+
 ### `el compile`
 
 Compiles the document using `pdflatex`. Only warnings and errors are printed — all other LaTeX output is suppressed. On success, a symlink to the PDF is created in the project root.
@@ -60,8 +62,10 @@ On macOS, TeX Live installs its binaries to `/Library/TeX/texbin/`. `el` checks 
 
 ## What `el` adds to your project
 
-Running `el init` and `el compile` in a LaTeX project creates three things, all gitignored by default:
+Running `el init` and `el compile` in a LaTeX project creates three things:
 
 - **`.el.json`** — stores which `.tex` file is the main document
 - **`.aux_dir/`** — all pdflatex/bibtex/biber intermediate files go here instead of cluttering the project root
 - **`<name>.pdf`** — a symlink pointing into `.aux_dir/`; named after your main `.tex` file; open this in your PDF viewer
+
+In a git repository, `el init` registers `.aux_dir` and `.el.json` in `.git/info/exclude` automatically, so none of these files need to be added to `.gitignore`.
