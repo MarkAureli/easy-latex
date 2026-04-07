@@ -1,0 +1,5 @@
+el
+*.exe
+.aux_dir/
+*.pdf
+.DS_Store
