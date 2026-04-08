@@ -455,7 +455,7 @@ func queryCrossref(e Entry, doi string) (*Entry, error) {
 		}
 	}
 	if len(m.ContainerTitle) > 0 {
-		if applyField(&updated, "journal", m.ContainerTitle[0]) {
+		if applyField(&updated, "journal", AbbreviateISO4(m.ContainerTitle[0])) {
 			corrections = append(corrections, "journal")
 		}
 	}

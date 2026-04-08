@@ -85,7 +85,7 @@ The file is only rewritten if the content actually changes.
 
 **Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in `.aux_dir/bib_cache.json` and not re-fetched on subsequent compiles):
 
-- Entry has a `doi` field (or a `url` containing `doi.org`) → queried against the [Crossref API](https://api.crossref.org); mismatched fields are auto-corrected in place.
+- Entry has a `doi` field (or a `url` containing `doi.org`) → queried against the [Crossref API](https://api.crossref.org); mismatched fields are auto-corrected in place. For `@article` entries, the journal name returned by Crossref is mechanically abbreviated to its ISO 4 form using the [LTWA](https://www.issn.org/services/online-services/access-to-the-ltwa/) (e.g. `Nature Communications` → `Nat. Commun.`).
 - Entry has an `eprint` field with `archiveprefix`/`eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org` → queried against the arXiv API; title, author, and year are auto-corrected if needed.
 - Entry has neither → a one-time warning is printed for types where `doi` is mandatory (`@article`, `@inproceedings`, `@conference`, `@incollection`); silently skipped for all other types.
 
