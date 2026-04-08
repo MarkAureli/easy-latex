@@ -201,13 +201,16 @@ func toCamelCase(s string) string {
 }
 
 // firstAuthorLastName returns the last name of the first author from a BibTeX
-// author string. Handles both "Last, First" and "First Last" formats.
+// author string. Handles both "Last, First" and "First Last" formats, and
+// brace-wrapped organisation names (e.g. {Google Quantum AI}).
 func firstAuthorLastName(s string) string {
-	// Drop everything from " and " onward (additional authors).
-	if i := strings.Index(strings.ToLower(s), " and "); i >= 0 {
-		s = s[:i]
+	// Take only the first author (brace-aware split).
+	s = strings.TrimSpace(splitByAnd(s)[0])
+
+	// Brace-wrapped → organisation; strip braces and use whole name.
+	if strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}") {
+		return s[1 : len(s)-1]
 	}
-	s = strings.TrimSpace(s)
 
 	// "Last, First" — take everything before the comma.
 	if last, _, ok := strings.Cut(s, ","); ok {

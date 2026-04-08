@@ -100,6 +100,10 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 
 		normalizeEntryFields(&e)
 
+		if author := FieldValue(e, "author"); author != "" {
+			SetField(&e, "author", "{"+formatAuthorField(author)+"}")
+		}
+
 		if warn := warnMissingFields(e); warn != "" {
 			fmt.Printf("[bib] %s: %s\n", e.Key, warn)
 		}

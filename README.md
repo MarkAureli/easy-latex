@@ -42,7 +42,7 @@ After each successful compilation, `el compile` formats and validates every regi
 
 **Citation key normalisation** — each entry's key is rewritten to the canonical form `{LastName}{Year}{Title}`:
 
-- `LastName` is the first author's last name in CamelCase (e.g. `VanDerBerg` for a compound name, `GarciaLopez` for a hyphenated one)
+- `LastName` is the first author's last name in CamelCase (e.g. `VanDerBerg` for a compound name, `GarciaLopez` for a hyphenated one); for organisation authors the full name is used (e.g. `{Google Quantum AI}` → `GoogleQuantumAi`)
 - `Year` is the four-digit publication year
 - `Title` is the title in CamelCase with math mode (`$…$`) and LaTeX commands stripped; accents are resolved to ASCII (`\"u` → `ue`, `\'e` → `e`, `ß` → `ss`)
 - For `@unpublished` entries `year` is optional; if absent the key is `{LastName}{Title}`
@@ -62,6 +62,18 @@ Example: an entry for "A Great Paper" by Smith in 2023 becomes `Smith2023AGreatP
 | `@techreport` | `author, year, title, institution, doi, url` |
 | `@misc` | `author, year, title, doi, url` — or for arXiv entries: `author, year, title, eprint, archiveprefix, primaryclass` |
 | `@unpublished` | `author, year, title, doi, url, note` |
+
+**Author formatting** — the `author` field is normalised uniformly across all entry types. Individual authors are written as `Last, F. M.` (last name followed by space-separated abbreviated initials); multiple authors are separated by ` and `:
+
+```bibtex
+author = {Smith, J. F. and Doe, J.},
+```
+
+Organisation names must be wrapped in an extra pair of braces to be treated as a single unit rather than a personal name:
+
+```bibtex
+author = {{Google Quantum AI}},
+```
 
 Additional rules:
 

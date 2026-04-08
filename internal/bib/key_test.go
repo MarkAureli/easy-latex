@@ -152,6 +152,8 @@ func TestFirstAuthorLastName(t *testing.T) {
 		{"Smith, John and Doe, Jane", "Smith"},
 		{"John Smith and Jane Doe", "Smith"},
 		{"García-López, Maria", "García-López"},
+		{"{Google Quantum AI}", "Google Quantum AI"},
+		{"{Google Quantum AI} and Smith, J.", "Google Quantum AI"},
 		{"", ""},
 	}
 	for _, c := range cases {
