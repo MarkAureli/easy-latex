@@ -86,6 +86,20 @@ func formatEntry(e Entry) string {
 	return buf.String()
 }
 
+// stripNonEscapedBraces removes all { and } characters from s that are not
+// immediately preceded by a backslash. Used to normalise title field values.
+func stripNonEscapedBraces(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if (s[i] == '{' || s[i] == '}') && (i == 0 || s[i-1] != '\\') {
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
 // sortedFields returns fields in canonical order for the given entry type,
 // with any unrecognized fields appended in their original order.
 func sortedFields(entryType string, fields []Field) []Field {

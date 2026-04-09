@@ -151,6 +151,26 @@ func TestRenderItems_NonWhitespaceRawPreserved(t *testing.T) {
 	}
 }
 
+// ── stripNonEscapedBraces ─────────────────────────────────────────────────────
+
+func TestStripNonEscapedBraces(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"No braces here", "No braces here"},
+		{"Some {Special} Title", "Some Special Title"},
+		{"{Leading} brace", "Leading brace"},
+		{"Trailing {brace}", "Trailing brace"},
+		{"Escaped \\{brace\\}", "Escaped \\{brace\\}"},
+		{"Mixed {inner} and \\{escaped\\}", "Mixed inner and \\{escaped\\}"},
+		{"", ""},
+		{"{}", ""},
+	}
+	for _, c := range cases {
+		if got := stripNonEscapedBraces(c.in); got != c.want {
+			t.Errorf("stripNonEscapedBraces(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // ── roundtrip formatting ──────────────────────────────────────────────────────
 
 func TestFormatIdempotent(t *testing.T) {
