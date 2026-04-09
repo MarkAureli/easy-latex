@@ -13,10 +13,11 @@ var configCmd = &cobra.Command{
 }
 
 var (
-	flagAbbreviateJournals bool
-	flagBraceTitles        bool
-	flagIEEEFormat         bool
-	flagMaxAuthors         int
+	flagAbbreviateJournals  bool
+	flagBraceTitles         bool
+	flagIEEEFormat          bool
+	flagMaxAuthors          int
+	flagAbbreviateFirstName bool
 )
 
 func init() {
@@ -28,6 +29,8 @@ func init() {
 		"Enable IEEE bib formatting: forces brace-titles and converts arXiv @misc to @unpublished (default false)")
 	configCmd.Flags().IntVar(&flagMaxAuthors, "max-authors", 0,
 		"Maximum number of authors to store (0 = unlimited; >=1 truncates to N and appends 'and others')")
+	configCmd.Flags().BoolVar(&flagAbbreviateFirstName, "abbreviate-first-name", true,
+		"Abbreviate first (and middle) names to initials (default true; false keeps first name in full)")
 }
 
 func runConfig(cmd *cobra.Command, args []string) error {
@@ -35,9 +38,10 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	braceChanged := cmd.Flags().Changed("brace-titles")
 	ieeeChanged := cmd.Flags().Changed("ieee-format")
 	maxAuthorsChanged := cmd.Flags().Changed("max-authors")
+	abbrevFirstChanged := cmd.Flags().Changed("abbreviate-first-name")
 
-	if !abbrevChanged && !braceChanged && !ieeeChanged && !maxAuthorsChanged {
-		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false>, --brace-titles=<true|false>, --ieee-format=<true|false>, or --max-authors=<N>")
+	if !abbrevChanged && !braceChanged && !ieeeChanged && !maxAuthorsChanged && !abbrevFirstChanged {
+		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false>, --brace-titles=<true|false>, --ieee-format=<true|false>, --max-authors=<N>, or --abbreviate-first-name=<true|false>")
 	}
 
 	cfg, err := loadConfig()
@@ -86,6 +90,16 @@ func runConfig(cmd *cobra.Command, args []string) error {
 			fmt.Println("Max authors set to unlimited")
 		} else {
 			fmt.Printf("Max authors set to %d\n", flagMaxAuthors)
+		}
+	}
+
+	if abbrevFirstChanged {
+		v := flagAbbreviateFirstName
+		cfg.AbbreviateFirstName = &v
+		if flagAbbreviateFirstName {
+			fmt.Println("First name abbreviation enabled")
+		} else {
+			fmt.Println("First name abbreviation disabled (first name kept in full)")
 		}
 	}
 

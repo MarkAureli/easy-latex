@@ -10,13 +10,14 @@ import (
 
 // Config is the structure stored in .el.json
 type Config struct {
-	Main               string   `json:"main"`
-	AuxDir             string   `json:"aux_dir"`
-	BibFiles           []string `json:"bib_files,omitempty"`
-	AbbreviateJournals *bool    `json:"abbreviate_journals,omitempty"`
-	BraceTitles        *bool    `json:"brace_titles,omitempty"`
-	IEEEFormat         *bool    `json:"ieee_format,omitempty"`
-	MaxAuthors         *int     `json:"max_authors,omitempty"`
+	Main                string   `json:"main"`
+	AuxDir              string   `json:"aux_dir"`
+	BibFiles            []string `json:"bib_files,omitempty"`
+	AbbreviateJournals  *bool    `json:"abbreviate_journals,omitempty"`
+	BraceTitles         *bool    `json:"brace_titles,omitempty"`
+	IEEEFormat          *bool    `json:"ieee_format,omitempty"`
+	MaxAuthors          *int     `json:"max_authors,omitempty"`
+	AbbreviateFirstName *bool    `json:"abbreviate_first_name,omitempty"`
 }
 
 // abbreviateJournals returns true when journal abbreviation is enabled.
@@ -35,6 +36,12 @@ func (cfg *Config) braceTitles() bool {
 // Defaults to false when the field is absent (nil).
 func (cfg *Config) ieeeFormat() bool {
 	return cfg.IEEEFormat != nil && *cfg.IEEEFormat
+}
+
+// abbreviateFirstName returns true when first (and middle) names should be
+// abbreviated to initials. Defaults to true when the field is absent (nil).
+func (cfg *Config) abbreviateFirstName() bool {
+	return cfg.AbbreviateFirstName == nil || *cfg.AbbreviateFirstName
 }
 
 // maxAuthors returns the maximum number of authors to store, or 0 for unlimited.

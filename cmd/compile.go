@@ -74,7 +74,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	// Normalise bib files before the bib tool runs so bibtex/biber processes
 	// the corrected entries (canonical keys, formatted fields, etc.).
-	if err := bib.ProcessBibFiles(cfg.BibFiles, cfg.AuxDir, cfg.abbreviateJournals(), cfg.braceTitles(), cfg.ieeeFormat(), cfg.maxAuthors()); err != nil {
+	if err := bib.ProcessBibFiles(cfg.BibFiles, cfg.AuxDir, cfg.abbreviateJournals(), cfg.braceTitles(), cfg.ieeeFormat(), cfg.maxAuthors(), cfg.abbreviateFirstName()); err != nil {
 		return err
 	}
 

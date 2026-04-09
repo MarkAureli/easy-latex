@@ -8,17 +8,18 @@ import (
 // formatAuthorField normalises the value of an author field.
 //
 // Authors are separated by " and " (brace-aware). Each individual author is
-// normalised to "Last, F. M." form. Author tokens already wrapped in braces
+// normalised to "Last, F. M." form when abbreviateFirstName is true, or
+// "Last, First M." form when false. Author tokens already wrapped in braces
 // (e.g. {Google Quantum AI}) are treated as organisations and left unchanged.
 //
 // If maxAuthors > 0 and there are more authors than that limit, only the first
 // maxAuthors authors are kept and "others" is appended, causing BibTeX/BibLaTeX
 // to render "et al.".
-func formatAuthorField(authors string, maxAuthors int) string {
+func formatAuthorField(authors string, maxAuthors int, abbreviateFirstName bool) string {
 	parts := splitByAnd(authors)
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		out = append(out, formatSingleAuthor(strings.TrimSpace(p)))
+		out = append(out, formatSingleAuthor(strings.TrimSpace(p), abbreviateFirstName))
 	}
 	if maxAuthors > 0 && len(out) > maxAuthors {
 		out = append(out[:maxAuthors], "others")
@@ -55,9 +56,11 @@ func splitByAnd(s string) []string {
 // formatSingleAuthor normalises one author token.
 //
 // Tokens already wrapped in braces are returned unchanged (organisations).
-// Otherwise the token is normalised to "Last, F. M." form, handling both
-// "Last, First Middle" and "First Middle Last" input.
-func formatSingleAuthor(name string) string {
+// Otherwise the token is normalised to "Last, F. M." form when
+// abbreviateFirstName is true, or "Last, First M." form when false (first
+// given name kept in full, middle names still abbreviated). Both "Last, First
+// Middle" and "First Middle Last" input forms are handled.
+func formatSingleAuthor(name string, abbreviateFirstName bool) string {
 	if strings.HasPrefix(name, "{") && strings.HasSuffix(name, "}") {
 		return name // organisation — keep as-is
 	}
@@ -79,21 +82,29 @@ func formatSingleAuthor(name string) string {
 		}
 	}
 
-	abbrev := abbreviateGivenNames(givens)
+	abbrev := abbreviateGivenNames(givens, abbreviateFirstName)
 	if abbrev == "" {
 		return last
 	}
 	return last + ", " + abbrev
 }
 
-// abbreviateGivenNames returns space-separated initials for a list of given
-// names, e.g. "John Frank" → "J. F.".
-func abbreviateGivenNames(givens string) string {
+// abbreviateGivenNames returns formatted given names.
+//
+// When abbreviateFirstName is true all names are reduced to initials, e.g.
+// "John Frank" → "J. F.".
+// When false the first name is kept verbatim and only middle names are
+// abbreviated, e.g. "John Frank" → "John F.".
+func abbreviateGivenNames(givens string, abbreviateFirstName bool) string {
 	parts := strings.Fields(givens)
 	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if init := initialOf(p); init != "" {
-			out = append(out, init)
+	for i, p := range parts {
+		if i == 0 && !abbreviateFirstName {
+			out = append(out, p)
+		} else {
+			if init := initialOf(p); init != "" {
+				out = append(out, init)
+			}
 		}
 	}
 	return strings.Join(out, " ")

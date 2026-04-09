@@ -37,9 +37,34 @@ func TestFormatAuthorField(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := formatAuthorField(tc.in, 0)
+			got := formatAuthorField(tc.in, 0, true)
 			if got != tc.want {
 				t.Errorf("formatAuthorField(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFormatAuthorFieldFullFirstName(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"full first, middle abbreviated", "Smith, John Frank", "Smith, John F."},
+		{"natural order full first", "John Frank Smith", "Smith, John F."},
+		{"single given name kept full", "Smith, John", "Smith, John"},
+		{"no given name", "Smith", "Smith"},
+		{"already initial stays", "Smith, J. F.", "Smith, J. F."},
+		{"multiple authors", "Smith, John Frank and Doe, Jane Mary", "Smith, John F. and Doe, Jane M."},
+		{"organisation unchanged", "{Google Quantum AI}", "{Google Quantum AI}"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := formatAuthorField(tc.in, 0, false)
+			if got != tc.want {
+				t.Errorf("formatAuthorField(%q, 0, false) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}
@@ -61,7 +86,7 @@ func TestFormatAuthorFieldMaxAuthors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := formatAuthorField(tc.in, tc.maxAuthors)
+			got := formatAuthorField(tc.in, tc.maxAuthors, true)
 			if got != tc.want {
 				t.Errorf("formatAuthorField(%q, %d) = %q, want %q", tc.in, tc.maxAuthors, got, tc.want)
 			}
