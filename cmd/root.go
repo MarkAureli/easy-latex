@@ -16,6 +16,7 @@ type Config struct {
 	AbbreviateJournals *bool    `json:"abbreviate_journals,omitempty"`
 	BraceTitles        *bool    `json:"brace_titles,omitempty"`
 	IEEEFormat         *bool    `json:"ieee_format,omitempty"`
+	MaxAuthors         *int     `json:"max_authors,omitempty"`
 }
 
 // abbreviateJournals returns true when journal abbreviation is enabled.
@@ -34,6 +35,19 @@ func (cfg *Config) braceTitles() bool {
 // Defaults to false when the field is absent (nil).
 func (cfg *Config) ieeeFormat() bool {
 	return cfg.IEEEFormat != nil && *cfg.IEEEFormat
+}
+
+// maxAuthors returns the maximum number of authors to store, or 0 for unlimited.
+// Defaults to 0 (unlimited) when the field is absent (nil).
+// IEEE format implies a maximum of 5 authors when no explicit limit is set.
+func (cfg *Config) maxAuthors() int {
+	if cfg.MaxAuthors == nil || *cfg.MaxAuthors == 0 {
+		if cfg.ieeeFormat() {
+			return 5
+		}
+		return 0
+	}
+	return *cfg.MaxAuthors
 }
 
 func loadConfig() (*Config, error) {

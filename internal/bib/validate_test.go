@@ -672,7 +672,7 @@ func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, true, false); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, true, false, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -715,7 +715,7 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, true, false); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, true, false, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -756,7 +756,7 @@ func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, false, false); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, false, false, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -798,7 +798,7 @@ func TestBraceTitles_DisabledNormalizesDoubleBraced(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, false, false); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, false, false, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -926,7 +926,7 @@ func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, false, true); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, false, true, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -974,7 +974,7 @@ func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
 	}
 
 	// ieee_format=true, brace_titles=false — should still double-brace
-	if err := ProcessBibFiles([]string{path}, dir, true, false, true); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, false, true, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1013,7 +1013,7 @@ func TestIEEEFormat_NonArxivMiscUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, false, true); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, false, true, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

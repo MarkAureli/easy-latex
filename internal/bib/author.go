@@ -10,11 +10,18 @@ import (
 // Authors are separated by " and " (brace-aware). Each individual author is
 // normalised to "Last, F. M." form. Author tokens already wrapped in braces
 // (e.g. {Google Quantum AI}) are treated as organisations and left unchanged.
-func formatAuthorField(authors string) string {
+//
+// If maxAuthors > 0 and there are more authors than that limit, only the first
+// maxAuthors authors are kept and "others" is appended, causing BibTeX/BibLaTeX
+// to render "et al.".
+func formatAuthorField(authors string, maxAuthors int) string {
 	parts := splitByAnd(authors)
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		out = append(out, formatSingleAuthor(strings.TrimSpace(p)))
+	}
+	if maxAuthors > 0 && len(out) > maxAuthors {
+		out = append(out[:maxAuthors], "others")
 	}
 	return strings.Join(out, " and ")
 }

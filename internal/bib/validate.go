@@ -36,7 +36,7 @@ func saveCache(auxDir string, c cache) {
 }
 
 // ProcessBibFiles formats and validates every registered .bib file.
-func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, braceTitles, ieeeFormat bool) error {
+func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int) error {
 	if len(bibFiles) == 0 {
 		return nil
 	}
@@ -44,7 +44,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, brace
 	cacheChanged := false
 
 	for _, path := range bibFiles {
-		changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles, ieeeFormat)
+		changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles, ieeeFormat, maxAuthors)
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, brace
 	return nil
 }
 
-func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles, ieeeFormat bool) (cacheChanged bool, err error) {
+func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int) (cacheChanged bool, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("cannot read %s: %w", path, err)
@@ -105,7 +105,7 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 		}
 
 		if author := FieldValue(e, "author"); author != "" {
-			SetField(&e, "author", "{"+formatAuthorField(author)+"}")
+			SetField(&e, "author", "{"+formatAuthorField(author, maxAuthors)+"}")
 		}
 
 		if title := FieldValue(e, "title"); title != "" {

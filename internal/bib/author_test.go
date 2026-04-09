@@ -37,9 +37,33 @@ func TestFormatAuthorField(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := formatAuthorField(tc.in)
+			got := formatAuthorField(tc.in, 0)
 			if got != tc.want {
 				t.Errorf("formatAuthorField(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFormatAuthorFieldMaxAuthors(t *testing.T) {
+	tests := []struct {
+		name       string
+		in         string
+		maxAuthors int
+		want       string
+	}{
+		{"unlimited", "Smith, John and Doe, Jane and Lee, Bob", 0, "Smith, J. and Doe, J. and Lee, B."},
+		{"limit 1 of 3", "Smith, John and Doe, Jane and Lee, Bob", 1, "Smith, J. and others"},
+		{"limit 2 of 3", "Smith, John and Doe, Jane and Lee, Bob", 2, "Smith, J. and Doe, J. and others"},
+		{"limit equals count", "Smith, John and Doe, Jane", 2, "Smith, J. and Doe, J."},
+		{"limit exceeds count", "Smith, John and Doe, Jane", 5, "Smith, J. and Doe, J."},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := formatAuthorField(tc.in, tc.maxAuthors)
+			if got != tc.want {
+				t.Errorf("formatAuthorField(%q, %d) = %q, want %q", tc.in, tc.maxAuthors, got, tc.want)
 			}
 		})
 	}

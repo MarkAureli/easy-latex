@@ -16,6 +16,7 @@ var (
 	flagAbbreviateJournals bool
 	flagBraceTitles        bool
 	flagIEEEFormat         bool
+	flagMaxAuthors         int
 )
 
 func init() {
@@ -25,15 +26,18 @@ func init() {
 		"Enclose title values in an extra pair of curly braces (default false)")
 	configCmd.Flags().BoolVar(&flagIEEEFormat, "ieee-format", false,
 		"Enable IEEE bib formatting: forces brace-titles and converts arXiv @misc to @unpublished (default false)")
+	configCmd.Flags().IntVar(&flagMaxAuthors, "max-authors", 0,
+		"Maximum number of authors to store (0 = unlimited; >=1 truncates to N and appends 'and others')")
 }
 
 func runConfig(cmd *cobra.Command, args []string) error {
 	abbrevChanged := cmd.Flags().Changed("abbreviate-journals")
 	braceChanged := cmd.Flags().Changed("brace-titles")
 	ieeeChanged := cmd.Flags().Changed("ieee-format")
+	maxAuthorsChanged := cmd.Flags().Changed("max-authors")
 
-	if !abbrevChanged && !braceChanged && !ieeeChanged {
-		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false>, --brace-titles=<true|false>, or --ieee-format=<true|false>")
+	if !abbrevChanged && !braceChanged && !ieeeChanged && !maxAuthorsChanged {
+		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false>, --brace-titles=<true|false>, --ieee-format=<true|false>, or --max-authors=<N>")
 	}
 
 	cfg, err := loadConfig()
@@ -66,8 +70,22 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		cfg.IEEEFormat = &v
 		if flagIEEEFormat {
 			fmt.Println("IEEE bib formatting enabled")
+			fmt.Println("Max authors set to 5 (IEEE default; override with --max-authors)")
 		} else {
 			fmt.Println("IEEE bib formatting disabled")
+		}
+	}
+
+	if maxAuthorsChanged {
+		if flagMaxAuthors < 0 {
+			return fmt.Errorf("--max-authors must be 0 (unlimited) or a positive integer")
+		}
+		v := flagMaxAuthors
+		cfg.MaxAuthors = &v
+		if flagMaxAuthors == 0 {
+			fmt.Println("Max authors set to unlimited")
+		} else {
+			fmt.Printf("Max authors set to %d\n", flagMaxAuthors)
 		}
 	}
 
