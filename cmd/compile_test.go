@@ -217,7 +217,7 @@ func TestRunCompile_Bibtex(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	assertPDFSymlink(t)
-	assertBBLContains(t, "knuth1984")
+	assertBBLContains(t, "Knuth1984TheTexbook")
 }
 
 func TestRunCompile_Biber(t *testing.T) {
@@ -229,5 +229,5 @@ func TestRunCompile_Biber(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	assertPDFSymlink(t)
-	assertBBLContains(t, "knuth1984")
+	assertBBLContains(t, "Knuth1984TheTexbook")
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
+	"github.com/MarkAureli/easy-latex/internal/texscan"
 	"github.com/spf13/cobra"
 )
 
@@ -74,8 +75,20 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	// Normalise bib files before the bib tool runs so bibtex/biber processes
 	// the corrected entries (canonical keys, formatted fields, etc.).
-	if err := bib.ProcessBibFiles(cfg.BibFiles, cfg.AuxDir, cfg.abbreviateJournals(), cfg.braceTitles(), cfg.ieeeFormat(), cfg.maxAuthors(), cfg.abbreviateFirstName()); err != nil {
+	renames, err := bib.ProcessBibFiles(cfg.BibFiles, cfg.AuxDir, cfg.abbreviateJournals(), cfg.braceTitles(), cfg.ieeeFormat(), cfg.maxAuthors(), cfg.abbreviateFirstName())
+	if err != nil {
 		return err
+	}
+	// If any bib keys were renamed, update \cite{} references in all .tex files
+	// and re-run pdflatex so the .aux/.bcf reflects the new keys before the bib tool.
+	if len(renames) > 0 {
+		texFiles := texscan.FindTexFiles(cfg.Main, ".")
+		if err := rewriteCiteKeys(texFiles, renames); err != nil {
+			return err
+		}
+		if _, err := runPdflatex(pdflatex, cfg); err != nil {
+			return err
+		}
 	}
 
 	// Detect and run bibliography tool based on artifacts from first pass
@@ -271,4 +284,50 @@ func bibFilesFromArtifacts(stem, auxDir string) []string {
 	}
 
 	return files
+}
+
+// rewriteCiteKeys replaces old citation keys with their renamed counterparts in
+// all given .tex files. Only occurrences delimited by {, } or , (with optional
+// surrounding whitespace) are replaced, avoiding false matches in prose or labels.
+func rewriteCiteKeys(texFiles []string, renames map[string]string) error {
+	type rule struct {
+		re  *regexp.Regexp
+		new string
+	}
+	rules := make([]rule, 0, len(renames))
+	for old, newKey := range renames {
+		pat := regexp.MustCompile(`([{,]\s*)` + regexp.QuoteMeta(old) + `(\s*[},])`)
+		rules = append(rules, rule{pat, newKey})
+	}
+
+	for _, path := range texFiles {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("cannot read %s: %w", path, err)
+		}
+		lines := strings.Split(string(data), "\n")
+		changed := false
+		for i, line := range lines {
+			// Only rewrite the non-comment portion of each line.
+			commentIdx := strings.Index(line, "%")
+			pre, suf := line, ""
+			if commentIdx >= 0 {
+				pre, suf = line[:commentIdx], line[commentIdx:]
+			}
+			newPre := pre
+			for _, r := range rules {
+				newPre = r.re.ReplaceAllString(newPre, "${1}"+r.new+"${2}")
+			}
+			if newPre != pre {
+				lines[i] = newPre + suf
+				changed = true
+			}
+		}
+		if changed {
+			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+				return fmt.Errorf("cannot write %s: %w", path, err)
+			}
+		}
+	}
+	return nil
 }

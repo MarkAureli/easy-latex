@@ -247,7 +247,7 @@ func TestQueryCrossref_CorrectsMismatchedFields(t *testing.T) {
 			{Name: "doi", Value: "{10.1000/xyz}"},
 		},
 	}
-	result, err := queryCrossref(e, "10.1000/xyz", true)
+	result, _, err := queryCrossref(e, "10.1000/xyz")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestQueryCrossref_NoChangeWhenFieldsMatch(t *testing.T) {
 			{Name: "doi", Value: "{10.1/x}"},
 		},
 	}
-	result, err := queryCrossref(e, "10.1/x", true)
+	result, _, err := queryCrossref(e, "10.1/x")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -341,7 +341,7 @@ func TestQueryArxiv_CorrectsMismatchedTitle(t *testing.T) {
 		Key:    "Smith2023",
 		Fields: []Field{{Name: "title", Value: "{Wrong Title}"}},
 	}
-	result, err := queryArxiv(e, "2301.00001")
+	result, _, err := queryArxiv(e, "2301.00001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -368,7 +368,7 @@ func TestQueryArxiv_ExtractsYearFromPublished(t *testing.T) {
 		Key:    "Doe2019",
 		Fields: []Field{{Name: "title", Value: "{A Title}"}},
 	}
-	result, err := queryArxiv(e, "1906.00001")
+	result, _, err := queryArxiv(e, "1906.00001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -631,7 +631,7 @@ func containsField(warn, field string) bool {
 
 func TestValidateEntry_NoIDWarning_ArticleWarns(t *testing.T) {
 	e := Entry{Type: "article", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
-	corrected, source, warn := validateEntry(e, true)
+	corrected, _, source, warn := validateEntry(e, true)
 	if corrected != nil {
 		t.Error("expected no correction")
 	}
@@ -645,7 +645,7 @@ func TestValidateEntry_NoIDWarning_ArticleWarns(t *testing.T) {
 
 func TestValidateEntry_NoIDWarning_BookSuppressed(t *testing.T) {
 	e := Entry{Type: "book", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
-	_, source, warn := validateEntry(e, true)
+	_, _, source, warn := validateEntry(e, true)
 	if source != "no-id" {
 		t.Errorf("source = %q, want %q", source, "no-id")
 	}
@@ -672,7 +672,7 @@ func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -715,7 +715,7 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -756,7 +756,7 @@ func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -798,7 +798,7 @@ func TestBraceTitles_DisabledNormalizesDoubleBraced(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -926,7 +926,7 @@ func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -974,7 +974,7 @@ func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
 	}
 
 	// ieee_format=true, brace_titles=false — should still double-brace
-	if err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1013,7 +1013,7 @@ func TestIEEEFormat_NonArxivMiscUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

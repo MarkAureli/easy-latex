@@ -14,9 +14,23 @@ import (
 	"time"
 )
 
-// cache maps citation keys to their validation source
-// ("crossref", "arxiv", or "no-id").
-type cache map[string]string
+// cacheEntry stores the validation source and the raw (pre-config) field values
+// fetched from Crossref or arXiv. Raw fields allow config-dependent
+// transformations (journal abbreviation, author formatting, title bracing) to
+// be re-applied on every compile without re-fetching from the API.
+//
+// Title is stored after stripNonEscapedBraces (non-configurable preprocessing).
+// Authors is the full "Last, First and …" string before maxAuthors/abbreviation.
+// Journal is the full unabbreviated name (Crossref only).
+type cacheEntry struct {
+	Source  string `json:"source"`
+	Title   string `json:"title,omitempty"`
+	Authors string `json:"authors,omitempty"`
+	Journal string `json:"journal,omitempty"`
+}
+
+// cache maps canonical citation keys to their cacheEntry.
+type cache map[string]cacheEntry
 
 func loadCache(auxDir string) cache {
 	data, err := os.ReadFile(filepath.Join(auxDir, "bib_cache.json"))
@@ -25,6 +39,7 @@ func loadCache(auxDir string) cache {
 	}
 	var c cache
 	if err := json.Unmarshal(data, &c); err != nil {
+		// Unreadable or old-format cache: start fresh; entries will be re-validated.
 		return make(cache)
 	}
 	return c
@@ -36,45 +51,60 @@ func saveCache(auxDir string, c cache) {
 }
 
 // ProcessBibFiles formats and validates every registered .bib file.
-func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName bool) error {
+// ProcessBibFiles formats and validates every registered .bib file.
+// It returns a map of renamed citation keys (oldKey → newKey) across all files,
+// which the caller can use to update \cite{} references in .tex sources.
+func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName bool) (map[string]string, error) {
 	if len(bibFiles) == 0 {
-		return nil
+		return nil, nil
 	}
 	c := loadCache(auxDir)
 	cacheChanged := false
+	allRenames := make(map[string]string)
 
 	for _, path := range bibFiles {
-		changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles, ieeeFormat, maxAuthors, abbreviateFirstName)
+		renames, changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles, ieeeFormat, maxAuthors, abbreviateFirstName)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if changed {
 			cacheChanged = true
+		}
+		for old, new := range renames {
+			allRenames[old] = new
 		}
 	}
 
 	if cacheChanged {
 		saveCache(auxDir, c)
 	}
-	return nil
+	return allRenames, nil
 }
 
-func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName bool) (cacheChanged bool, err error) {
+func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName bool) (renames map[string]string, cacheChanged bool, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return false, fmt.Errorf("cannot read %s: %w", path, err)
+		return nil, false, fmt.Errorf("cannot read %s: %w", path, err)
 	}
 
 	items := ParseFile(string(data))
 
+	// Capture original keys before any renaming so we can build the rename map.
+	origKeys := make(map[int]string)
+	for i, item := range items {
+		if item.IsEntry {
+			origKeys[i] = item.Entry.Key
+		}
+	}
+
 	assignCanonicalKeys(items)
 
-	// pendingCache collects (itemIndex, source) for entries validated this run.
+	// pendingCache collects entries validated this run.
 	// Written to the cache after the second assignCanonicalKeys so the cache
 	// key matches the final canonical key.
 	type pendingEntry struct {
 		itemIdx int
-		source  string
+		entry   cacheEntry
 	}
 	var pending []pendingEntry
 
@@ -84,8 +114,9 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 		}
 		e := item.Entry
 
-		if _, seen := c[e.Key]; !seen {
-			corrected, source, warn := validateEntry(e, abbreviateJournals)
+		cached, seen := c[e.Key]
+		if !seen {
+			corrected, raw, source, warn := validateEntry(e, abbreviateJournals)
 			if warn != "" {
 				fmt.Printf("[bib] %s: %s\n", e.Key, warn)
 			}
@@ -93,8 +124,30 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 				e = *corrected
 			}
 			if source != "" {
-				pending = append(pending, pendingEntry{i, source})
+				pending = append(pending, pendingEntry{i, cacheEntry{
+					Source:  source,
+					Title:   raw.Title,
+					Authors: raw.Authors,
+					Journal: raw.Journal,
+				}})
 				cacheChanged = true
+			}
+		} else if cached.Source == "crossref" || cached.Source == "arxiv" {
+			// Re-apply raw fields with the current config so that changes to
+			// abbreviateJournals, maxAuthors, abbreviateFirstName, or braceTitles
+			// take effect without re-fetching from the API.
+			if cached.Title != "" {
+				SetField(&e, "title", "{"+cached.Title+"}")
+			}
+			if cached.Authors != "" {
+				SetField(&e, "author", "{"+cached.Authors+"}")
+			}
+			if cached.Journal != "" {
+				journal := cached.Journal
+				if abbreviateJournals {
+					journal = AbbreviateISO4(journal)
+				}
+				SetField(&e, "journal", "{"+journal+"}")
 			}
 		}
 
@@ -137,16 +190,27 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 
 	// Flush pending cache entries under the final canonical keys.
 	for _, p := range pending {
-		c[items[p.itemIdx].Entry.Key] = p.source
+		c[items[p.itemIdx].Entry.Key] = p.entry
+	}
+
+	// Build rename map: entries whose key changed from the original .bib key.
+	renames = make(map[string]string)
+	for i, item := range items {
+		if !item.IsEntry {
+			continue
+		}
+		if orig := origKeys[i]; orig != item.Entry.Key {
+			renames[orig] = item.Entry.Key
+		}
 	}
 
 	formatted := renderItems(items)
 	if formatted != string(data) {
 		if err := os.WriteFile(path, []byte(formatted), 0644); err != nil {
-			return cacheChanged, fmt.Errorf("cannot write %s: %w", path, err)
+			return renames, cacheChanged, fmt.Errorf("cannot write %s: %w", path, err)
 		}
 	}
-	return cacheChanged, nil
+	return renames, cacheChanged, nil
 }
 
 // ── entry specifications ───────────────────────────────────────────────────────
@@ -350,29 +414,33 @@ func ensureArticleOptionalFields(e *Entry) {
 }
 
 // validateEntry looks up the entry via Crossref or arXiv and returns a
-// corrected entry (nil if nothing changed), the source used, and an optional
-// warning.
-func validateEntry(e Entry, abbreviateJournals bool) (corrected *Entry, source, warning string) {
+// corrected entry (nil if nothing changed), the raw fields for caching, the
+// source used, and an optional warning.
+func validateEntry(e Entry, abbreviateJournals bool) (corrected *Entry, raw cacheEntry, source, warning string) {
 	if doi := findDOI(e); doi != "" {
-		result, err := queryCrossref(e, doi, abbreviateJournals)
+		result, raw, err := queryCrossref(e, doi)
 		if err != nil {
-			return nil, "", fmt.Sprintf("Crossref query failed: %v", err)
+			return nil, cacheEntry{}, "", fmt.Sprintf("Crossref query failed: %v", err)
 		}
-		return result, "crossref", ""
+		// Apply journal abbreviation to the corrected entry (raw.Journal is always full).
+		if result != nil && raw.Journal != "" && abbreviateJournals {
+			SetField(result, "journal", "{"+AbbreviateISO4(raw.Journal)+"}")
+		}
+		return result, raw, "crossref", ""
 	}
 
 	if id := findArxivID(e); id != "" {
-		result, err := queryArxiv(e, id)
+		result, raw, err := queryArxiv(e, id)
 		if err != nil {
-			return nil, "", fmt.Sprintf("arXiv query failed: %v", err)
+			return nil, cacheEntry{}, "", fmt.Sprintf("arXiv query failed: %v", err)
 		}
-		return result, "arxiv", ""
+		return result, raw, "arxiv", ""
 	}
 
 	if doiIsMandatory(e.Type) {
-		return nil, "no-id", "no DOI or arXiv ID — skipping validation"
+		return nil, cacheEntry{}, "no-id", "no DOI or arXiv ID — skipping validation"
 	}
-	return nil, "no-id", ""
+	return nil, cacheEntry{}, "no-id", ""
 }
 
 // doiIsMandatory reports whether "doi" is listed as a mandatory field for the
@@ -443,56 +511,59 @@ type crossrefResponse struct {
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
-func queryCrossref(e Entry, doi string, abbreviateJournals bool) (*Entry, error) {
+func queryCrossref(e Entry, doi string) (*Entry, cacheEntry, error) {
 	req, err := http.NewRequest("GET", "https://api.crossref.org/works/"+url.PathEscape(doi), nil)
 	if err != nil {
-		return nil, err
+		return nil, cacheEntry{}, err
 	}
 	req.Header.Set("User-Agent", "easy-latex/0.1 (https://github.com/MarkAureli/easy-latex)")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, cacheEntry{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, cacheEntry{}, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, cacheEntry{}, err
 	}
 
 	var cr crossrefResponse
 	if err := json.Unmarshal(body, &cr); err != nil {
-		return nil, err
+		return nil, cacheEntry{}, err
 	}
 	if cr.Status != "ok" {
-		return nil, fmt.Errorf("status: %s", cr.Status)
+		return nil, cacheEntry{}, fmt.Errorf("status: %s", cr.Status)
 	}
 
 	m := cr.Message
 	updated := e
+	var raw cacheEntry
 	var corrections []string
 
 	if len(m.Title) > 0 {
-		if applyField(&updated, "title", m.Title[0]) {
+		// Strip non-escaped braces here (non-configurable preprocessing) so the
+		// cached title is already in its final pre-transformation state.
+		raw.Title = stripNonEscapedBraces(m.Title[0])
+		if applyField(&updated, "title", raw.Title) {
 			corrections = append(corrections, "title")
 		}
 	}
 	if len(m.Author) > 0 {
-		if applyField(&updated, "author", formatCrossrefAuthors(m.Author)) {
+		raw.Authors = formatCrossrefAuthors(m.Author)
+		if applyField(&updated, "author", raw.Authors) {
 			corrections = append(corrections, "author")
 		}
 	}
 	if len(m.ContainerTitle) > 0 {
-		journal := m.ContainerTitle[0]
-		if abbreviateJournals {
-			journal = AbbreviateISO4(journal)
-		}
-		if applyField(&updated, "journal", journal) {
+		// Store the full journal name; abbreviation is applied by the caller.
+		raw.Journal = m.ContainerTitle[0]
+		if applyField(&updated, "journal", raw.Journal) {
 			corrections = append(corrections, "journal")
 		}
 	}
@@ -524,9 +595,9 @@ func queryCrossref(e Entry, doi string, abbreviateJournals bool) (*Entry, error)
 
 	if len(corrections) > 0 {
 		fmt.Printf("[bib] %s: corrected %s\n", e.Key, strings.Join(corrections, ", "))
-		return &updated, nil
+		return &updated, raw, nil
 	}
-	return nil, nil
+	return nil, raw, nil
 }
 
 func formatCrossrefAuthors(authors []crossrefAuthor) string {
@@ -560,42 +631,46 @@ type arxivAuthor struct {
 	Name string `xml:"name"`
 }
 
-func queryArxiv(e Entry, id string) (*Entry, error) {
+func queryArxiv(e Entry, id string) (*Entry, cacheEntry, error) {
 	resp, err := httpClient.Get("https://export.arxiv.org/api/query?id_list=" + url.QueryEscape(id))
 	if err != nil {
-		return nil, err
+		return nil, cacheEntry{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, cacheEntry{}, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, cacheEntry{}, err
 	}
 
 	var feed arxivFeed
 	if err := xml.Unmarshal(body, &feed); err != nil {
-		return nil, err
+		return nil, cacheEntry{}, err
 	}
 	if len(feed.Entries) == 0 {
-		return nil, fmt.Errorf("no entry found for %s", id)
+		return nil, cacheEntry{}, fmt.Errorf("no entry found for %s", id)
 	}
 
 	ax := feed.Entries[0]
 	updated := e
+	var raw cacheEntry
 	var corrections []string
 
 	title := strings.TrimSpace(strings.ReplaceAll(ax.Title, "\n", " "))
 	if title != "" {
-		if applyField(&updated, "title", title) {
+		// Strip non-escaped braces (non-configurable preprocessing) before caching.
+		raw.Title = stripNonEscapedBraces(title)
+		if applyField(&updated, "title", raw.Title) {
 			corrections = append(corrections, "title")
 		}
 	}
 	if len(ax.Authors) > 0 {
-		if applyField(&updated, "author", formatArxivAuthors(ax.Authors)) {
+		raw.Authors = formatArxivAuthors(ax.Authors)
+		if applyField(&updated, "author", raw.Authors) {
 			corrections = append(corrections, "author")
 		}
 	}
@@ -607,9 +682,9 @@ func queryArxiv(e Entry, id string) (*Entry, error) {
 
 	if len(corrections) > 0 {
 		fmt.Printf("[bib] %s: corrected %s\n", e.Key, strings.Join(corrections, ", "))
-		return &updated, nil
+		return &updated, raw, nil
 	}
-	return nil, nil
+	return nil, raw, nil
 }
 
 func formatArxivAuthors(authors []arxivAuthor) string {
