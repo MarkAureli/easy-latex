@@ -1,14 +1,20 @@
 # cmd
 
-Cobra commands wired in `root.go`. Config struct (`Config`) holds `Main`, `AuxDir`, `BibFiles`, `AbbreviateJournals`; persisted as `.el.json`.
+Cobra commands wired in `root.go`. Config struct (`Config`) holds `Main`, `AuxDir`, `BibFiles`, `AbbreviateJournals`, `BraceTitles`, `IEEEFormat`; persisted as `.el.json`.
 
 ## el config (`config.go`)
 
-Reads `.el.json`, updates the requested field, and rewrites it.
+Reads `.el.json`, updates the requested field(s), and rewrites it. Any combination of flags may be passed in a single invocation.
 
-- `--abbreviate-journals=<true|false>` — enable/disable ISO 4 journal abbreviation (default: true, nil in JSON = true)
+| Flag | Default | nil meaning |
+|---|---|---|
+| `--abbreviate-journals=<bool>` | true | true |
+| `--brace-titles=<bool>` | false | false |
+| `--ieee-format=<bool>` | false | false |
 
-`AbbreviateJournals` is stored as `*bool` with `omitempty`; nil (absent) defaults to true. `cfg.abbreviateJournals()` is the helper used by compile.
+All options stored as `*bool` with `omitempty`. Helpers: `cfg.abbreviateJournals()`, `cfg.braceTitles()`, `cfg.ieeeFormat()`.
+
+`--ieee-format=true` implies `brace-titles=true` and converts `@misc` arXiv entries to `@unpublished` (see bib CLAUDE.md).
 
 ## el init (`init.go`)
 
@@ -22,12 +28,13 @@ Reads `.el.json`, updates the requested field, and rewrites it.
 
 Compile sequence:
 1. First `pdflatex` pass — output buffered (bib warnings expected at this stage)
-2. Detect bib tool from artifacts: `.bcf` → biber; `\bibdata` in `.aux` → bibtex; neither → skip
-3. If bib tool found: run it, then second `pdflatex` pass; if output contains "rerun", run a third pass
-4. Print filtered pdflatex output (errors, warnings, undefined refs, over/underfull boxes)
-5. Create symlink `<stem>.pdf` → `.aux_dir/<stem>.pdf`
-6. Call `bib.ProcessBibFiles` on all registered bib files
-7. If `-o`/`--open`: open the PDF
+2. Discover bib files from artifacts if `BibFiles` is empty
+3. Call `bib.ProcessBibFiles` — normalise bib files before the bib tool runs
+4. Detect bib tool from artifacts: `.bcf` → biber; `\bibdata` in `.aux` → bibtex; neither → skip
+5. If bib tool found: run it, then second `pdflatex` pass; if output contains "rerun", run a third pass
+6. Print filtered pdflatex output (errors, warnings, undefined refs, over/underfull boxes)
+7. Create symlink `<stem>.pdf` → `.aux_dir/<stem>.pdf`
+8. If `-o`/`--open`: open the PDF
 
 Tool lookup: `exec.LookPath` first, then `/Library/TeX/texbin/` fallback (macOS TeX Live).
 

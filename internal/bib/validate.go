@@ -36,7 +36,7 @@ func saveCache(auxDir string, c cache) {
 }
 
 // ProcessBibFiles formats and validates every registered .bib file.
-func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, braceTitles bool) error {
+func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, braceTitles, ieeeFormat bool) error {
 	if len(bibFiles) == 0 {
 		return nil
 	}
@@ -44,7 +44,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, brace
 	cacheChanged := false
 
 	for _, path := range bibFiles {
-		changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles)
+		changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles, ieeeFormat)
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, brace
 	return nil
 }
 
-func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles bool) (cacheChanged bool, err error) {
+func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles, ieeeFormat bool) (cacheChanged bool, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("cannot read %s: %w", path, err)
@@ -100,6 +100,10 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 
 		normalizeEntryFields(&e)
 
+		if ieeeFormat && e.Type == "misc" && findArxivID(e) != "" {
+			transformArxivMiscToUnpublished(&e)
+		}
+
 		if author := FieldValue(e, "author"); author != "" {
 			SetField(&e, "author", "{"+formatAuthorField(author)+"}")
 		}
@@ -110,7 +114,7 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 			}
 		}
 
-		if braceTitles {
+		if braceTitles || ieeeFormat {
 			if title := FieldValue(e, "title"); title != "" {
 				SetField(&e, "title", "{{"+title+"}}")
 			}
@@ -239,6 +243,23 @@ var entrySpecs = map[string]typeSpec{
 			"author": true, "year": true, "title": true, "doi": true, "url": true, "note": true,
 		},
 	},
+}
+
+// transformArxivMiscToUnpublished converts a @misc arXiv entry to @unpublished
+// per IEEE style: author, year, and title are kept; eprint, archiveprefix, and
+// primaryclass are dropped; a note field is added with an \href to arXiv.
+func transformArxivMiscToUnpublished(e *Entry) {
+	eprint := FieldValue(*e, "eprint")
+	e.Type = "unpublished"
+	filtered := make([]Field, 0, len(e.Fields))
+	for _, f := range e.Fields {
+		if f.Name == "author" || f.Name == "year" || f.Name == "title" {
+			filtered = append(filtered, f)
+		}
+	}
+	e.Fields = filtered
+	note := `[arXiv preprint \href{https://arxiv.org/abs/` + eprint + `}{arXiv:` + eprint + `}]`
+	SetField(e, "note", "{"+note+"}")
 }
 
 // warnMissingFields returns a warning string if any mandatory fields are absent,

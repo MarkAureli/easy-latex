@@ -672,7 +672,7 @@ func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, true); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -715,7 +715,7 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, true); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -756,7 +756,7 @@ func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, false); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, false, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -798,7 +798,7 @@ func TestBraceTitles_DisabledNormalizesDoubleBraced(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ProcessBibFiles([]string{path}, dir, true, false); err != nil {
+	if err := ProcessBibFiles([]string{path}, dir, true, false, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -820,6 +820,214 @@ func TestBraceTitles_DisabledNormalizesDoubleBraced(t *testing.T) {
 	}
 	if raw != "{My Test Title}" {
 		t.Errorf("title raw value = %q, want %q (double braces not stripped)", raw, "{My Test Title}")
+	}
+}
+
+// ── transformArxivMiscToUnpublished ───────────────────────────────────────────
+
+func TestTransformArxivMiscToUnpublished_TypeChanged(t *testing.T) {
+	e := Entry{
+		Type: "misc",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "title", Value: "{My Paper}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+			{Name: "primaryclass", Value: "{cs.LG}"},
+		},
+	}
+	transformArxivMiscToUnpublished(&e)
+	if e.Type != "unpublished" {
+		t.Errorf("type = %q, want %q", e.Type, "unpublished")
+	}
+}
+
+func TestTransformArxivMiscToUnpublished_DropsArxivFields(t *testing.T) {
+	e := Entry{
+		Type: "misc",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "title", Value: "{My Paper}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+			{Name: "primaryclass", Value: "{cs.LG}"},
+		},
+	}
+	transformArxivMiscToUnpublished(&e)
+	for _, f := range e.Fields {
+		if f.Name == "eprint" || f.Name == "archiveprefix" || f.Name == "primaryclass" {
+			t.Errorf("field %q should have been dropped", f.Name)
+		}
+	}
+}
+
+func TestTransformArxivMiscToUnpublished_KeepsAuthorYearTitle(t *testing.T) {
+	e := Entry{
+		Type: "misc",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "title", Value: "{My Paper}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+		},
+	}
+	transformArxivMiscToUnpublished(&e)
+	for _, name := range []string{"author", "year", "title"} {
+		if FieldValue(e, name) == "" {
+			t.Errorf("field %q should have been kept", name)
+		}
+	}
+}
+
+func TestTransformArxivMiscToUnpublished_NoteContainsHref(t *testing.T) {
+	e := Entry{
+		Type: "misc",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "title", Value: "{My Paper}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+		},
+	}
+	transformArxivMiscToUnpublished(&e)
+	note := FieldValue(e, "note")
+	wantURL := "https://arxiv.org/abs/2301.00001"
+	wantLabel := "arXiv:2301.00001"
+	if !strings.Contains(note, wantURL) {
+		t.Errorf("note %q does not contain URL %q", note, wantURL)
+	}
+	if !strings.Contains(note, wantLabel) {
+		t.Errorf("note %q does not contain label %q", note, wantLabel)
+	}
+	if !strings.Contains(note, `\href`) {
+		t.Errorf("note %q does not contain \\href", note)
+	}
+}
+
+// ── IEEE format (processBibFile integration) ──────────────────────────────────
+
+func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
+	dir := t.TempDir()
+	bibContent := `@misc{Smith2023MyPaper,
+  author       = {Smith, John},
+  year         = {2023},
+  title        = {My Paper},
+  eprint       = {2301.00001},
+  archiveprefix = {arXiv},
+  primaryclass = {cs.LG},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, false, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+
+	if entry.Type != "unpublished" {
+		t.Errorf("type = %q, want %q", entry.Type, "unpublished")
+	}
+	for _, name := range []string{"eprint", "archiveprefix", "primaryclass"} {
+		if FieldValue(entry, name) != "" {
+			t.Errorf("field %q should have been dropped", name)
+		}
+	}
+	note := FieldValue(entry, "note")
+	if !strings.Contains(note, "2301.00001") {
+		t.Errorf("note %q does not reference eprint", note)
+	}
+	if !strings.Contains(note, `\href`) {
+		t.Errorf("note %q does not contain \\href", note)
+	}
+}
+
+func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
+	dir := t.TempDir()
+	bibContent := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {My Test Title},
+  journal = {Nature},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// ieee_format=true, brace_titles=false — should still double-brace
+	if err := ProcessBibFiles([]string{path}, dir, true, false, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	raw := ""
+	for _, f := range entry.Fields {
+		if f.Name == "title" {
+			raw = f.Value
+			break
+		}
+	}
+	if raw != "{{My Test Title}}" {
+		t.Errorf("title raw = %q, want %q", raw, "{{My Test Title}}")
+	}
+}
+
+func TestIEEEFormat_NonArxivMiscUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	bibContent := `@misc{Smith2023Software,
+  author = {Smith, John},
+  year   = {2023},
+  title  = {Some Software},
+  url    = {https://example.com},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, false, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	if entry.Type != "misc" {
+		t.Errorf("type = %q, want %q (non-arXiv misc should stay misc)", entry.Type, "misc")
 	}
 }
 

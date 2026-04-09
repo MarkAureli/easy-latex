@@ -16,6 +16,7 @@ func invokeConfig(t *testing.T, args []string) error {
 	cmd := &cobra.Command{}
 	cmd.Flags().BoolVar(&flagAbbreviateJournals, "abbreviate-journals", true, "")
 	cmd.Flags().BoolVar(&flagBraceTitles, "brace-titles", false, "")
+	cmd.Flags().BoolVar(&flagIEEEFormat, "ieee-format", false, "")
 	if err := cmd.ParseFlags(args); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -256,5 +257,81 @@ func TestRunConfig_OmittedFromFreshConfig(t *testing.T) {
 	}
 	if !cfg.abbreviateJournals() {
 		t.Error("fresh config: abbreviateJournals() = false, want true")
+	}
+}
+
+func readIEEEFormat(t *testing.T, dir string) *bool {
+	t.Helper()
+	return readConfig(t, dir).IEEEFormat
+}
+
+// ── ieeeFormat() helper ───────────────────────────────────────────────────────
+
+func TestIEEEFormat_NilDefaultsFalse(t *testing.T) {
+	cfg := &Config{}
+	if cfg.ieeeFormat() {
+		t.Error("expected false when IEEEFormat is nil")
+	}
+}
+
+func TestIEEEFormat_ExplicitTrue(t *testing.T) {
+	v := true
+	cfg := &Config{IEEEFormat: &v}
+	if !cfg.ieeeFormat() {
+		t.Error("expected true when IEEEFormat is &true")
+	}
+}
+
+func TestIEEEFormat_ExplicitFalse(t *testing.T) {
+	v := false
+	cfg := &Config{IEEEFormat: &v}
+	if cfg.ieeeFormat() {
+		t.Error("expected false when IEEEFormat is &false")
+	}
+}
+
+// ── --ieee-format flag ────────────────────────────────────────────────────────
+
+func TestRunConfig_SetIEEEFormatTrue(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfig(t, []string{"--ieee-format=true"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readIEEEFormat(t, dir)
+	if got == nil || *got != true {
+		t.Errorf("IEEEFormat = %v, want &true", got)
+	}
+}
+
+func TestRunConfig_SetIEEEFormatFalse(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfig(t, []string{"--ieee-format=false"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readIEEEFormat(t, dir)
+	if got == nil || *got != false {
+		t.Errorf("IEEEFormat = %v, want &false", got)
+	}
+}
+
+func TestRunConfig_IEEEFormatOmittedFromFreshConfig(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	cfg := readConfig(t, dir)
+	if cfg.IEEEFormat != nil {
+		t.Errorf("fresh config: IEEEFormat = %v, want nil", cfg.IEEEFormat)
+	}
+	if cfg.ieeeFormat() {
+		t.Error("fresh config: ieeeFormat() = true, want false")
 	}
 }

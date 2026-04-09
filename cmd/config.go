@@ -15,6 +15,7 @@ var configCmd = &cobra.Command{
 var (
 	flagAbbreviateJournals bool
 	flagBraceTitles        bool
+	flagIEEEFormat         bool
 )
 
 func init() {
@@ -22,14 +23,17 @@ func init() {
 		"Abbreviate journal names according to ISO 4 (default true)")
 	configCmd.Flags().BoolVar(&flagBraceTitles, "brace-titles", false,
 		"Enclose title values in an extra pair of curly braces (default false)")
+	configCmd.Flags().BoolVar(&flagIEEEFormat, "ieee-format", false,
+		"Enable IEEE bib formatting: forces brace-titles and converts arXiv @misc to @unpublished (default false)")
 }
 
 func runConfig(cmd *cobra.Command, args []string) error {
 	abbrevChanged := cmd.Flags().Changed("abbreviate-journals")
 	braceChanged := cmd.Flags().Changed("brace-titles")
+	ieeeChanged := cmd.Flags().Changed("ieee-format")
 
-	if !abbrevChanged && !braceChanged {
-		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false> or --brace-titles=<true|false>")
+	if !abbrevChanged && !braceChanged && !ieeeChanged {
+		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false>, --brace-titles=<true|false>, or --ieee-format=<true|false>")
 	}
 
 	cfg, err := loadConfig()
@@ -54,6 +58,16 @@ func runConfig(cmd *cobra.Command, args []string) error {
 			fmt.Println("Title double-bracing enabled")
 		} else {
 			fmt.Println("Title double-bracing disabled")
+		}
+	}
+
+	if ieeeChanged {
+		v := flagIEEEFormat
+		cfg.IEEEFormat = &v
+		if flagIEEEFormat {
+			fmt.Println("IEEE bib formatting enabled")
+		} else {
+			fmt.Println("IEEE bib formatting disabled")
 		}
 	}
 

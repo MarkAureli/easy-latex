@@ -15,6 +15,7 @@ type Config struct {
 	BibFiles           []string `json:"bib_files,omitempty"`
 	AbbreviateJournals *bool    `json:"abbreviate_journals,omitempty"`
 	BraceTitles        *bool    `json:"brace_titles,omitempty"`
+	IEEEFormat         *bool    `json:"ieee_format,omitempty"`
 }
 
 // abbreviateJournals returns true when journal abbreviation is enabled.
@@ -27,6 +28,12 @@ func (cfg *Config) abbreviateJournals() bool {
 // Defaults to false when the field is absent (nil).
 func (cfg *Config) braceTitles() bool {
 	return cfg.BraceTitles != nil && *cfg.BraceTitles
+}
+
+// ieeeFormat returns true when IEEE bib formatting is enabled.
+// Defaults to false when the field is absent (nil).
+func (cfg *Config) ieeeFormat() bool {
+	return cfg.IEEEFormat != nil && *cfg.IEEEFormat
 }
 
 func loadConfig() (*Config, error) {
