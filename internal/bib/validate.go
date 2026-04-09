@@ -398,6 +398,10 @@ func normalizeEntryFields(e *Entry) {
 			SetField(e, "url", "{https://doi.org/"+doi+"}")
 		}
 	}
+	// Upgrade http:// to https:// in the url field.
+	if u := FieldValue(*e, "url"); strings.HasPrefix(u, "http://") {
+		SetField(e, "url", "{https://"+u[len("http://"):]+"}")
+	}
 }
 
 // ensureArticleOptionalFields adds blank placeholders for volume, number, and
