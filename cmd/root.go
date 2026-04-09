@@ -10,9 +10,16 @@ import (
 
 // Config is the structure stored in .el.json
 type Config struct {
-	Main     string   `json:"main"`
-	AuxDir   string   `json:"aux_dir"`
-	BibFiles []string `json:"bib_files,omitempty"`
+	Main              string   `json:"main"`
+	AuxDir            string   `json:"aux_dir"`
+	BibFiles          []string `json:"bib_files,omitempty"`
+	AbbreviateJournals *bool   `json:"abbreviate_journals,omitempty"`
+}
+
+// abbreviateJournals returns true when journal abbreviation is enabled.
+// Defaults to true when the field is absent (nil).
+func (cfg *Config) abbreviateJournals() bool {
+	return cfg.AbbreviateJournals == nil || *cfg.AbbreviateJournals
 }
 
 func loadConfig() (*Config, error) {
@@ -50,4 +57,5 @@ func Execute() {
 func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(compileCmd)
+	rootCmd.AddCommand(configCmd)
 }

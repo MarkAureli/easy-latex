@@ -36,7 +36,7 @@ func saveCache(auxDir string, c cache) {
 }
 
 // ProcessBibFiles formats and validates every registered .bib file.
-func ProcessBibFiles(bibFiles []string, auxDir string) error {
+func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals bool) error {
 	if len(bibFiles) == 0 {
 		return nil
 	}
@@ -44,7 +44,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string) error {
 	cacheChanged := false
 
 	for _, path := range bibFiles {
-		changed, err := processBibFile(path, auxDir, c)
+		changed, err := processBibFile(path, auxDir, c, abbreviateJournals)
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string) error {
 	return nil
 }
 
-func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error) {
+func processBibFile(path, auxDir string, c cache, abbreviateJournals bool) (cacheChanged bool, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("cannot read %s: %w", path, err)
@@ -85,7 +85,7 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 		e := item.Entry
 
 		if _, seen := c[e.Key]; !seen {
-			corrected, source, warn := validateEntry(e)
+			corrected, source, warn := validateEntry(e, abbreviateJournals)
 			if warn != "" {
 				fmt.Printf("[bib] %s: %s\n", e.Key, warn)
 			}
@@ -325,9 +325,9 @@ func ensureArticleOptionalFields(e *Entry) {
 // validateEntry looks up the entry via Crossref or arXiv and returns a
 // corrected entry (nil if nothing changed), the source used, and an optional
 // warning.
-func validateEntry(e Entry) (corrected *Entry, source, warning string) {
+func validateEntry(e Entry, abbreviateJournals bool) (corrected *Entry, source, warning string) {
 	if doi := findDOI(e); doi != "" {
-		result, err := queryCrossref(e, doi)
+		result, err := queryCrossref(e, doi, abbreviateJournals)
 		if err != nil {
 			return nil, "", fmt.Sprintf("Crossref query failed: %v", err)
 		}
@@ -416,7 +416,7 @@ type crossrefResponse struct {
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
-func queryCrossref(e Entry, doi string) (*Entry, error) {
+func queryCrossref(e Entry, doi string, abbreviateJournals bool) (*Entry, error) {
 	req, err := http.NewRequest("GET", "https://api.crossref.org/works/"+url.PathEscape(doi), nil)
 	if err != nil {
 		return nil, err
@@ -461,7 +461,11 @@ func queryCrossref(e Entry, doi string) (*Entry, error) {
 		}
 	}
 	if len(m.ContainerTitle) > 0 {
-		if applyField(&updated, "journal", AbbreviateISO4(m.ContainerTitle[0])) {
+		journal := m.ContainerTitle[0]
+		if abbreviateJournals {
+			journal = AbbreviateISO4(journal)
+		}
+		if applyField(&updated, "journal", journal) {
 			corrections = append(corrections, "journal")
 		}
 	}

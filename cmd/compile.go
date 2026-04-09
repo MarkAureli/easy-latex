@@ -110,7 +110,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot create symlink for %s: %w", pdfName, err)
 	}
 
-	if err := bib.ProcessBibFiles(cfg.BibFiles, cfg.AuxDir); err != nil {
+	if err := bib.ProcessBibFiles(cfg.BibFiles, cfg.AuxDir, cfg.abbreviateJournals()); err != nil {
 		return err
 	}
 

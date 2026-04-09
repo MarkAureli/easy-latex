@@ -1,6 +1,14 @@
 # cmd
 
-Cobra commands wired in `root.go`. Config struct (`Config`) holds `Main`, `AuxDir`, `BibFiles`; persisted as `.el.json`.
+Cobra commands wired in `root.go`. Config struct (`Config`) holds `Main`, `AuxDir`, `BibFiles`, `AbbreviateJournals`; persisted as `.el.json`.
+
+## el config (`config.go`)
+
+Reads `.el.json`, updates the requested field, and rewrites it.
+
+- `--abbreviate-journals=<true|false>` — enable/disable ISO 4 journal abbreviation (default: true, nil in JSON = true)
+
+`AbbreviateJournals` is stored as `*bool` with `omitempty`; nil (absent) defaults to true. `cfg.abbreviateJournals()` is the helper used by compile.
 
 ## el init (`init.go`)
 
