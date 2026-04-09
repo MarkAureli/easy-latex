@@ -72,6 +72,12 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Normalise bib files before the bib tool runs so bibtex/biber processes
+	// the corrected entries (canonical keys, formatted fields, etc.).
+	if err := bib.ProcessBibFiles(cfg.BibFiles, cfg.AuxDir, cfg.abbreviateJournals(), cfg.braceTitles(), cfg.ieeeFormat(), cfg.maxAuthors(), cfg.abbreviateFirstName()); err != nil {
+		return err
+	}
+
 	// Detect and run bibliography tool based on artifacts from first pass
 	bibTool, err := detectBibTool(stem, cfg.AuxDir)
 	if err != nil {
@@ -108,10 +114,6 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	_ = os.Remove(pdfName)
 	if err := os.Symlink(srcPDF, pdfName); err != nil {
 		return fmt.Errorf("cannot create symlink for %s: %w", pdfName, err)
-	}
-
-	if err := bib.ProcessBibFiles(cfg.BibFiles, cfg.AuxDir); err != nil {
-		return err
 	}
 
 	fmt.Printf("Compiled successfully -> %s\n", pdfName)

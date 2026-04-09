@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -246,7 +247,7 @@ func TestQueryCrossref_CorrectsMismatchedFields(t *testing.T) {
 			{Name: "doi", Value: "{10.1000/xyz}"},
 		},
 	}
-	result, err := queryCrossref(e, "10.1000/xyz")
+	result, err := queryCrossref(e, "10.1000/xyz", true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -285,7 +286,7 @@ func TestQueryCrossref_NoChangeWhenFieldsMatch(t *testing.T) {
 			{Name: "doi", Value: "{10.1/x}"},
 		},
 	}
-	result, err := queryCrossref(e, "10.1/x")
+	result, err := queryCrossref(e, "10.1/x", true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -630,7 +631,7 @@ func containsField(warn, field string) bool {
 
 func TestValidateEntry_NoIDWarning_ArticleWarns(t *testing.T) {
 	e := Entry{Type: "article", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
-	corrected, source, warn := validateEntry(e)
+	corrected, source, warn := validateEntry(e, true)
 	if corrected != nil {
 		t.Error("expected no correction")
 	}
@@ -644,12 +645,389 @@ func TestValidateEntry_NoIDWarning_ArticleWarns(t *testing.T) {
 
 func TestValidateEntry_NoIDWarning_BookSuppressed(t *testing.T) {
 	e := Entry{Type: "book", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
-	_, source, warn := validateEntry(e)
+	_, source, warn := validateEntry(e, true)
 	if source != "no-id" {
 		t.Errorf("source = %q, want %q", source, "no-id")
 	}
 	if warn != "" {
 		t.Errorf("expected no warning for book without doi, got %q", warn)
+	}
+}
+
+// ── brace titles ─────────────────────────────────────────────────────────────
+
+func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
+	dir := t.TempDir()
+	bib := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {My Test Title},
+  journal = {Nature},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	// Field.Value should be {{My Test Title}} — raw value includes outer delimiters
+	raw := ""
+	for _, f := range entry.Fields {
+		if f.Name == "title" {
+			raw = f.Value
+			break
+		}
+	}
+	if raw != "{{My Test Title}}" {
+		t.Errorf("title raw value = %q, want %q", raw, "{{My Test Title}}")
+	}
+}
+
+func TestBraceTitles_Idempotent(t *testing.T) {
+	dir := t.TempDir()
+	// Start with an already double-braced title (as written by a previous run).
+	bib := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {{My Test Title}},
+  journal = {Nature},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	raw := ""
+	for _, f := range entry.Fields {
+		if f.Name == "title" {
+			raw = f.Value
+			break
+		}
+	}
+	if raw != "{{My Test Title}}" {
+		t.Errorf("title raw value = %q, want %q (not idempotent)", raw, "{{My Test Title}}")
+	}
+}
+
+func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
+	dir := t.TempDir()
+	bib := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {My Test Title},
+  journal = {Nature},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	raw := ""
+	for _, f := range entry.Fields {
+		if f.Name == "title" {
+			raw = f.Value
+			break
+		}
+	}
+	if raw != "{My Test Title}" {
+		t.Errorf("title raw value = %q, want %q", raw, "{My Test Title}")
+	}
+}
+
+func TestBraceTitles_DisabledNormalizesDoubleBraced(t *testing.T) {
+	dir := t.TempDir()
+	// If braceTitles is later disabled, existing double-braced titles should be stripped.
+	bib := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {{My Test Title}},
+  journal = {Nature},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	raw := ""
+	for _, f := range entry.Fields {
+		if f.Name == "title" {
+			raw = f.Value
+			break
+		}
+	}
+	if raw != "{My Test Title}" {
+		t.Errorf("title raw value = %q, want %q (double braces not stripped)", raw, "{My Test Title}")
+	}
+}
+
+// ── transformArxivMiscToUnpublished ───────────────────────────────────────────
+
+func TestTransformArxivMiscToUnpublished_TypeChanged(t *testing.T) {
+	e := Entry{
+		Type: "misc",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "title", Value: "{My Paper}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+			{Name: "primaryclass", Value: "{cs.LG}"},
+		},
+	}
+	transformArxivMiscToUnpublished(&e)
+	if e.Type != "unpublished" {
+		t.Errorf("type = %q, want %q", e.Type, "unpublished")
+	}
+}
+
+func TestTransformArxivMiscToUnpublished_DropsArxivFields(t *testing.T) {
+	e := Entry{
+		Type: "misc",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "title", Value: "{My Paper}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+			{Name: "primaryclass", Value: "{cs.LG}"},
+		},
+	}
+	transformArxivMiscToUnpublished(&e)
+	for _, f := range e.Fields {
+		if f.Name == "eprint" || f.Name == "archiveprefix" || f.Name == "primaryclass" {
+			t.Errorf("field %q should have been dropped", f.Name)
+		}
+	}
+}
+
+func TestTransformArxivMiscToUnpublished_KeepsAuthorYearTitle(t *testing.T) {
+	e := Entry{
+		Type: "misc",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "title", Value: "{My Paper}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+		},
+	}
+	transformArxivMiscToUnpublished(&e)
+	for _, name := range []string{"author", "year", "title"} {
+		if FieldValue(e, name) == "" {
+			t.Errorf("field %q should have been kept", name)
+		}
+	}
+}
+
+func TestTransformArxivMiscToUnpublished_NoteContainsHref(t *testing.T) {
+	e := Entry{
+		Type: "misc",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, John}"},
+			{Name: "year", Value: "{2023}"},
+			{Name: "title", Value: "{My Paper}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+		},
+	}
+	transformArxivMiscToUnpublished(&e)
+	note := FieldValue(e, "note")
+	wantURL := "https://arxiv.org/abs/2301.00001"
+	wantLabel := "arXiv:2301.00001"
+	if !strings.Contains(note, wantURL) {
+		t.Errorf("note %q does not contain URL %q", note, wantURL)
+	}
+	if !strings.Contains(note, wantLabel) {
+		t.Errorf("note %q does not contain label %q", note, wantLabel)
+	}
+	if !strings.Contains(note, `\href`) {
+		t.Errorf("note %q does not contain \\href", note)
+	}
+}
+
+// ── IEEE format (processBibFile integration) ──────────────────────────────────
+
+func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
+	dir := t.TempDir()
+	bibContent := `@misc{Smith2023MyPaper,
+  author       = {Smith, John},
+  year         = {2023},
+  title        = {My Paper},
+  eprint       = {2301.00001},
+  archiveprefix = {arXiv},
+  primaryclass = {cs.LG},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+
+	if entry.Type != "unpublished" {
+		t.Errorf("type = %q, want %q", entry.Type, "unpublished")
+	}
+	for _, name := range []string{"eprint", "archiveprefix", "primaryclass"} {
+		if FieldValue(entry, name) != "" {
+			t.Errorf("field %q should have been dropped", name)
+		}
+	}
+	note := FieldValue(entry, "note")
+	if !strings.Contains(note, "2301.00001") {
+		t.Errorf("note %q does not reference eprint", note)
+	}
+	if !strings.Contains(note, `\href`) {
+		t.Errorf("note %q does not contain \\href", note)
+	}
+}
+
+func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
+	dir := t.TempDir()
+	bibContent := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {My Test Title},
+  journal = {Nature},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// ieee_format=true, brace_titles=false — should still double-brace
+	if err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	raw := ""
+	for _, f := range entry.Fields {
+		if f.Name == "title" {
+			raw = f.Value
+			break
+		}
+	}
+	if raw != "{{My Test Title}}" {
+		t.Errorf("title raw = %q, want %q", raw, "{{My Test Title}}")
+	}
+}
+
+func TestIEEEFormat_NonArxivMiscUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	bibContent := `@misc{Smith2023Software,
+  author = {Smith, John},
+  year   = {2023},
+  title  = {Some Software},
+  url    = {https://example.com},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	if entry.Type != "misc" {
+		t.Errorf("type = %q, want %q (non-arXiv misc should stay misc)", entry.Type, "misc")
 	}
 }
 

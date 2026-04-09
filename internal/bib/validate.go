@@ -36,7 +36,7 @@ func saveCache(auxDir string, c cache) {
 }
 
 // ProcessBibFiles formats and validates every registered .bib file.
-func ProcessBibFiles(bibFiles []string, auxDir string) error {
+func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName bool) error {
 	if len(bibFiles) == 0 {
 		return nil
 	}
@@ -44,7 +44,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string) error {
 	cacheChanged := false
 
 	for _, path := range bibFiles {
-		changed, err := processBibFile(path, auxDir, c)
+		changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles, ieeeFormat, maxAuthors, abbreviateFirstName)
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string) error {
 	return nil
 }
 
-func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error) {
+func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName bool) (cacheChanged bool, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("cannot read %s: %w", path, err)
@@ -85,7 +85,7 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 		e := item.Entry
 
 		if _, seen := c[e.Key]; !seen {
-			corrected, source, warn := validateEntry(e)
+			corrected, source, warn := validateEntry(e, abbreviateJournals)
 			if warn != "" {
 				fmt.Printf("[bib] %s: %s\n", e.Key, warn)
 			}
@@ -100,13 +100,23 @@ func processBibFile(path, auxDir string, c cache) (cacheChanged bool, err error)
 
 		normalizeEntryFields(&e)
 
+		if ieeeFormat && e.Type == "misc" && findArxivID(e) != "" {
+			transformArxivMiscToUnpublished(&e)
+		}
+
 		if author := FieldValue(e, "author"); author != "" {
-			SetField(&e, "author", "{"+formatAuthorField(author)+"}")
+			SetField(&e, "author", "{"+formatAuthorField(author, maxAuthors, abbreviateFirstName)+"}")
 		}
 
 		if title := FieldValue(e, "title"); title != "" {
 			if normalized := stripNonEscapedBraces(title); normalized != title {
 				SetField(&e, "title", "{"+normalized+"}")
+			}
+		}
+
+		if braceTitles || ieeeFormat {
+			if title := FieldValue(e, "title"); title != "" {
+				SetField(&e, "title", "{{"+title+"}}")
 			}
 		}
 
@@ -235,6 +245,23 @@ var entrySpecs = map[string]typeSpec{
 	},
 }
 
+// transformArxivMiscToUnpublished converts a @misc arXiv entry to @unpublished
+// per IEEE style: author, year, and title are kept; eprint, archiveprefix, and
+// primaryclass are dropped; a note field is added with an \href to arXiv.
+func transformArxivMiscToUnpublished(e *Entry) {
+	eprint := FieldValue(*e, "eprint")
+	e.Type = "unpublished"
+	filtered := make([]Field, 0, len(e.Fields))
+	for _, f := range e.Fields {
+		if f.Name == "author" || f.Name == "year" || f.Name == "title" {
+			filtered = append(filtered, f)
+		}
+	}
+	e.Fields = filtered
+	note := `[arXiv preprint \href{https://arxiv.org/abs/` + eprint + `}{arXiv:` + eprint + `}]`
+	SetField(e, "note", "{"+note+"}")
+}
+
 // warnMissingFields returns a warning string if any mandatory fields are absent,
 // or an empty string when all are present.
 // A mandatory token of the form "a|b" is satisfied when at least one of a or b is non-empty.
@@ -325,9 +352,9 @@ func ensureArticleOptionalFields(e *Entry) {
 // validateEntry looks up the entry via Crossref or arXiv and returns a
 // corrected entry (nil if nothing changed), the source used, and an optional
 // warning.
-func validateEntry(e Entry) (corrected *Entry, source, warning string) {
+func validateEntry(e Entry, abbreviateJournals bool) (corrected *Entry, source, warning string) {
 	if doi := findDOI(e); doi != "" {
-		result, err := queryCrossref(e, doi)
+		result, err := queryCrossref(e, doi, abbreviateJournals)
 		if err != nil {
 			return nil, "", fmt.Sprintf("Crossref query failed: %v", err)
 		}
@@ -416,7 +443,7 @@ type crossrefResponse struct {
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
-func queryCrossref(e Entry, doi string) (*Entry, error) {
+func queryCrossref(e Entry, doi string, abbreviateJournals bool) (*Entry, error) {
 	req, err := http.NewRequest("GET", "https://api.crossref.org/works/"+url.PathEscape(doi), nil)
 	if err != nil {
 		return nil, err
@@ -461,7 +488,11 @@ func queryCrossref(e Entry, doi string) (*Entry, error) {
 		}
 	}
 	if len(m.ContainerTitle) > 0 {
-		if applyField(&updated, "journal", AbbreviateISO4(m.ContainerTitle[0])) {
+		journal := m.ContainerTitle[0]
+		if abbreviateJournals {
+			journal = AbbreviateISO4(journal)
+		}
+		if applyField(&updated, "journal", journal) {
 			corrections = append(corrections, "journal")
 		}
 	}
