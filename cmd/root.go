@@ -10,16 +10,23 @@ import (
 
 // Config is the structure stored in .el.json
 type Config struct {
-	Main              string   `json:"main"`
-	AuxDir            string   `json:"aux_dir"`
-	BibFiles          []string `json:"bib_files,omitempty"`
-	AbbreviateJournals *bool   `json:"abbreviate_journals,omitempty"`
+	Main               string   `json:"main"`
+	AuxDir             string   `json:"aux_dir"`
+	BibFiles           []string `json:"bib_files,omitempty"`
+	AbbreviateJournals *bool    `json:"abbreviate_journals,omitempty"`
+	BraceTitles        *bool    `json:"brace_titles,omitempty"`
 }
 
 // abbreviateJournals returns true when journal abbreviation is enabled.
 // Defaults to true when the field is absent (nil).
 func (cfg *Config) abbreviateJournals() bool {
 	return cfg.AbbreviateJournals == nil || *cfg.AbbreviateJournals
+}
+
+// braceTitles returns true when title double-bracing is enabled.
+// Defaults to false when the field is absent (nil).
+func (cfg *Config) braceTitles() bool {
+	return cfg.BraceTitles != nil && *cfg.BraceTitles
 }
 
 func loadConfig() (*Config, error) {

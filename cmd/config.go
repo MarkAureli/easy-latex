@@ -12,16 +12,24 @@ var configCmd = &cobra.Command{
 	RunE:  runConfig,
 }
 
-var flagAbbreviateJournals bool
+var (
+	flagAbbreviateJournals bool
+	flagBraceTitles        bool
+)
 
 func init() {
 	configCmd.Flags().BoolVar(&flagAbbreviateJournals, "abbreviate-journals", true,
 		"Abbreviate journal names according to ISO 4 (default true)")
+	configCmd.Flags().BoolVar(&flagBraceTitles, "brace-titles", false,
+		"Enclose title values in an extra pair of curly braces (default false)")
 }
 
 func runConfig(cmd *cobra.Command, args []string) error {
-	if !cmd.Flags().Changed("abbreviate-journals") {
-		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false>")
+	abbrevChanged := cmd.Flags().Changed("abbreviate-journals")
+	braceChanged := cmd.Flags().Changed("brace-titles")
+
+	if !abbrevChanged && !braceChanged {
+		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false> or --brace-titles=<true|false>")
 	}
 
 	cfg, err := loadConfig()
@@ -29,17 +37,25 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	v := flagAbbreviateJournals
-	cfg.AbbreviateJournals = &v
-
-	if err := saveConfig(cfg); err != nil {
-		return err
+	if abbrevChanged {
+		v := flagAbbreviateJournals
+		cfg.AbbreviateJournals = &v
+		if flagAbbreviateJournals {
+			fmt.Println("Journal abbreviation enabled (ISO 4)")
+		} else {
+			fmt.Println("Journal abbreviation disabled")
+		}
 	}
 
-	if flagAbbreviateJournals {
-		fmt.Println("Journal abbreviation enabled (ISO 4)")
-	} else {
-		fmt.Println("Journal abbreviation disabled")
+	if braceChanged {
+		v := flagBraceTitles
+		cfg.BraceTitles = &v
+		if flagBraceTitles {
+			fmt.Println("Title double-bracing enabled")
+		} else {
+			fmt.Println("Title double-bracing disabled")
+		}
 	}
-	return nil
+
+	return saveConfig(cfg)
 }

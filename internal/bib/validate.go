@@ -36,7 +36,7 @@ func saveCache(auxDir string, c cache) {
 }
 
 // ProcessBibFiles formats and validates every registered .bib file.
-func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals bool) error {
+func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, braceTitles bool) error {
 	if len(bibFiles) == 0 {
 		return nil
 	}
@@ -44,7 +44,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals bool) 
 	cacheChanged := false
 
 	for _, path := range bibFiles {
-		changed, err := processBibFile(path, auxDir, c, abbreviateJournals)
+		changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles)
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals bool) 
 	return nil
 }
 
-func processBibFile(path, auxDir string, c cache, abbreviateJournals bool) (cacheChanged bool, err error) {
+func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles bool) (cacheChanged bool, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("cannot read %s: %w", path, err)
@@ -107,6 +107,12 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals bool) (cach
 		if title := FieldValue(e, "title"); title != "" {
 			if normalized := stripNonEscapedBraces(title); normalized != title {
 				SetField(&e, "title", "{"+normalized+"}")
+			}
+		}
+
+		if braceTitles {
+			if title := FieldValue(e, "title"); title != "" {
+				SetField(&e, "title", "{{"+title+"}}")
 			}
 		}
 

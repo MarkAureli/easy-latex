@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -650,6 +651,175 @@ func TestValidateEntry_NoIDWarning_BookSuppressed(t *testing.T) {
 	}
 	if warn != "" {
 		t.Errorf("expected no warning for book without doi, got %q", warn)
+	}
+}
+
+// ── brace titles ─────────────────────────────────────────────────────────────
+
+func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
+	dir := t.TempDir()
+	bib := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {My Test Title},
+  journal = {Nature},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	// Field.Value should be {{My Test Title}} — raw value includes outer delimiters
+	raw := ""
+	for _, f := range entry.Fields {
+		if f.Name == "title" {
+			raw = f.Value
+			break
+		}
+	}
+	if raw != "{{My Test Title}}" {
+		t.Errorf("title raw value = %q, want %q", raw, "{{My Test Title}}")
+	}
+}
+
+func TestBraceTitles_Idempotent(t *testing.T) {
+	dir := t.TempDir()
+	// Start with an already double-braced title (as written by a previous run).
+	bib := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {{My Test Title}},
+  journal = {Nature},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	raw := ""
+	for _, f := range entry.Fields {
+		if f.Name == "title" {
+			raw = f.Value
+			break
+		}
+	}
+	if raw != "{{My Test Title}}" {
+		t.Errorf("title raw value = %q, want %q (not idempotent)", raw, "{{My Test Title}}")
+	}
+}
+
+func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
+	dir := t.TempDir()
+	bib := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {My Test Title},
+  journal = {Nature},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	raw := ""
+	for _, f := range entry.Fields {
+		if f.Name == "title" {
+			raw = f.Value
+			break
+		}
+	}
+	if raw != "{My Test Title}" {
+		t.Errorf("title raw value = %q, want %q", raw, "{My Test Title}")
+	}
+}
+
+func TestBraceTitles_DisabledNormalizesDoubleBraced(t *testing.T) {
+	dir := t.TempDir()
+	// If braceTitles is later disabled, existing double-braced titles should be stripped.
+	bib := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {{My Test Title}},
+  journal = {Nature},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ProcessBibFiles([]string{path}, dir, true, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	raw := ""
+	for _, f := range entry.Fields {
+		if f.Name == "title" {
+			raw = f.Value
+			break
+		}
+	}
+	if raw != "{My Test Title}" {
+		t.Errorf("title raw value = %q, want %q (double braces not stripped)", raw, "{My Test Title}")
 	}
 }
 
