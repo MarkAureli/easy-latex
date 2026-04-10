@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Config is the structure stored in .el.json
+// Config is the structure stored in .el/config.json
 type Config struct {
 	Main                string   `json:"main"`
 	AuxDir              string   `json:"aux_dir"`
@@ -58,13 +58,13 @@ func (cfg *Config) maxAuthors() int {
 }
 
 func loadConfig() (*Config, error) {
-	data, err := os.ReadFile(".el.json")
+	data, err := os.ReadFile(".el/config.json")
 	if err != nil {
 		return nil, fmt.Errorf("not initialized. Run 'el init' first")
 	}
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("corrupt .el.json: %w", err)
+		return nil, fmt.Errorf("corrupt .el/config.json: %w", err)
 	}
 	return &cfg, nil
 }
@@ -74,7 +74,7 @@ func saveConfig(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(".el.json", data, 0644)
+	return os.WriteFile(".el/config.json", data, 0644)
 }
 
 var rootCmd = &cobra.Command{

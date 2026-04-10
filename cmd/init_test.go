@@ -18,7 +18,7 @@ func writeTeX(t *testing.T, dir, name, content string) {
 
 func readConfig(t *testing.T, dir string) Config {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dir, ".el.json"))
+	data, err := os.ReadFile(filepath.Join(dir, ".el", "config.json"))
 	if err != nil {
 		t.Fatalf("readConfig: %v", err)
 	}
@@ -58,12 +58,12 @@ func TestDoInit_OneMainFile(t *testing.T) {
 	if cfg.Main != "main.tex" {
 		t.Errorf("Main = %q, want %q", cfg.Main, "main.tex")
 	}
-	if cfg.AuxDir != ".aux_dir" {
-		t.Errorf("AuxDir = %q, want %q", cfg.AuxDir, ".aux_dir")
+	if cfg.AuxDir != ".el" {
+		t.Errorf("AuxDir = %q, want %q", cfg.AuxDir, ".el")
 	}
 }
 
-func TestDoInit_CreatesAuxDir(t *testing.T) {
+func TestDoInit_CreatesElDir(t *testing.T) {
 	dir := t.TempDir()
 	writeTeX(t, dir, "main.tex", `\begin{document}`)
 
@@ -71,12 +71,12 @@ func TestDoInit_CreatesAuxDir(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	info, err := os.Stat(filepath.Join(dir, ".aux_dir"))
+	info, err := os.Stat(filepath.Join(dir, ".el"))
 	if err != nil {
-		t.Fatalf(".aux_dir not created: %v", err)
+		t.Fatalf(".el not created: %v", err)
 	}
 	if !info.IsDir() {
-		t.Error(".aux_dir is not a directory")
+		t.Error(".el is not a directory")
 	}
 }
 
@@ -182,10 +182,8 @@ func TestUpdateGitExclude_AddsEntries(t *testing.T) {
 	}
 
 	content := readExclude(t, gitDir)
-	for _, entry := range []string{".aux_dir", ".el.json"} {
-		if !strings.Contains(content, entry) {
-			t.Errorf("exclude missing %q", entry)
-		}
+	if !strings.Contains(content, ".el") {
+		t.Errorf("exclude missing %q", ".el")
 	}
 }
 
@@ -193,40 +191,33 @@ func TestUpdateGitExclude_NoDuplicates(t *testing.T) {
 	dir := t.TempDir()
 	gitDir := makeGitRepo(t, dir)
 
-	// Pre-populate exclude with both entries
-	existing := ".aux_dir\n.el.json\n"
-	os.WriteFile(filepath.Join(gitDir, "info", "exclude"), []byte(existing), 0644)
+	// Pre-populate exclude with the entry already present
+	os.WriteFile(filepath.Join(gitDir, "info", "exclude"), []byte(".el\n"), 0644)
 
 	if err := updateGitExclude(dir); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	content := readExclude(t, gitDir)
-	if strings.Count(content, ".aux_dir") != 1 {
-		t.Errorf(".aux_dir appears more than once in exclude:\n%s", content)
-	}
-	if strings.Count(content, ".el.json") != 1 {
-		t.Errorf(".el.json appears more than once in exclude:\n%s", content)
+	if strings.Count(content, ".el") != 1 {
+		t.Errorf(".el appears more than once in exclude:\n%s", content)
 	}
 }
 
-func TestUpdateGitExclude_AddsOnlyMissing(t *testing.T) {
+func TestUpdateGitExclude_AddsToEmptyFile(t *testing.T) {
 	dir := t.TempDir()
 	gitDir := makeGitRepo(t, dir)
 
-	// Pre-populate with only one entry
-	os.WriteFile(filepath.Join(gitDir, "info", "exclude"), []byte(".aux_dir\n"), 0644)
+	// Pre-populate with an empty file
+	os.WriteFile(filepath.Join(gitDir, "info", "exclude"), []byte(""), 0644)
 
 	if err := updateGitExclude(dir); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	content := readExclude(t, gitDir)
-	if strings.Count(content, ".aux_dir") != 1 {
-		t.Errorf(".aux_dir appears more than once in exclude:\n%s", content)
-	}
-	if !strings.Contains(content, ".el.json") {
-		t.Errorf("exclude missing .el.json:\n%s", content)
+	if strings.Count(content, ".el") != 1 {
+		t.Errorf(".el should appear exactly once in exclude:\n%s", content)
 	}
 }
 
@@ -242,14 +233,14 @@ func TestUpdateGitExclude_NoTrailingNewlineHandled(t *testing.T) {
 	}
 
 	content := readExclude(t, gitDir)
-	// Entries must appear as whole lines, not concatenated with "# comment"
+	// Entry must appear as a whole line, not concatenated with "# comment"
 	for _, line := range strings.Split(content, "\n") {
-		if line == "# comment.aux_dir" || line == "# comment.el.json" {
+		if line == "# comment.el" {
 			t.Errorf("entry was concatenated with existing content: %q", line)
 		}
 	}
-	if !strings.Contains(content, ".aux_dir") {
-		t.Errorf("exclude missing .aux_dir")
+	if !strings.Contains(content, ".el") {
+		t.Errorf("exclude missing .el")
 	}
 }
 
@@ -263,10 +254,8 @@ func TestDoInit_UpdatesGitExclude(t *testing.T) {
 	}
 
 	content := readExclude(t, gitDir)
-	for _, entry := range []string{".aux_dir", ".el.json"} {
-		if !strings.Contains(content, entry) {
-			t.Errorf("exclude missing %q after init", entry)
-		}
+	if !strings.Contains(content, ".el") {
+		t.Errorf("exclude missing %q after init", ".el")
 	}
 }
 

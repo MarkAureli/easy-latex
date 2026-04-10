@@ -23,9 +23,13 @@ func chdir(t *testing.T, dir string) {
 
 func writeConfig(t *testing.T, dir, main string) {
 	t.Helper()
-	cfg := Config{Main: main, AuxDir: ".aux_dir"}
+	elDir := filepath.Join(dir, ".el")
+	if err := os.MkdirAll(elDir, 0755); err != nil {
+		t.Fatalf("writeConfig mkdir: %v", err)
+	}
+	cfg := Config{Main: main, AuxDir: ".el"}
 	data, _ := json.MarshalIndent(cfg, "", "  ")
-	if err := os.WriteFile(filepath.Join(dir, ".el.json"), data, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(elDir, "config.json"), data, 0644); err != nil {
 		t.Fatalf("writeConfig: %v", err)
 	}
 }
@@ -115,7 +119,6 @@ func TestRunCompile_NotInitialized(t *testing.T) {
 func TestRunCompile_MissingMainFile(t *testing.T) {
 	dir := t.TempDir()
 	writeConfig(t, dir, "missing.tex")
-	os.MkdirAll(filepath.Join(dir, ".aux_dir"), 0755)
 	chdir(t, dir)
 
 	if err := runCompile(nil, nil); err == nil {
@@ -168,7 +171,6 @@ func setupCompileDir(t *testing.T, texContent, bibContent string) string {
 		}
 	}
 	writeConfig(t, dir, "main.tex")
-	os.MkdirAll(filepath.Join(dir, ".aux_dir"), 0755)
 	return dir
 }
 
@@ -182,14 +184,14 @@ func assertPDFSymlink(t *testing.T) {
 		t.Error("main.pdf is not a symlink")
 	}
 	target, _ := os.Readlink("main.pdf")
-	if !strings.Contains(target, ".aux_dir") {
-		t.Errorf("symlink target %q does not point into .aux_dir", target)
+	if !strings.Contains(target, ".el") {
+		t.Errorf("symlink target %q does not point into .el", target)
 	}
 }
 
 func assertBBLContains(t *testing.T, entry string) {
 	t.Helper()
-	bbl, err := os.ReadFile(filepath.Join(".aux_dir", "main.bbl"))
+	bbl, err := os.ReadFile(filepath.Join(".el", "main.bbl"))
 	if err != nil {
 		t.Fatalf("main.bbl not found: %v", err)
 	}

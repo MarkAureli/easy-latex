@@ -52,20 +52,20 @@ func doInit(dir string, stdin io.Reader) error {
 		}
 	}
 
-	auxDir := filepath.Join(dir, ".aux_dir")
-	if err := os.MkdirAll(auxDir, 0755); err != nil {
-		return fmt.Errorf("cannot create .aux_dir: %w", err)
+	elDir := filepath.Join(dir, ".el")
+	if err := os.MkdirAll(elDir, 0755); err != nil {
+		return fmt.Errorf("cannot create .el: %w", err)
 	}
 
 	bibFiles := texscan.FindBibFiles(chosen, dir)
 
-	cfg := Config{Main: chosen, AuxDir: ".aux_dir", BibFiles: bibFiles}
+	cfg := Config{Main: chosen, AuxDir: ".el", BibFiles: bibFiles}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".el.json"), data, 0644); err != nil {
-		return fmt.Errorf("cannot write .el.json: %w", err)
+	if err := os.WriteFile(filepath.Join(elDir, "config.json"), data, 0644); err != nil {
+		return fmt.Errorf("cannot write .el/config.json: %w", err)
 	}
 
 	if err := updateGitExclude(dir); err != nil {
@@ -79,8 +79,8 @@ func doInit(dir string, stdin io.Reader) error {
 	return nil
 }
 
-// updateGitExclude appends .aux_dir and .el.json to .git/info/exclude if a
-// .git directory is present and the entries are not already listed.
+// updateGitExclude appends .el to .git/info/exclude if a
+// .git directory is present and the entry is not already listed.
 func updateGitExclude(dir string) error {
 	gitDir := filepath.Join(dir, ".git")
 	if _, err := os.Stat(gitDir); err != nil {
@@ -99,7 +99,7 @@ func updateGitExclude(dir string) error {
 	}
 
 	var toAdd []string
-	for _, entry := range []string{".aux_dir", ".el.json"} {
+	for _, entry := range []string{".el"} {
 		if !existing[entry] {
 			toAdd = append(toAdd, entry)
 		}
