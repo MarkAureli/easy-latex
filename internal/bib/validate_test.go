@@ -429,7 +429,7 @@ func TestNormalizeEntryFields_ArticleDropsUnknownFields(t *testing.T) {
 			{Name: "keywords", Value: "{foo, bar}"},
 		},
 	}
-	normalizeEntryFields(&e)
+	normalizeEntryFields(&e, false)
 	spec := entrySpecs["article"]
 	for _, f := range e.Fields {
 		if !spec.allowed[f.Name] {
@@ -443,7 +443,7 @@ func TestNormalizeEntryFields_ArticleRenamesIssueToNumber(t *testing.T) {
 		Type:   "article",
 		Fields: []Field{{Name: "issue", Value: "{3}"}},
 	}
-	normalizeEntryFields(&e)
+	normalizeEntryFields(&e, false)
 	if got := FieldValue(e, "number"); got != "3" {
 		t.Errorf("number = %q, want %q", got, "3")
 	}
@@ -462,7 +462,7 @@ func TestNormalizeEntryFields_ArticleIssueDroppedWhenNumberPresent(t *testing.T)
 			{Name: "issue", Value: "{3}"},
 		},
 	}
-	normalizeEntryFields(&e)
+	normalizeEntryFields(&e, false)
 	if got := FieldValue(e, "number"); got != "5" {
 		t.Errorf("number should be unchanged, got %q", got)
 	}
@@ -478,7 +478,7 @@ func TestNormalizeEntryFields_ConstructsURLFromDOI(t *testing.T) {
 		Type:   "article",
 		Fields: []Field{{Name: "doi", Value: "{10.1000/xyz}"}},
 	}
-	normalizeEntryFields(&e)
+	normalizeEntryFields(&e, false)
 	if got := FieldValue(e, "url"); got != "https://doi.org/10.1000/xyz" {
 		t.Errorf("url = %q, want %q", got, "https://doi.org/10.1000/xyz")
 	}
@@ -492,9 +492,23 @@ func TestNormalizeEntryFields_DoesNotOverwriteExistingURL(t *testing.T) {
 			{Name: "url", Value: "{https://example.com}"},
 		},
 	}
-	normalizeEntryFields(&e)
+	normalizeEntryFields(&e, false)
 	if got := FieldValue(e, "url"); got != "https://example.com" {
 		t.Errorf("url overwritten: got %q", got)
+	}
+}
+
+func TestNormalizeEntryFields_UrlFromDOIOverwritesExistingURL(t *testing.T) {
+	e := Entry{
+		Type: "article",
+		Fields: []Field{
+			{Name: "doi", Value: "{10.1000/xyz}"},
+			{Name: "url", Value: "{https://example.com}"},
+		},
+	}
+	normalizeEntryFields(&e, true)
+	if got := FieldValue(e, "url"); got != "https://doi.org/10.1000/xyz" {
+		t.Errorf("url = %q, want %q", got, "https://doi.org/10.1000/xyz")
 	}
 }
 
@@ -503,7 +517,7 @@ func TestNormalizeEntryFields_UnknownTypeUnchanged(t *testing.T) {
 		Type:   "unknown",
 		Fields: []Field{{Name: "note", Value: "{kept}"}},
 	}
-	normalizeEntryFields(&e)
+	normalizeEntryFields(&e, false)
 	if FieldValue(e, "note") != "kept" {
 		t.Error("unknown type fields should not be stripped")
 	}
@@ -518,7 +532,7 @@ func TestNormalizeEntryFields_MiscArxivNormalizesArchivePrefix(t *testing.T) {
 			{Name: "archiveprefix", Value: "{arxiv}"},
 		},
 	}
-	normalizeEntryFields(&e)
+	normalizeEntryFields(&e, false)
 	if got := FieldValue(e, "archiveprefix"); got != "arXiv" {
 		t.Errorf("archiveprefix = %q, want %q", got, "arXiv")
 	}
@@ -533,7 +547,7 @@ func TestNormalizeEntryFields_MiscArxivSetsArchivePrefixWhenAbsent(t *testing.T)
 			{Name: "archiveprefix", Value: "{arXiv}"},
 		},
 	}
-	normalizeEntryFields(&e)
+	normalizeEntryFields(&e, false)
 	if got := FieldValue(e, "archiveprefix"); got != "arXiv" {
 		t.Errorf("archiveprefix = %q, want %q", got, "arXiv")
 	}
@@ -548,7 +562,7 @@ func TestNormalizeEntryFields_BookDropsUnknownFields(t *testing.T) {
 			{Name: "note", Value: "{some note}"},
 		},
 	}
-	normalizeEntryFields(&e)
+	normalizeEntryFields(&e, false)
 	spec := entrySpecs["book"]
 	for _, f := range e.Fields {
 		if !spec.allowed[f.Name] {
@@ -672,7 +686,7 @@ func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -715,7 +729,7 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -756,7 +770,7 @@ func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -798,7 +812,7 @@ func TestBraceTitles_DisabledNormalizesDoubleBraced(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -926,7 +940,7 @@ func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -974,7 +988,7 @@ func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
 	}
 
 	// ieee_format=true, brace_titles=false — should still double-brace
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1013,7 +1027,7 @@ func TestIEEEFormat_NonArxivMiscUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

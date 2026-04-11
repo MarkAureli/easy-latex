@@ -18,6 +18,7 @@ var (
 	flagIEEEFormat          bool
 	flagMaxAuthors          int
 	flagAbbreviateFirstName bool
+	flagUrlFromDOI          bool
 )
 
 func init() {
@@ -31,6 +32,8 @@ func init() {
 		"Maximum number of authors to store (0 = unlimited; >=1 truncates to N and appends 'and others')")
 	configCmd.Flags().BoolVar(&flagAbbreviateFirstName, "abbreviate-first-name", true,
 		"Abbreviate first (and middle) names to initials (default true; false keeps first name in full)")
+	configCmd.Flags().BoolVar(&flagUrlFromDOI, "url-from-doi", false,
+		"Replace url field with https://doi.org/<doi> for entries with a non-empty doi (default false)")
 }
 
 func runConfig(cmd *cobra.Command, args []string) error {
@@ -39,9 +42,10 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	ieeeChanged := cmd.Flags().Changed("ieee-format")
 	maxAuthorsChanged := cmd.Flags().Changed("max-authors")
 	abbrevFirstChanged := cmd.Flags().Changed("abbreviate-first-name")
+	urlFromDOIChanged := cmd.Flags().Changed("url-from-doi")
 
-	if !abbrevChanged && !braceChanged && !ieeeChanged && !maxAuthorsChanged && !abbrevFirstChanged {
-		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false>, --brace-titles=<true|false>, --ieee-format=<true|false>, --max-authors=<N>, or --abbreviate-first-name=<true|false>")
+	if !abbrevChanged && !braceChanged && !ieeeChanged && !maxAuthorsChanged && !abbrevFirstChanged && !urlFromDOIChanged {
+		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false>, --brace-titles=<true|false>, --ieee-format=<true|false>, --max-authors=<N>, --abbreviate-first-name=<true|false>, or --url-from-doi=<true|false>")
 	}
 
 	cfg, err := loadConfig()
@@ -100,6 +104,16 @@ func runConfig(cmd *cobra.Command, args []string) error {
 			fmt.Println("First name abbreviation enabled")
 		} else {
 			fmt.Println("First name abbreviation disabled (first name kept in full)")
+		}
+	}
+
+	if urlFromDOIChanged {
+		v := flagUrlFromDOI
+		cfg.UrlFromDOI = &v
+		if flagUrlFromDOI {
+			fmt.Println("URL-from-DOI enabled (url field replaced with https://doi.org/<doi> when doi is present)")
+		} else {
+			fmt.Println("URL-from-DOI disabled (url field only set from doi when absent)")
 		}
 	}
 

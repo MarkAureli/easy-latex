@@ -19,6 +19,7 @@ type Config struct {
 	IEEEFormat          *bool    `json:"ieee_format,omitempty"`
 	MaxAuthors          *int     `json:"max_authors,omitempty"`
 	AbbreviateFirstName *bool    `json:"abbreviate_first_name,omitempty"`
+	UrlFromDOI          *bool    `json:"url_from_doi,omitempty"`
 }
 
 // abbreviateJournals returns true when journal abbreviation is enabled.
@@ -43,6 +44,12 @@ func (cfg *Config) ieeeFormat() bool {
 // abbreviated to initials. Defaults to true when the field is absent (nil).
 func (cfg *Config) abbreviateFirstName() bool {
 	return cfg.AbbreviateFirstName == nil || *cfg.AbbreviateFirstName
+}
+
+// urlFromDOI returns true when url fields should be replaced with https://doi.org/<doi>
+// for entries with a non-empty doi field. Defaults to false when the field is absent (nil).
+func (cfg *Config) urlFromDOI() bool {
+	return cfg.UrlFromDOI != nil && *cfg.UrlFromDOI
 }
 
 // maxAuthors returns the maximum number of authors to store, or 0 for unlimited.

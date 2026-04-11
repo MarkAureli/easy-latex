@@ -54,7 +54,7 @@ func saveCache(auxDir string, c cache) {
 // ProcessBibFiles formats and validates every registered .bib file.
 // It returns a map of renamed citation keys (oldKey → newKey) across all files,
 // which the caller can use to update \cite{} references in .tex sources.
-func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName bool) (map[string]string, error) {
+func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName, urlFromDOI bool) (map[string]string, error) {
 	if len(bibFiles) == 0 {
 		return nil, nil
 	}
@@ -63,7 +63,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, brace
 	allRenames := make(map[string]string)
 
 	for _, path := range bibFiles {
-		renames, changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles, ieeeFormat, maxAuthors, abbreviateFirstName)
+		renames, changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles, ieeeFormat, maxAuthors, abbreviateFirstName, urlFromDOI)
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +81,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, brace
 	return allRenames, nil
 }
 
-func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName bool) (renames map[string]string, cacheChanged bool, err error) {
+func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName, urlFromDOI bool) (renames map[string]string, cacheChanged bool, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, false, fmt.Errorf("cannot read %s: %w", path, err)
@@ -165,7 +165,7 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 			}
 		}
 
-		normalizeEntryFields(&e)
+		normalizeEntryFields(&e, urlFromDOI)
 
 		if ieeeFormat && e.Type == "misc" && findArxivID(e) != "" {
 			transformArxivMiscToUnpublished(&e)
@@ -400,7 +400,7 @@ func warnMissingFields(e Entry) string {
 
 // normalizeEntryFields drops non-allowed fields, resolves field synonyms,
 // and derives url from doi if url is absent. Only acts on known entry types.
-func normalizeEntryFields(e *Entry) {
+func normalizeEntryFields(e *Entry, urlFromDOI bool) {
 	spec, ok := entrySpecs[e.Type]
 	if !ok {
 		return
@@ -433,11 +433,14 @@ func normalizeEntryFields(e *Entry) {
 	if isArxiv {
 		SetField(e, "archiveprefix", "{arXiv}")
 	}
-	// Derive url from doi when the type supports both and url is absent.
+	// Derive url from doi when the type supports both.
 	// Not applied to arXiv @misc entries, which are identified by eprint.
-	if !isArxiv && allowed["url"] && FieldValue(*e, "url") == "" {
+	// When urlFromDOI is true, replace any existing url; otherwise only set when url is absent.
+	if !isArxiv && allowed["url"] {
 		if doi := FieldValue(*e, "doi"); doi != "" {
-			SetField(e, "url", "{https://doi.org/"+doi+"}")
+			if urlFromDOI || FieldValue(*e, "url") == "" {
+				SetField(e, "url", "{https://doi.org/"+doi+"}")
+			}
 		}
 	}
 	// Upgrade http:// to https:// in the url field.
