@@ -114,6 +114,17 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 		}
 		e := item.Entry
 
+		// Capture original field values to compare after post-processing.
+		origAuthor := FieldValue(e, "author")
+		origTitle := FieldValue(e, "title")
+		origJournal := FieldValue(e, "journal")
+		origYear := FieldValue(e, "year")
+		origVolume := FieldValue(e, "volume")
+		origNumber := FieldValue(e, "number")
+		origPages := FieldValue(e, "pages")
+		origDOI := FieldValue(e, "doi")
+
+		var validationSource string
 		cached, seen := c[e.Key]
 		if !seen {
 			corrected, raw, source, warn := validateEntry(e, abbreviateJournals)
@@ -131,6 +142,9 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 					Journal: raw.Journal,
 				}})
 				cacheChanged = true
+			}
+			if source == "crossref" || source == "arxiv" {
+				validationSource = source
 			}
 		} else if cached.Source == "crossref" || cached.Source == "arxiv" {
 			// Re-apply raw fields with the current config so that changes to
@@ -181,6 +195,34 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 
 		// Sort fields after validation so any newly added fields are ordered too.
 		e.Fields = sortedFields(e.Type, e.Fields)
+
+		// Log only fields that actually changed in the output after all post-processing.
+		if validationSource != "" {
+			type fieldCheck struct {
+				name string
+				orig string
+			}
+			checks := []fieldCheck{
+				{"author", origAuthor},
+				{"title", origTitle},
+				{"journal", origJournal},
+				{"year", origYear},
+				{"volume", origVolume},
+				{"number", origNumber},
+				{"pages", origPages},
+				{"doi", origDOI},
+			}
+			var corrections []string
+			for _, fc := range checks {
+				if normalizeFieldValue(FieldValue(e, fc.name)) != normalizeFieldValue(fc.orig) {
+					corrections = append(corrections, fc.name)
+				}
+			}
+			if len(corrections) > 0 {
+				fmt.Printf("[bib] %s: reformatted %s\n", e.Key, strings.Join(corrections, ", "))
+			}
+		}
+
 		items[i].Entry = e
 	}
 
@@ -598,7 +640,6 @@ func queryCrossref(e Entry, doi string) (*Entry, cacheEntry, error) {
 	}
 
 	if len(corrections) > 0 {
-		fmt.Printf("[bib] %s: corrected %s\n", e.Key, strings.Join(corrections, ", "))
 		return &updated, raw, nil
 	}
 	return nil, raw, nil
@@ -685,7 +726,6 @@ func queryArxiv(e Entry, id string) (*Entry, cacheEntry, error) {
 	}
 
 	if len(corrections) > 0 {
-		fmt.Printf("[bib] %s: corrected %s\n", e.Key, strings.Join(corrections, ", "))
 		return &updated, raw, nil
 	}
 	return nil, raw, nil
