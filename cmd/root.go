@@ -8,10 +8,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const auxDir = ".el"
+
 // Config is the structure stored in .el/config.json
 type Config struct {
 	Main                string   `json:"main"`
-	AuxDir              string   `json:"aux_dir"`
 	BibFiles            []string `json:"bib_files,omitempty"`
 	AbbreviateJournals  *bool    `json:"abbreviate_journals,omitempty"`
 	BraceTitles         *bool    `json:"brace_titles,omitempty"`

@@ -110,7 +110,7 @@ func TestRunConfig_SetTrue(t *testing.T) {
 func TestRunConfig_PreservesOtherFields(t *testing.T) {
 	dir := t.TempDir()
 	// Write a config with bib files set
-	cfg := Config{Main: "thesis.tex", AuxDir: ".el", BibFiles: []string{"refs.bib", "extra.bib"}}
+	cfg := Config{Main: "thesis.tex", BibFiles: []string{"refs.bib", "extra.bib"}}
 	data, _ := json.MarshalIndent(cfg, "", "  ")
 	os.MkdirAll(filepath.Join(dir, ".el"), 0755)
 	os.WriteFile(filepath.Join(dir, ".el", "config.json"), data, 0644)
@@ -124,10 +124,7 @@ func TestRunConfig_PreservesOtherFields(t *testing.T) {
 	if updated.Main != "thesis.tex" {
 		t.Errorf("Main = %q, want %q", updated.Main, "thesis.tex")
 	}
-	if updated.AuxDir != ".el" {
-		t.Errorf("AuxDir = %q, want %q", updated.AuxDir, ".el")
-	}
-	if len(updated.BibFiles) != 2 {
+if len(updated.BibFiles) != 2 {
 		t.Errorf("BibFiles = %v, want 2 entries", updated.BibFiles)
 	}
 }

@@ -59,7 +59,7 @@ func doInit(dir string, stdin io.Reader) error {
 
 	bibFiles := texscan.FindBibFiles(chosen, dir)
 
-	cfg := Config{Main: chosen, AuxDir: ".el", BibFiles: bibFiles}
+	cfg := Config{Main: chosen, BibFiles: bibFiles}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err

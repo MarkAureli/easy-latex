@@ -27,7 +27,7 @@ func writeConfig(t *testing.T, dir, main string) {
 	if err := os.MkdirAll(elDir, 0755); err != nil {
 		t.Fatalf("writeConfig mkdir: %v", err)
 	}
-	cfg := Config{Main: main, AuxDir: ".el"}
+	cfg := Config{Main: main}
 	data, _ := json.MarshalIndent(cfg, "", "  ")
 	if err := os.WriteFile(filepath.Join(elDir, "config.json"), data, 0644); err != nil {
 		t.Fatalf("writeConfig: %v", err)

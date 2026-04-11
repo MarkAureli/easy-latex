@@ -45,8 +45,8 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("main file %q not found. Re-run 'el init'", cfg.Main)
 	}
 
-	if err := os.MkdirAll(cfg.AuxDir, 0755); err != nil {
-		return fmt.Errorf("cannot create %s: %w", cfg.AuxDir, err)
+	if err := os.MkdirAll(auxDir, 0755); err != nil {
+		return fmt.Errorf("cannot create %s: %w", auxDir, err)
 	}
 
 	pdflatex, err := findPdflatex()
@@ -67,7 +67,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	// Update bib file list from artifacts if not already set by el init.
 	if len(cfg.BibFiles) == 0 {
-		if found := bibFilesFromArtifacts(stem, cfg.AuxDir); len(found) > 0 {
+		if found := bibFilesFromArtifacts(stem, auxDir); len(found) > 0 {
 			cfg.BibFiles = found
 			_ = saveConfig(cfg)
 		}
@@ -75,7 +75,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	// Normalise bib files before the bib tool runs so bibtex/biber processes
 	// the corrected entries (canonical keys, formatted fields, etc.).
-	renames, err := bib.ProcessBibFiles(cfg.BibFiles, cfg.AuxDir, cfg.abbreviateJournals(), cfg.braceTitles(), cfg.ieeeFormat(), cfg.maxAuthors(), cfg.abbreviateFirstName())
+	renames, err := bib.ProcessBibFiles(cfg.BibFiles, auxDir, cfg.abbreviateJournals(), cfg.braceTitles(), cfg.ieeeFormat(), cfg.maxAuthors(), cfg.abbreviateFirstName())
 	if err != nil {
 		return err
 	}
@@ -92,12 +92,12 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Detect and run bibliography tool based on artifacts from first pass
-	bibTool, err := detectBibTool(stem, cfg.AuxDir)
+	bibTool, err := detectBibTool(stem, auxDir)
 	if err != nil {
 		return err
 	}
 	if bibTool != "" {
-		if err := runBibTool(bibTool, stem, cfg.AuxDir); err != nil {
+		if err := runBibTool(bibTool, stem, auxDir); err != nil {
 			return err
 		}
 		// Second pdflatex pass to incorporate bibliography
@@ -121,7 +121,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	}
 
 	pdfName := stem + ".pdf"
-	srcPDF := filepath.Join(cfg.AuxDir, pdfName)
+	srcPDF := filepath.Join(auxDir, pdfName)
 
 	// Remove stale symlink or file, then create symlink
 	_ = os.Remove(pdfName)
@@ -172,7 +172,7 @@ func runPdflatex(pdflatex string, cfg *Config) ([]string, error) {
 	c := exec.Command(pdflatex,
 		"-interaction=nonstopmode",
 		"-file-line-error",
-		"-output-directory="+cfg.AuxDir,
+		"-output-directory="+auxDir,
 		cfg.Main,
 	)
 	output, runErr := c.CombinedOutput()

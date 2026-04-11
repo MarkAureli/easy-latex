@@ -58,9 +58,7 @@ func TestDoInit_OneMainFile(t *testing.T) {
 	if cfg.Main != "main.tex" {
 		t.Errorf("Main = %q, want %q", cfg.Main, "main.tex")
 	}
-	if cfg.AuxDir != ".el" {
-		t.Errorf("AuxDir = %q, want %q", cfg.AuxDir, ".el")
-	}
+
 }
 
 func TestDoInit_CreatesElDir(t *testing.T) {
