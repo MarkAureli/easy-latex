@@ -1302,6 +1302,166 @@ func TestIEEEFormat_NonArxivMiscUnchanged(t *testing.T) {
 	}
 }
 
+// ── AllocateCacheEntries ──────────────────────────────────────────────────────
+
+func TestAllocateCacheEntries_NoIDEntryAdded(t *testing.T) {
+	dir := t.TempDir()
+	bibContent := "@misc{SomeKey,\n  author = {Doe, Jane},\n  title = {Some Title},\n  year = {2024},\n}\n"
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	added, err := AllocateCacheEntries([]string{path}, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if added != 1 {
+		t.Errorf("added = %d, want 1", added)
+	}
+	c := loadCache(dir)
+	var found bool
+	for _, entry := range c {
+		if entry.Source == "no-id" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected a no-id cache entry, found none")
+	}
+}
+
+func TestAllocateCacheEntries_NoIDDedup_ByCanonicalKey(t *testing.T) {
+	dir := t.TempDir()
+	// Pre-populate cache with the canonical key that the bib entry will produce.
+	saveCache(dir, cache{"Doe2024SomeTitle": cacheEntry{Source: "no-id"}})
+
+	bibContent := "@misc{AnyKey,\n  author = {Doe, Jane},\n  title = {Some Title},\n  year = {2024},\n}\n"
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	added, err := AllocateCacheEntries([]string{path}, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if added != 0 {
+		t.Errorf("added = %d, want 0 (canonical key already in cache)", added)
+	}
+}
+
+func TestAllocateCacheEntries_DOIDedup_ByDOI(t *testing.T) {
+	dir := t.TempDir()
+	// Cache already has an entry whose Fields["doi"] matches.
+	saveCache(dir, cache{
+		"Smith2020Title": cacheEntry{
+			Source: "crossref",
+			Fields: map[string]string{"doi": "10.1/existing"},
+		},
+	})
+
+	bibContent := "@article{AnyKey,\n  author = {Smith, A.},\n  title = {Title},\n  year = {2020},\n  doi = {10.1/existing},\n}\n"
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// No HTTP calls expected; if Crossref is reached the test will hang/fail.
+	added, err := AllocateCacheEntries([]string{path}, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if added != 0 {
+		t.Errorf("added = %d, want 0 (DOI already in cache)", added)
+	}
+}
+
+func TestAllocateCacheEntries_ArxivDedup_ByEprint(t *testing.T) {
+	dir := t.TempDir()
+	saveCache(dir, cache{
+		"Doe2023Title": cacheEntry{
+			Source: "arxiv",
+			Fields: map[string]string{"eprint": "2301.00001"},
+		},
+	})
+
+	bibContent := "@misc{AnyKey,\n  author = {Doe, Jane},\n  title = {Title},\n  year = {2023},\n  eprint = {2301.00001},\n  archiveprefix = {arXiv},\n}\n"
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	added, err := AllocateCacheEntries([]string{path}, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if added != 0 {
+		t.Errorf("added = %d, want 0 (arXiv ID already in cache)", added)
+	}
+}
+
+func TestAllocateCacheEntries_DOIDedup_CaseInsensitive(t *testing.T) {
+	dir := t.TempDir()
+	saveCache(dir, cache{
+		"Smith2020Title": cacheEntry{
+			Source: "crossref",
+			Fields: map[string]string{"doi": "10.1/UPPER"},
+		},
+	})
+
+	bibContent := "@article{AnyKey,\n  author = {Smith, A.},\n  title = {Title},\n  year = {2020},\n  doi = {10.1/upper},\n}\n"
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	added, err := AllocateCacheEntries([]string{path}, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if added != 0 {
+		t.Errorf("added = %d, want 0 (DOI matched case-insensitively)", added)
+	}
+}
+
+func TestAllocateCacheEntries_NewDOIEntry_ValidatedAndCached(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeCrossrefJSON("Correct Title", "Smith", "John", "Nature", "2023", "42", "3", "1--10", "10.1/new"))
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	dir := t.TempDir()
+	bibContent := "@article{AnyKey,\n  author = {Smith, John},\n  title = {Wrong Title},\n  year = {2023},\n  doi = {10.1/new},\n}\n"
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	added, err := AllocateCacheEntries([]string{path}, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if added != 1 {
+		t.Errorf("added = %d, want 1", added)
+	}
+	c := loadCache(dir)
+	var found bool
+	for _, entry := range c {
+		if entry.Source == "crossref" && entry.Fields["doi"] == "10.1/new" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected crossref cache entry with doi=10.1/new")
+	}
+}
+
 // rebaseTransport redirects all requests to a test server base URL.
 type rebaseTransport struct {
 	base string

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/MarkAureli/easy-latex/internal/bib"
 	"github.com/MarkAureli/easy-latex/internal/texscan"
 	"github.com/spf13/cobra"
 )
@@ -73,6 +74,10 @@ func doInit(dir string, stdin io.Reader) error {
 	}
 
 	if err := updateGitExclude(dir); err != nil {
+		return err
+	}
+
+	if _, err := bib.AllocateCacheEntries(bibFiles, elDir); err != nil {
 		return err
 	}
 

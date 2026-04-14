@@ -61,6 +61,144 @@ func saveCache(auxDir string, c cache) {
 	_ = os.WriteFile(filepath.Join(auxDir, "bib.json"), data, 0644)
 }
 
+// AllocateCacheEntries parses each bib file and seeds the bib cache with any
+// entries not yet present, without rewriting the bib files.
+//
+// Duplicate detection:
+//   - entries with a DOI  → deduplicated by DOI  (Crossref validated)
+//   - entries with arXiv ID → deduplicated by arXiv ID (arXiv validated)
+//   - no-ID entries       → deduplicated by canonical cite key
+//
+// Returns the number of newly added cache entries.
+func AllocateCacheEntries(bibFiles []string, auxDir string) (int, error) {
+	if len(bibFiles) == 0 {
+		return 0, nil
+	}
+	c := loadCache(auxDir)
+
+	// Build reverse-index of IDs already in cache for fast dedup.
+	cachedDOIs := make(map[string]bool)
+	cachedArxivIDs := make(map[string]bool)
+	for _, entry := range c {
+		if doi := entry.Fields["doi"]; doi != "" {
+			cachedDOIs[strings.ToLower(doi)] = true
+		}
+		if id := entry.Fields["eprint"]; id != "" {
+			cachedArxivIDs[strings.ToLower(id)] = true
+		}
+	}
+
+	added := 0
+	for _, path := range bibFiles {
+		n, err := allocateBibFile(path, c, cachedDOIs, cachedArxivIDs)
+		if err != nil {
+			return added, err
+		}
+		added += n
+	}
+	if added > 0 {
+		saveCache(auxDir, c)
+	}
+	return added, nil
+}
+
+func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string]bool) (int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, fmt.Errorf("cannot read %s: %w", path, err)
+	}
+	items := ParseFile(string(data))
+	assignCanonicalKeys(items)
+
+	type pendingEntry struct {
+		itemIdx int
+		entry   cacheEntry
+	}
+	var pending []pendingEntry
+	added := 0
+
+	for i, item := range items {
+		if !item.IsEntry {
+			continue
+		}
+		e := item.Entry
+		rawURL := FieldValue(e, "url")
+		doi := findDOI(e)
+		arxivID := findArxivID(e)
+
+		switch {
+		case doi != "":
+			if cachedDOIs[strings.ToLower(doi)] {
+				continue
+			}
+			corrected, raw, source, warn := validateEntry(e, false)
+			if warn != "" {
+				fmt.Printf("[bib] %s: %s\n", e.Key, warn)
+			}
+			if corrected != nil {
+				items[i].Entry = *corrected
+			}
+			pending = append(pending, pendingEntry{i, buildCacheEntry(items[i].Entry, raw, source, rawURL)})
+			cachedDOIs[strings.ToLower(doi)] = true
+			added++
+		case arxivID != "":
+			if cachedArxivIDs[strings.ToLower(arxivID)] {
+				continue
+			}
+			corrected, raw, source, warn := validateEntry(e, false)
+			if warn != "" {
+				fmt.Printf("[bib] %s: %s\n", e.Key, warn)
+			}
+			if corrected != nil {
+				items[i].Entry = *corrected
+			}
+			pending = append(pending, pendingEntry{i, buildCacheEntry(items[i].Entry, raw, source, rawURL)})
+			cachedArxivIDs[strings.ToLower(arxivID)] = true
+			added++
+		default:
+			if _, seen := c[e.Key]; seen {
+				continue
+			}
+			c[e.Key] = cacheEntry{Source: "no-id"}
+			added++
+		}
+	}
+
+	// Re-assign canonical keys: Crossref/arXiv may have corrected author/title/year.
+	assignCanonicalKeys(items)
+	for _, p := range pending {
+		c[items[p.itemIdx].Entry.Key] = p.entry
+	}
+	return added, nil
+}
+
+// buildCacheEntry constructs a cacheEntry from a validated entry and its raw API
+// response, mirroring the snapshot logic in processBibFile.
+func buildCacheEntry(e Entry, raw cacheEntry, source, rawURL string) cacheEntry {
+	entry := cacheEntry{Source: source}
+	if source == "crossref" || source == "arxiv" {
+		eCopy := e
+		normalizeEntryFields(&eCopy, false)
+		fields := make(map[string]string, len(eCopy.Fields))
+		for _, f := range eCopy.Fields {
+			if v := FieldValue(eCopy, f.Name); v != "" {
+				fields[f.Name] = v
+			}
+		}
+		for k, v := range raw.Fields {
+			if v != "" {
+				fields[k] = v
+			}
+		}
+		delete(fields, "url")
+		if rawURL != "" {
+			fields["url"] = rawURL
+		}
+		entry.Fields = fields
+	}
+	return entry
+}
+
 // LoadCacheKeys returns all canonical citation keys stored in the bib cache.
 func LoadCacheKeys(auxDir string) []string {
 	c := loadCache(auxDir)
