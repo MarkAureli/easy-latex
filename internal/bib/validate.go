@@ -50,6 +50,16 @@ func saveCache(auxDir string, c cache) {
 	_ = os.WriteFile(filepath.Join(auxDir, "bib_cache.json"), data, 0644)
 }
 
+// LoadCacheKeys returns all canonical citation keys stored in the bib cache.
+func LoadCacheKeys(auxDir string) []string {
+	c := loadCache(auxDir)
+	keys := make([]string, 0, len(c))
+	for k := range c {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // ProcessBibFiles formats and validates every registered .bib file.
 // ProcessBibFiles formats and validates every registered .bib file.
 // It returns a map of renamed citation keys (oldKey → newKey) across all files,

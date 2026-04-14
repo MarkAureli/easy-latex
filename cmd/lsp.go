@@ -11,11 +11,7 @@ var lspCmd = &cobra.Command{
 	Use:   "lsp",
 	Short: "Start LSP server (cite-key completions over stdio)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := loadConfig()
-		if err != nil {
-			return err
-		}
-		items := lsp.BuildItems(cfg.BibFiles)
+		items := lsp.BuildItems(auxDir)
 		return lsp.Serve(items, os.Stdin, os.Stdout)
 	},
 }
