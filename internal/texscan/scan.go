@@ -2,6 +2,7 @@ package texscan
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,9 +10,11 @@ import (
 )
 
 var (
-	reBibliography = regexp.MustCompile(`\\bibliography\{([^}]+)\}`)
-	reBibResource  = regexp.MustCompile(`\\addbibresource\{([^}]+)\}`)
-	reInclude      = regexp.MustCompile(`\\(?:input|include)\{([^}]+)\}`)
+	reBibliography       = regexp.MustCompile(`\\bibliography\{([^}]+)\}`)
+	reBibResource        = regexp.MustCompile(`\\addbibresource\{([^}]+)\}`)
+	reInclude            = regexp.MustCompile(`\\(?:input|include)\{([^}]+)\}`)
+	reFileContentsBegin  = regexp.MustCompile(`\\begin\{filecontents\*?\}(?:\[[^\]]*\])?\{([^}]+\.bib)\}`)
+	reFileContentsEnd    = regexp.MustCompile(`\\end\{filecontents\*?\}`)
 )
 
 // FindBibFiles scans mainTex (and recursively included .tex files) for
@@ -109,6 +112,60 @@ func FindTexFiles(mainTex, dir string) []string {
 
 	walk(mainTex)
 	return result
+}
+
+// ResolveFileContents finds \begin{filecontents}{*.bib}...\end{filecontents} blocks
+// in mainTex and all included .tex files, writes the embedded content to disk as the
+// named .bib file, and removes the block from the tex file.
+func ResolveFileContents(mainTex, dir string) error {
+	for _, path := range FindTexFiles(mainTex, dir) {
+		if err := resolveFileContentsInFile(path, dir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func resolveFileContentsInFile(path, dir string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("cannot read %s: %w", path, err)
+	}
+	lines := strings.Split(string(data), "\n")
+
+	var outLines []string
+	changed := false
+	i := 0
+	for i < len(lines) {
+		if m := reFileContentsBegin.FindStringSubmatch(StripComment(lines[i])); m != nil {
+			bibName := m[1]
+			var content []string
+			i++
+			for i < len(lines) {
+				if reFileContentsEnd.MatchString(StripComment(lines[i])) {
+					i++
+					break
+				}
+				content = append(content, lines[i])
+				i++
+			}
+			bibContent := strings.Join(content, "\n") + "\n"
+			if err := os.WriteFile(filepath.Join(dir, bibName), []byte(bibContent), 0644); err != nil {
+				return fmt.Errorf("cannot write %s: %w", bibName, err)
+			}
+			changed = true
+			continue
+		}
+		outLines = append(outLines, lines[i])
+		i++
+	}
+
+	if changed {
+		if err := os.WriteFile(path, []byte(strings.Join(outLines, "\n")), 0644); err != nil {
+			return fmt.Errorf("cannot write %s: %w", path, err)
+		}
+	}
+	return nil
 }
 
 // StripComment returns the portion of line before any unescaped % comment marker.

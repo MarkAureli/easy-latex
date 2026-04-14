@@ -56,6 +56,10 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	stem := filepath.Base(strings.TrimSuffix(cfg.Main, ".tex"))
 
+	if err := texscan.ResolveFileContents(cfg.Main, "."); err != nil {
+		return err
+	}
+
 	// First pdflatex pass — buffer output; only print if no bib tool runs,
 	// since bib-related warnings (undefined citations, references) are expected
 	// at this stage and will be resolved by the subsequent bib tool pass.

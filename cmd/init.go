@@ -57,6 +57,10 @@ func doInit(dir string, stdin io.Reader) error {
 		return fmt.Errorf("cannot create .el: %w", err)
 	}
 
+	if err := texscan.ResolveFileContents(chosen, dir); err != nil {
+		return err
+	}
+
 	bibFiles := texscan.FindBibFiles(chosen, dir)
 
 	cfg := Config{Main: chosen, BibFiles: bibFiles}
