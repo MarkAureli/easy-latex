@@ -14,26 +14,29 @@ import (
 	"time"
 )
 
-// cacheEntry stores the validation source and the raw (pre-config) field values
-// fetched from Crossref or arXiv. Raw fields allow config-dependent
-// transformations (journal abbreviation, author formatting, title bracing) to
-// be re-applied on every compile without re-fetching from the API.
+// cacheEntry stores the validation source and a snapshot of all allowed field
+// values for an entry. Fields holds pre-config-transform values so that changes
+// to abbreviateJournals, maxAuthors, abbreviateFirstName, braceTitles, or
+// urlFromDOI take effect on the next compile without re-fetching from the API.
 //
-// Title is stored after stripNonEscapedBraces (non-configurable preprocessing).
-// Authors is the full "Last, First and …" string before maxAuthors/abbreviation.
-// Journal is the full unabbreviated name (Crossref only).
+// API-sourced fields stored raw:
+//   - title: after stripNonEscapedBraces (non-configurable), before brace-wrapping
+//   - author: full "Last, First and …" string, before maxAuthors/abbreviation
+//   - journal: full unabbreviated name (Crossref only)
+//   - url: as present in the bib file before urlFromDOI; absent when not in bib
+//
+// All other allowed fields (year, volume, number, pages, doi, booktitle, …) are
+// stored as returned by the API or as present in the bib file.
 type cacheEntry struct {
-	Source  string `json:"source"`
-	Title   string `json:"title,omitempty"`
-	Authors string `json:"authors,omitempty"`
-	Journal string `json:"journal,omitempty"`
+	Source string            `json:"source"`
+	Fields map[string]string `json:"fields,omitempty"`
 }
 
 // cache maps canonical citation keys to their cacheEntry.
 type cache map[string]cacheEntry
 
 func loadCache(auxDir string) cache {
-	data, err := os.ReadFile(filepath.Join(auxDir, "bib_cache.json"))
+	data, err := os.ReadFile(filepath.Join(auxDir, "bib.json"))
 	if err != nil {
 		return make(cache)
 	}
@@ -42,12 +45,20 @@ func loadCache(auxDir string) cache {
 		// Unreadable or old-format cache: start fresh; entries will be re-validated.
 		return make(cache)
 	}
+	// Remove old-format crossref/arxiv entries that lack a Fields snapshot so
+	// they get re-validated and fully re-cached under the new schema.
+	// no-id entries legitimately have no fields and are preserved.
+	for k, v := range c {
+		if (v.Source == "crossref" || v.Source == "arxiv") && len(v.Fields) == 0 {
+			delete(c, k)
+		}
+	}
 	return c
 }
 
 func saveCache(auxDir string, c cache) {
 	data, _ := json.MarshalIndent(c, "", "  ")
-	_ = os.WriteFile(filepath.Join(auxDir, "bib_cache.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(auxDir, "bib.json"), data, 0644)
 }
 
 // LoadCacheKeys returns all canonical citation keys stored in the bib cache.
@@ -124,6 +135,10 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 		}
 		e := item.Entry
 
+		// Capture raw url before any modification; stored as-is in the cache
+		// so that urlFromDOI is always re-applied from current config.
+		rawURL := FieldValue(e, "url")
+
 		// Capture original field values to compare after post-processing.
 		origAuthor := FieldValue(e, "author")
 		origTitle := FieldValue(e, "title")
@@ -145,33 +160,52 @@ func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitle
 				e = *corrected
 			}
 			if source != "" {
-				pending = append(pending, pendingEntry{i, cacheEntry{
-					Source:  source,
-					Title:   raw.Title,
-					Authors: raw.Authors,
-					Journal: raw.Journal,
-				}})
+				entry := cacheEntry{Source: source}
+				if source == "crossref" || source == "arxiv" {
+					// Build a full snapshot of all allowed fields for this entry.
+					// Normalize a copy to get canonical field names and drop unknown fields,
+					// but skip urlFromDOI so we preserve the raw url from the bib file.
+					eCopy := e
+					normalizeEntryFields(&eCopy, false)
+					fields := make(map[string]string, len(eCopy.Fields))
+					for _, f := range eCopy.Fields {
+						if v := FieldValue(eCopy, f.Name); v != "" {
+							fields[f.Name] = v
+						}
+					}
+					// Overlay raw API values (pre-config-transform: full journal name,
+					// unformatted authors, pre-brace title, pre-abbreviation year/vol/etc).
+					for k, v := range raw.Fields {
+						if v != "" {
+							fields[k] = v
+						}
+					}
+					// Restore raw url: store what was in the bib file, not any
+					// doi-derived value. urlFromDOI is re-applied each compile.
+					delete(fields, "url")
+					if rawURL != "" {
+						fields["url"] = rawURL
+					}
+					entry.Fields = fields
+				}
+				pending = append(pending, pendingEntry{i, entry})
 				cacheChanged = true
 			}
 			if source == "crossref" || source == "arxiv" {
 				validationSource = source
 			}
 		} else if cached.Source == "crossref" || cached.Source == "arxiv" {
-			// Re-apply raw fields with the current config so that changes to
-			// abbreviateJournals, maxAuthors, abbreviateFirstName, or braceTitles
-			// take effect without re-fetching from the API.
-			if cached.Title != "" {
-				SetField(&e, "title", "{"+cached.Title+"}")
-			}
-			if cached.Authors != "" {
-				SetField(&e, "author", "{"+cached.Authors+"}")
-			}
-			if cached.Journal != "" {
-				journal := cached.Journal
-				if abbreviateJournals {
-					journal = AbbreviateISO4(journal)
+			// Re-apply all cached fields so that changes to abbreviateJournals,
+			// maxAuthors, abbreviateFirstName, braceTitles, or urlFromDOI take
+			// effect on the next compile without re-fetching from the API.
+			// journal is re-abbreviated here; all other config transforms run
+			// later in the pipeline (normalizeEntryFields, author formatting, etc).
+			for name, val := range cached.Fields {
+				if name == "journal" && abbreviateJournals {
+					SetField(&e, name, "{"+AbbreviateISO4(val)+"}")
+				} else {
+					SetField(&e, name, "{"+val+"}")
 				}
-				SetField(&e, "journal", "{"+journal+"}")
 			}
 		}
 
@@ -481,9 +515,9 @@ func validateEntry(e Entry, abbreviateJournals bool) (corrected *Entry, raw cach
 		if err != nil {
 			return nil, cacheEntry{}, "", fmt.Sprintf("Crossref query failed: %v", err)
 		}
-		// Apply journal abbreviation to the corrected entry (raw.Journal is always full).
-		if result != nil && raw.Journal != "" && abbreviateJournals {
-			SetField(result, "journal", "{"+AbbreviateISO4(raw.Journal)+"}")
+		// Apply journal abbreviation to the corrected entry (raw.Fields["journal"] is always full).
+		if result != nil && raw.Fields["journal"] != "" && abbreviateJournals {
+			SetField(result, "journal", "{"+AbbreviateISO4(raw.Fields["journal"])+"}")
 		}
 		return result, raw, "crossref", ""
 	}
@@ -602,52 +636,57 @@ func queryCrossref(e Entry, doi string) (*Entry, cacheEntry, error) {
 
 	m := cr.Message
 	updated := e
-	var raw cacheEntry
+	raw := cacheEntry{Fields: make(map[string]string)}
 	var corrections []string
 
 	if len(m.Title) > 0 {
 		// Strip non-escaped braces here (non-configurable preprocessing) so the
 		// cached title is already in its final pre-transformation state.
-		raw.Title = stripNonEscapedBraces(m.Title[0])
-		if applyField(&updated, "title", raw.Title) {
+		raw.Fields["title"] = stripNonEscapedBraces(m.Title[0])
+		if applyField(&updated, "title", raw.Fields["title"]) {
 			corrections = append(corrections, "title")
 		}
 	}
 	if len(m.Author) > 0 {
-		raw.Authors = formatCrossrefAuthors(m.Author)
-		if applyField(&updated, "author", raw.Authors) {
+		raw.Fields["author"] = formatCrossrefAuthors(m.Author)
+		if applyField(&updated, "author", raw.Fields["author"]) {
 			corrections = append(corrections, "author")
 		}
 	}
 	if len(m.ContainerTitle) > 0 {
 		// Store the full journal name; abbreviation is applied by the caller.
-		raw.Journal = m.ContainerTitle[0]
-		if applyField(&updated, "journal", raw.Journal) {
+		raw.Fields["journal"] = m.ContainerTitle[0]
+		if applyField(&updated, "journal", raw.Fields["journal"]) {
 			corrections = append(corrections, "journal")
 		}
 	}
 	if len(m.Published.DateParts) > 0 && len(m.Published.DateParts[0]) > 0 {
-		if applyField(&updated, "year", fmt.Sprintf("%d", m.Published.DateParts[0][0])) {
+		raw.Fields["year"] = fmt.Sprintf("%d", m.Published.DateParts[0][0])
+		if applyField(&updated, "year", raw.Fields["year"]) {
 			corrections = append(corrections, "year")
 		}
 	}
 	if m.Volume != "" {
+		raw.Fields["volume"] = m.Volume
 		if applyField(&updated, "volume", m.Volume) {
 			corrections = append(corrections, "volume")
 		}
 	}
 	if m.Issue != "" {
+		raw.Fields["number"] = m.Issue
 		if applyField(&updated, "number", m.Issue) {
 			corrections = append(corrections, "number")
 		}
 	}
 	if m.Page != "" {
+		raw.Fields["pages"] = m.Page
 		if applyField(&updated, "pages", m.Page) {
 			corrections = append(corrections, "pages")
 		}
 	}
 	if m.DOI != "" {
-		if applyField(&updated, "doi", strings.ToLower(m.DOI)) {
+		raw.Fields["doi"] = strings.ToLower(m.DOI)
+		if applyField(&updated, "doi", raw.Fields["doi"]) {
 			corrections = append(corrections, "doi")
 		}
 	}
@@ -680,9 +719,12 @@ type arxivFeed struct {
 }
 
 type arxivEntry struct {
-	Title     string        `xml:"title"`
-	Authors   []arxivAuthor `xml:"author"`
-	Published string        `xml:"published"`
+	Title           string        `xml:"title"`
+	Authors         []arxivAuthor `xml:"author"`
+	Published       string        `xml:"published"`
+	PrimaryCategory struct {
+		Term string `xml:"term,attr"`
+	} `xml:"http://arxiv.org/schemas/atom primary_category"`
 }
 
 type arxivAuthor struct {
@@ -715,26 +757,38 @@ func queryArxiv(e Entry, id string) (*Entry, cacheEntry, error) {
 
 	ax := feed.Entries[0]
 	updated := e
-	var raw cacheEntry
+	raw := cacheEntry{Fields: make(map[string]string)}
 	var corrections []string
 
 	title := strings.TrimSpace(strings.ReplaceAll(ax.Title, "\n", " "))
 	if title != "" {
 		// Strip non-escaped braces (non-configurable preprocessing) before caching.
-		raw.Title = stripNonEscapedBraces(title)
-		if applyField(&updated, "title", raw.Title) {
+		raw.Fields["title"] = stripNonEscapedBraces(title)
+		if applyField(&updated, "title", raw.Fields["title"]) {
 			corrections = append(corrections, "title")
 		}
 	}
 	if len(ax.Authors) > 0 {
-		raw.Authors = formatArxivAuthors(ax.Authors)
-		if applyField(&updated, "author", raw.Authors) {
+		raw.Fields["author"] = formatArxivAuthors(ax.Authors)
+		if applyField(&updated, "author", raw.Fields["author"]) {
 			corrections = append(corrections, "author")
 		}
 	}
 	if len(ax.Published) >= 4 {
-		if applyField(&updated, "year", ax.Published[:4]) {
+		raw.Fields["year"] = ax.Published[:4]
+		if applyField(&updated, "year", raw.Fields["year"]) {
 			corrections = append(corrections, "year")
+		}
+	}
+	// eprint is known from the query parameter; store it so the cache is complete.
+	raw.Fields["eprint"] = id
+	if applyField(&updated, "eprint", id) {
+		corrections = append(corrections, "eprint")
+	}
+	if pc := ax.PrimaryCategory.Term; pc != "" {
+		raw.Fields["primaryclass"] = pc
+		if applyField(&updated, "primaryclass", pc) {
+			corrections = append(corrections, "primaryclass")
 		}
 	}
 

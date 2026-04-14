@@ -247,7 +247,7 @@ func TestQueryCrossref_CorrectsMismatchedFields(t *testing.T) {
 			{Name: "doi", Value: "{10.1000/xyz}"},
 		},
 	}
-	result, _, err := queryCrossref(e, "10.1000/xyz")
+	result, raw, err := queryCrossref(e, "10.1000/xyz")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -256,6 +256,22 @@ func TestQueryCrossref_CorrectsMismatchedFields(t *testing.T) {
 	}
 	if got := FieldValue(*result, "title"); got != "Correct Title" {
 		t.Errorf("title = %q, want %q", got, "Correct Title")
+	}
+	// raw.Fields must capture all API-provided fields.
+	wantFields := map[string]string{
+		"title":  "Correct Title",
+		"author": "Smith, John",
+		"journal": "Nature",
+		"year":   "2023",
+		"volume": "42",
+		"number": "3",
+		"pages":  "100--110",
+		"doi":    "10.1000/xyz",
+	}
+	for k, want := range wantFields {
+		if got := raw.Fields[k]; got != want {
+			t.Errorf("raw.Fields[%q] = %q, want %q", k, got, want)
+		}
 	}
 }
 
@@ -319,6 +335,19 @@ func makeArxivXML(title, authors, published string) []byte {
 	return b
 }
 
+// makeArxivXMLWithCategory produces an arXiv Atom feed with a primary_category element.
+func makeArxivXMLWithCategory(title, authors, published, primaryClass string) []byte {
+	return []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <title>` + title + `</title>
+    <author><name>` + authors + `</name></author>
+    <published>` + published + `</published>
+    <arxiv:primary_category term="` + primaryClass + `" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+</feed>`)
+}
+
 func splitAuthors(s string) []string {
 	if s == "" {
 		return nil
@@ -341,7 +370,7 @@ func TestQueryArxiv_CorrectsMismatchedTitle(t *testing.T) {
 		Key:    "Smith2023",
 		Fields: []Field{{Name: "title", Value: "{Wrong Title}"}},
 	}
-	result, _, err := queryArxiv(e, "2301.00001")
+	result, raw, err := queryArxiv(e, "2301.00001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -350,6 +379,19 @@ func TestQueryArxiv_CorrectsMismatchedTitle(t *testing.T) {
 	}
 	if got := FieldValue(*result, "title"); got != "Correct Title" {
 		t.Errorf("title = %q, want %q", got, "Correct Title")
+	}
+	// raw.Fields must capture all API-provided fields.
+	if got := raw.Fields["title"]; got != "Correct Title" {
+		t.Errorf("raw.Fields[\"title\"] = %q, want %q", got, "Correct Title")
+	}
+	if got := raw.Fields["author"]; got != "Smith, John" {
+		t.Errorf("raw.Fields[\"author\"] = %q, want %q", got, "Smith, John")
+	}
+	if got := raw.Fields["year"]; got != "2023" {
+		t.Errorf("raw.Fields[\"year\"] = %q, want %q", got, "2023")
+	}
+	if got := raw.Fields["eprint"]; got != "2301.00001" {
+		t.Errorf("raw.Fields[\"eprint\"] = %q, want %q", got, "2301.00001")
 	}
 }
 
@@ -377,6 +419,37 @@ func TestQueryArxiv_ExtractsYearFromPublished(t *testing.T) {
 	}
 	if got := FieldValue(*result, "year"); got != "2019" {
 		t.Errorf("year = %q, want %q", got, "2019")
+	}
+}
+
+func TestQueryArxiv_ExtractsPrimaryClass(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.Write(makeArxivXMLWithCategory("A Title", "Smith, John", "2023-01-15T00:00:00Z", "cs.LG"))
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{
+		Key: "Smith2023",
+		Fields: []Field{
+			{Name: "title", Value: "{A Title}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+		},
+	}
+	_, raw, err := queryArxiv(e, "2301.00001")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := raw.Fields["primaryclass"]; got != "cs.LG" {
+		t.Errorf("raw.Fields[\"primaryclass\"] = %q, want %q", got, "cs.LG")
+	}
+	if got := raw.Fields["eprint"]; got != "2301.00001" {
+		t.Errorf("raw.Fields[\"eprint\"] = %q, want %q", got, "2301.00001")
 	}
 }
 
@@ -665,6 +738,190 @@ func TestValidateEntry_NoIDWarning_BookSuppressed(t *testing.T) {
 	}
 	if warn != "" {
 		t.Errorf("expected no warning for book without doi, got %q", warn)
+	}
+}
+
+// ── cache re-application ──────────────────────────────────────────────────────
+
+// TestCacheReappliesAllFields verifies that on a second ProcessBibFiles call
+// (entry already in cache), all Fields from the cache are written back to the
+// bib file, overriding whatever was in the file.
+func TestCacheReappliesAllFields(t *testing.T) {
+	dir := t.TempDir()
+	// Cache key must match the canonical key computed from the bib file's current
+	// content: author=Smith, year=2023, title="Stale Title" → Smith2023StaleTitle.
+	c := cache{
+		"Smith2023StaleTitle": cacheEntry{
+			Source: "crossref",
+			Fields: map[string]string{
+				"author":  "Smith, John",
+				"title":   "Correct Title",
+				"journal": "Nature",
+				"year":    "2023",
+				"volume":  "99",
+				"number":  "7",
+				"pages":   "1--10",
+				"doi":     "10.1/x",
+			},
+		},
+	}
+	saveCache(dir, c)
+
+	// Bib file has stale/wrong values for most fields.
+	bib := `@article{Smith2023Test,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {Stale Title},
+  journal = {Stale Journal},
+  volume  = {},
+  number  = {},
+  pages   = {},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ProcessBibFiles([]string{path}, dir, false, false, false, 0, true, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	checks := map[string]string{
+		"title":   "Correct Title",
+		"journal": "Nature",
+		"volume":  "99",
+		"number":  "7",
+		"pages":   "1--10",
+	}
+	for field, want := range checks {
+		if got := FieldValue(entry, field); got != want {
+			t.Errorf("%s = %q, want %q", field, got, want)
+		}
+	}
+}
+
+// TestCacheJournalAbbreviationOnReapply verifies that the full journal name in
+// the cache is abbreviated when abbreviateJournals=true, even for cached entries.
+func TestCacheJournalAbbreviationOnReapply(t *testing.T) {
+	dir := t.TempDir()
+	// Key matches canonical form for author=Smith, year=2023, title="A Title".
+	c := cache{
+		"Smith2023ATitle": cacheEntry{
+			Source: "crossref",
+			Fields: map[string]string{
+				"author":  "Smith, John",
+				"title":   "A Title",
+				"journal": "Nature Communications",
+				"year":    "2023",
+				"doi":     "10.1/x",
+			},
+		},
+	}
+	saveCache(dir, c)
+
+	bib := `@article{Smith2023ATitle,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {A Title},
+  journal = {Nature Communications},
+  volume  = {},
+  number  = {},
+  pages   = {},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	got := FieldValue(entry, "journal")
+	if got == "Nature Communications" {
+		t.Error("journal should have been abbreviated but was not")
+	}
+	if got == "" {
+		t.Error("journal should not be empty")
+	}
+}
+
+// TestCacheRawURLPreservedOnReapply verifies that a raw url stored in the
+// cache is written back and not overridden when urlFromDOI=false.
+func TestCacheRawURLPreservedOnReapply(t *testing.T) {
+	dir := t.TempDir()
+	// Key matches canonical form for author=Smith, year=2023, title="A Title".
+	c := cache{
+		"Smith2023ATitle": cacheEntry{
+			Source: "crossref",
+			Fields: map[string]string{
+				"author":  "Smith, John",
+				"title":   "A Title",
+				"journal": "Nature",
+				"year":    "2023",
+				"doi":     "10.1/x",
+				"url":     "https://custom.example.com/paper",
+			},
+		},
+	}
+	saveCache(dir, c)
+
+	bib := `@article{Smith2023ATitle,
+  author  = {Smith, John},
+  year    = {2023},
+  title   = {A Title},
+  journal = {Nature},
+  volume  = {},
+  number  = {},
+  pages   = {},
+  doi     = {10.1/x},
+  url     = {https://doi.org/10.1/x},
+}
+`
+	path := dir + "/test.bib"
+	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ProcessBibFiles([]string{path}, dir, false, false, false, 0, true, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	items := ParseFile(string(data))
+	var entry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			entry = it.Entry
+			break
+		}
+	}
+	if got := FieldValue(entry, "url"); got != "https://custom.example.com/paper" {
+		t.Errorf("url = %q, want raw cached url", got)
 	}
 }
 
