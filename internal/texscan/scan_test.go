@@ -214,6 +214,162 @@ func TestResolveFileContents_FindBibFilesFindsResolvedBib(t *testing.T) {
 	}
 }
 
+// --- RewriteBibReferences ---
+
+func TestRewriteBibReferences_Bibliography(t *testing.T) {
+	dir := t.TempDir()
+	writeTex(t, dir, "main.tex", `\documentclass{article}
+\begin{document}
+\bibliography{refs}
+\end{document}
+`)
+
+	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readFile(t, filepath.Join(dir, "main.tex"))
+	if strings.Contains(got, `\bibliography{refs}`) {
+		t.Error(`\bibliography{refs} not replaced`)
+	}
+	if !strings.Contains(got, `\bibliography{references}`) {
+		t.Errorf("\\bibliography{references} not found in tex:\n%s", got)
+	}
+}
+
+func TestRewriteBibReferences_AddBibResource(t *testing.T) {
+	dir := t.TempDir()
+	writeTex(t, dir, "main.tex", `\usepackage[backend=biber]{biblatex}
+\addbibresource{refs.bib}
+\begin{document}
+\end{document}
+`)
+
+	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readFile(t, filepath.Join(dir, "main.tex"))
+	if strings.Contains(got, `\addbibresource{refs.bib}`) {
+		t.Error(`\addbibresource{refs.bib} not replaced`)
+	}
+	if !strings.Contains(got, `\addbibresource{references.bib}`) {
+		t.Errorf("\\addbibresource{references.bib} not found in tex:\n%s", got)
+	}
+}
+
+func TestRewriteBibReferences_TwoBibFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeTex(t, dir, "main.tex", `\begin{document}
+\bibliography{a,b}
+\end{document}
+`)
+
+	if err := RewriteBibReferences("main.tex", dir, []string{"preamble.bib", "references.bib"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readFile(t, filepath.Join(dir, "main.tex"))
+	if !strings.Contains(got, `\bibliography{preamble,references}`) {
+		t.Errorf("expected \\bibliography{preamble,references}, got:\n%s", got)
+	}
+}
+
+func TestRewriteBibReferences_TwoAddBibResources(t *testing.T) {
+	dir := t.TempDir()
+	writeTex(t, dir, "main.tex", `\addbibresource{refs.bib}
+\begin{document}
+\end{document}
+`)
+
+	if err := RewriteBibReferences("main.tex", dir, []string{"preamble.bib", "references.bib"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readFile(t, filepath.Join(dir, "main.tex"))
+	if strings.Count(got, `\addbibresource{`) != 2 {
+		t.Errorf("expected 2 \\addbibresource lines, got:\n%s", got)
+	}
+	if !strings.Contains(got, `\addbibresource{preamble.bib}`) {
+		t.Errorf("preamble.bib addbibresource missing:\n%s", got)
+	}
+	if !strings.Contains(got, `\addbibresource{references.bib}`) {
+		t.Errorf("references.bib addbibresource missing:\n%s", got)
+	}
+}
+
+func TestRewriteBibReferences_NoOp(t *testing.T) {
+	dir := t.TempDir()
+	original := `\begin{document}
+Hello world.
+\end{document}
+`
+	writeTex(t, dir, "main.tex", original)
+
+	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readFile(t, filepath.Join(dir, "main.tex"))
+	if got != original {
+		t.Errorf("file modified unexpectedly:\n%s", got)
+	}
+}
+
+func TestRewriteBibReferences_DuplicateBibliographyDropped(t *testing.T) {
+	dir := t.TempDir()
+	writeTex(t, dir, "main.tex", `\begin{document}
+\bibliography{refs}
+\bibliography{refs}
+\end{document}
+`)
+
+	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readFile(t, filepath.Join(dir, "main.tex"))
+	if strings.Count(got, `\bibliography{`) != 1 {
+		t.Errorf("expected exactly one \\bibliography, got:\n%s", got)
+	}
+}
+
+func TestRewriteBibReferences_InIncludedFile(t *testing.T) {
+	dir := t.TempDir()
+	writeTex(t, dir, "main.tex", `\input{sub}
+\begin{document}\end{document}
+`)
+	writeTex(t, dir, "sub.tex", `\bibliography{refs}
+`)
+
+	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readFile(t, filepath.Join(dir, "sub.tex"))
+	if !strings.Contains(got, `\bibliography{references}`) {
+		t.Errorf("expected \\bibliography{references} in sub.tex, got:\n%s", got)
+	}
+}
+
+func TestRewriteBibReferences_CommentedBibliographyIgnored(t *testing.T) {
+	dir := t.TempDir()
+	original := `\begin{document}
+% \bibliography{refs}
+\end{document}
+`
+	writeTex(t, dir, "main.tex", original)
+
+	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readFile(t, filepath.Join(dir, "main.tex"))
+	if got != original {
+		t.Errorf("commented \\bibliography should not be rewritten, got:\n%s", got)
+	}
+}
+
 func TestResolveFileContents_CommentedOutBlock(t *testing.T) {
 	dir := t.TempDir()
 	original := `% \begin{filecontents}{refs.bib}

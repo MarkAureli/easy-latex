@@ -64,6 +64,18 @@ func doInit(dir string, stdin io.Reader) error {
 
 	bibFiles := texscan.FindBibFiles(chosen, dir)
 
+	var entryBibFiles []string
+	if len(bibFiles) > 0 {
+		bibFiles, err = condenseBibFiles(bibFiles, dir)
+		if err != nil {
+			return err
+		}
+		if err := texscan.RewriteBibReferences(chosen, dir, bibFiles); err != nil {
+			return err
+		}
+		entryBibFiles = []string{"references.bib"}
+	}
+
 	cfg := Config{Main: chosen, BibFiles: bibFiles}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -77,7 +89,7 @@ func doInit(dir string, stdin io.Reader) error {
 		return err
 	}
 
-	if _, err := bib.AllocateCacheEntries(bibFiles, elDir); err != nil {
+	if _, err := bib.AllocateCacheEntries(entryBibFiles, elDir); err != nil {
 		return err
 	}
 
@@ -86,6 +98,103 @@ func doInit(dir string, stdin io.Reader) error {
 		fmt.Printf("Bib files: %s\n", strings.Join(bibFiles, ", "))
 	}
 	return nil
+}
+
+// condenseBibFiles consolidates all bibFiles into at most two files in dir:
+//   - references.bib: all bib entries
+//   - preamble.bib: @string/@preamble blocks (no entries, no comments, no @comment blocks)
+//
+// Original files are deleted. Returns the list of new bib files (preamble first if present).
+func condenseBibFiles(bibFiles []string, dir string) ([]string, error) {
+	var allEntries []bib.Entry
+	var preambleChunks []string
+
+	for _, bibFile := range bibFiles {
+		data, err := os.ReadFile(filepath.Join(dir, bibFile))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("cannot read %s: %w", bibFile, err)
+		}
+
+		for _, item := range bib.ParseFile(string(data)) {
+			if item.IsEntry {
+				allEntries = append(allEntries, item.Entry)
+				continue
+			}
+			trimmed := strings.TrimSpace(item.Raw)
+			if trimmed == "" {
+				continue
+			}
+			// Drop @comment blocks
+			if strings.HasPrefix(strings.ToLower(trimmed), "@comment") {
+				continue
+			}
+			// @string / @preamble blocks: keep as-is
+			if trimmed[0] == '@' {
+				preambleChunks = append(preambleChunks, trimmed)
+				continue
+			}
+			// Plain text between @-blocks: strip comment lines
+			if chunk := filterPreambleText(item.Raw); chunk != "" {
+				preambleChunks = append(preambleChunks, chunk)
+			}
+		}
+	}
+
+	refPath := filepath.Join(dir, "references.bib")
+	if err := os.WriteFile(refPath, []byte(bib.RenderEntries(allEntries)), 0644); err != nil {
+		return nil, fmt.Errorf("cannot write references.bib: %w", err)
+	}
+
+	newBibFiles := []string{"references.bib"}
+
+	if len(preambleChunks) > 0 {
+		preamblePath := filepath.Join(dir, "preamble.bib")
+		content := strings.Join(preambleChunks, "\n\n") + "\n"
+		if err := os.WriteFile(preamblePath, []byte(content), 0644); err != nil {
+			return nil, fmt.Errorf("cannot write preamble.bib: %w", err)
+		}
+		newBibFiles = []string{"preamble.bib", "references.bib"}
+	}
+
+	// Delete original files that are not one of the new output files
+	newRefAbs, _ := filepath.Abs(refPath)
+	newPreAbs, _ := filepath.Abs(filepath.Join(dir, "preamble.bib"))
+	for _, bibFile := range bibFiles {
+		absPath, _ := filepath.Abs(filepath.Join(dir, bibFile))
+		if absPath != newRefAbs && absPath != newPreAbs {
+			_ = os.Remove(filepath.Join(dir, bibFile))
+		}
+	}
+
+	return newBibFiles, nil
+}
+
+// filterPreambleText strips comment lines (starting with %) from raw plain-text
+// bib chunks and trims leading/trailing blank lines, preserving interior blank lines.
+func filterPreambleText(raw string) string {
+	lines := strings.Split(raw, "\n")
+	kept := lines[:0]
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "%") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	// Trim leading and trailing blank lines
+	start, end := 0, len(kept)-1
+	for start <= end && strings.TrimSpace(kept[start]) == "" {
+		start++
+	}
+	for end >= start && strings.TrimSpace(kept[end]) == "" {
+		end--
+	}
+	if start > end {
+		return ""
+	}
+	return strings.Join(kept[start:end+1], "\n")
 }
 
 // updateGitExclude appends .el to .git/info/exclude if a

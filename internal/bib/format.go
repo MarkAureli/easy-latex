@@ -42,6 +42,19 @@ var canonicalOrder = map[string][]string{
 	},
 }
 
+// RenderEntries formats a slice of entries into .bib file content,
+// separated by blank lines.
+func RenderEntries(entries []Entry) string {
+	var buf bytes.Buffer
+	for i, e := range entries {
+		if i > 0 {
+			buf.WriteByte('\n')
+		}
+		buf.WriteString(formatEntry(e))
+	}
+	return buf.String()
+}
+
 // renderItems converts a slice of Items back to .bib file content.
 // Whitespace-only raw items are collapsed to a single newline.
 // A blank line is always emitted between consecutive entries.

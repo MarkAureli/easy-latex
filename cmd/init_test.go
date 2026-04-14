@@ -257,6 +257,193 @@ func TestDoInit_UpdatesGitExclude(t *testing.T) {
 	}
 }
 
+// readTestFile reads the content of a file for use in assertions.
+func readTestFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("readTestFile %s: %v", path, err)
+	}
+	return string(data)
+}
+
+// bibBook is a simple book entry without DOI/arXiv — avoids network calls in AllocateCacheEntries.
+const bibBook = `@book{knuth1984,
+  author    = {Knuth, Donald E.},
+  year      = {1984},
+  title     = {The TeXbook},
+  publisher = {Addison-Wesley},
+}
+`
+
+func TestDoInit_BibFilesCondensed(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(bibBook), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// references.bib created with the entry
+	ref := readTestFile(t, filepath.Join(dir, "references.bib"))
+	if !strings.Contains(ref, "@book") {
+		t.Errorf("references.bib missing @book entry:\n%s", ref)
+	}
+	// preamble.bib not created (no @string/@preamble)
+	if _, err := os.Stat(filepath.Join(dir, "preamble.bib")); err == nil {
+		t.Error("preamble.bib should not be created when there is no preamble content")
+	}
+	// original deleted
+	if _, err := os.Stat(filepath.Join(dir, "refs.bib")); err == nil {
+		t.Error("original refs.bib should be deleted after condensation")
+	}
+}
+
+func TestDoInit_BibPreambleSplit(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	content := "@string{pub = {Addison-Wesley}}\n\n" + bibBook
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pre := readTestFile(t, filepath.Join(dir, "preamble.bib"))
+	if !strings.Contains(pre, "@string") {
+		t.Errorf("preamble.bib missing @string:\n%s", pre)
+	}
+	ref := readTestFile(t, filepath.Join(dir, "references.bib"))
+	if !strings.Contains(ref, "@book") {
+		t.Errorf("references.bib missing @book:\n%s", ref)
+	}
+	if strings.Contains(ref, "@string") {
+		t.Error("references.bib should not contain @string")
+	}
+	// preamble listed first in config
+	cfg := readConfig(t, dir)
+	if len(cfg.BibFiles) != 2 || cfg.BibFiles[0] != "preamble.bib" || cfg.BibFiles[1] != "references.bib" {
+		t.Errorf("BibFiles = %v, want [preamble.bib references.bib]", cfg.BibFiles)
+	}
+}
+
+func TestDoInit_BibCommentsDropped(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	content := "% top-level comment\n@string{pub = {Addison-Wesley}}\n" + bibBook
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pre := readTestFile(t, filepath.Join(dir, "preamble.bib"))
+	if strings.Contains(pre, "% top-level comment") {
+		t.Error("preamble.bib should not contain % comment lines")
+	}
+}
+
+func TestDoInit_BibAtCommentDropped(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	content := "@comment{This should be dropped}\n" + bibBook
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ref := readTestFile(t, filepath.Join(dir, "references.bib"))
+	if strings.Contains(ref, "@comment") {
+		t.Error("references.bib should not contain @comment blocks")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "preamble.bib")); err == nil {
+		t.Error("preamble.bib should not be created when only @comment was present")
+	}
+}
+
+func TestDoInit_BibliographyRewritten(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(bibBook), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	tex := readTestFile(t, filepath.Join(dir, "main.tex"))
+	if strings.Contains(tex, `\bibliography{refs}`) {
+		t.Error(`\bibliography{refs} not rewritten in main.tex`)
+	}
+	if !strings.Contains(tex, `\bibliography{references}`) {
+		t.Errorf("\\bibliography{references} not found in main.tex:\n%s", tex)
+	}
+}
+
+func TestDoInit_MultipleBibFilesCondensed(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{a,b}\n\\end{document}\n")
+	if err := os.WriteFile(filepath.Join(dir, "a.bib"), []byte(bibBook), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.bib"), []byte("@book{extra,\n  author = {A, B},\n  year   = {2000},\n  title  = {Extra},\n}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ref := readTestFile(t, filepath.Join(dir, "references.bib"))
+	if !strings.Contains(ref, "@book") {
+		t.Errorf("references.bib missing entries:\n%s", ref)
+	}
+	cfg := readConfig(t, dir)
+	if len(cfg.BibFiles) != 1 || cfg.BibFiles[0] != "references.bib" {
+		t.Errorf("BibFiles = %v, want [references.bib]", cfg.BibFiles)
+	}
+}
+
+func TestDoInit_BibIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(bibBook), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil); err != nil {
+		t.Fatalf("first init: %v", err)
+	}
+	ref1 := readTestFile(t, filepath.Join(dir, "references.bib"))
+
+	if err := doInit(dir, nil); err != nil {
+		t.Fatalf("second init: %v", err)
+	}
+	ref2 := readTestFile(t, filepath.Join(dir, "references.bib"))
+
+	if ref1 != ref2 {
+		t.Errorf("references.bib changed after second init:\nbefore:\n%s\nafter:\n%s", ref1, ref2)
+	}
+}
+
 func TestHasBeginDocument(t *testing.T) {
 	dir := t.TempDir()
 

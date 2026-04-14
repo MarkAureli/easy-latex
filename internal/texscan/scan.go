@@ -168,6 +168,71 @@ func resolveFileContentsInFile(path, dir string) error {
 	return nil
 }
 
+// RewriteBibReferences updates \bibliography and \addbibresource declarations in
+// all tex files reachable from mainTex to reference newBibFiles instead of the
+// old ones. The first occurrence in each file is replaced; subsequent occurrences
+// of the same command type are dropped.
+func RewriteBibReferences(mainTex, dir string, newBibFiles []string) error {
+	for _, path := range FindTexFiles(mainTex, dir) {
+		if err := rewriteBibRefsInFile(path, newBibFiles); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rewriteBibRefsInFile(path string, newBibFiles []string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("cannot read %s: %w", path, err)
+	}
+	lines := strings.Split(string(data), "\n")
+
+	newNames := make([]string, len(newBibFiles))
+	for i, f := range newBibFiles {
+		newNames[i] = strings.TrimSuffix(f, ".bib")
+	}
+	newBibArg := strings.Join(newNames, ",")
+
+	var outLines []string
+	bibDone := false
+	addBibDone := false
+	changed := false
+
+	for _, line := range lines {
+		stripped := StripComment(line)
+
+		if reBibliography.MatchString(stripped) {
+			changed = true
+			if !bibDone {
+				outLines = append(outLines, reBibliography.ReplaceAllLiteralString(line, `\bibliography{`+newBibArg+`}`))
+				bibDone = true
+			}
+			// subsequent occurrences dropped
+			continue
+		}
+
+		if reBibResource.MatchString(stripped) {
+			changed = true
+			if !addBibDone {
+				outLines = append(outLines, reBibResource.ReplaceAllLiteralString(line, `\addbibresource{`+newBibFiles[0]+`}`))
+				for _, f := range newBibFiles[1:] {
+					outLines = append(outLines, `\addbibresource{`+f+`}`)
+				}
+				addBibDone = true
+			}
+			continue
+		}
+
+		outLines = append(outLines, line)
+	}
+
+	if !changed {
+		return nil
+	}
+	return os.WriteFile(path, []byte(strings.Join(outLines, "\n")), 0644)
+}
+
 // StripComment returns the portion of line before any unescaped % comment marker.
 func StripComment(line string) string {
 	idx := strings.Index(line, "%")
