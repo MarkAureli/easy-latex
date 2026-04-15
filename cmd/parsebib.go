@@ -18,9 +18,13 @@ func runParsebib(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	added, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir)
+	added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir)
 	if err != nil {
 		return err
+	}
+	bib.SaveRenames(auxDir, renames)
+	if ef := entriesBibFile(cfg.BibFiles); ef != "" {
+		bib.UpdateBibHash(ef, auxDir)
 	}
 	fmt.Printf("Allocated %d new bib cache entries.\n", added)
 	return nil

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/MarkAureli/easy-latex/internal/bib"
 )
 
 // chdir changes the process working directory to dir and restores it after the test.
@@ -21,13 +23,13 @@ func chdir(t *testing.T, dir string) {
 	t.Cleanup(func() { os.Chdir(orig) })
 }
 
-func writeConfig(t *testing.T, dir, main string) {
+func writeConfig(t *testing.T, dir, main string, bibFiles ...string) {
 	t.Helper()
 	elDir := filepath.Join(dir, ".el")
 	if err := os.MkdirAll(elDir, 0755); err != nil {
 		t.Fatalf("writeConfig mkdir: %v", err)
 	}
-	cfg := Config{Main: main}
+	cfg := Config{Main: main, BibFiles: bibFiles}
 	data, _ := json.MarshalIndent(cfg, "", "  ")
 	if err := os.WriteFile(filepath.Join(elDir, "config.json"), data, 0644); err != nil {
 		t.Fatalf("writeConfig: %v", err)
@@ -138,13 +140,13 @@ const texBibtex = `\documentclass{article}
 \begin{document}
 A citation~\cite{knuth1984}.
 \bibliographystyle{plain}
-\bibliography{refs}
+\bibliography{bibliography}
 \end{document}
 `
 
 const texBiber = `\documentclass{article}
 \usepackage[backend=biber]{biblatex}
-\addbibresource{refs.bib}
+\addbibresource{bibliography.bib}
 \begin{document}
 A citation~\cite{knuth1984}.
 \printbibliography
@@ -165,12 +167,23 @@ func setupCompileDir(t *testing.T, texContent, bibContent string) string {
 	if err := os.WriteFile(filepath.Join(dir, "main.tex"), []byte(texContent), 0644); err != nil {
 		t.Fatal(err)
 	}
+	elDir := filepath.Join(dir, ".el")
 	if bibContent != "" {
-		if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(bibContent), 0644); err != nil {
+		bibPath := filepath.Join(dir, "bibliography.bib")
+		if err := os.WriteFile(bibPath, []byte(bibContent), 0644); err != nil {
 			t.Fatal(err)
 		}
+		writeConfig(t, dir, "main.tex", "bibliography.bib")
+		// Simulate 'el parsebib': seed bib.json, write renames.json, record hash.
+		_, renames, err := bib.AllocateCacheEntries([]string{bibPath}, elDir)
+		if err != nil {
+			t.Fatalf("AllocateCacheEntries: %v", err)
+		}
+		bib.SaveRenames(elDir, renames)
+		bib.UpdateBibHash(bibPath, elDir)
+	} else {
+		writeConfig(t, dir, "main.tex")
 	}
-	writeConfig(t, dir, "main.tex")
 	return dir
 }
 

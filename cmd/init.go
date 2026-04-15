@@ -71,10 +71,7 @@ func doInit(dir string, stdin io.Reader, ieee bool) error {
 
 	bibFiles := texscan.FindBibFiles(chosen, dir)
 
-	refName := "references.bib"
-	if ieee {
-		refName = "bibliography.bib"
-	}
+	refName := "bibliography.bib"
 
 	var entryBibFiles []string
 	if len(bibFiles) > 0 {
@@ -105,8 +102,11 @@ func doInit(dir string, stdin io.Reader, ieee bool) error {
 		return err
 	}
 
-	if _, err := bib.AllocateCacheEntries(entryBibFiles, elDir); err != nil {
+	if _, _, err := bib.AllocateCacheEntries(entryBibFiles, elDir); err != nil {
 		return err
+	}
+	if len(entryBibFiles) > 0 {
+		bib.UpdateBibHash(filepath.Join(dir, refName), elDir)
 	}
 
 	fmt.Printf("Initialized. Main file: %s\n", chosen)
@@ -117,8 +117,7 @@ func doInit(dir string, stdin io.Reader, ieee bool) error {
 }
 
 // condenseBibFiles consolidates all bibFiles into at most two files in dir.
-// Without ieee: entries → references.bib, @string/@preamble → preamble.bib.
-// With ieee:    entries → bibliography.bib, @string/@preamble → IEEEabrv.bib.
+// Entries → bibliography.bib; @string/@preamble → preamble.bib (or IEEEabrv.bib with ieee).
 // Original files are deleted. Returns the list of new bib files (preamble first if present).
 func condenseBibFiles(bibFiles []string, dir string, ieee bool) ([]string, error) {
 	var allEntries []bib.Entry
@@ -158,10 +157,9 @@ func condenseBibFiles(bibFiles []string, dir string, ieee bool) ([]string, error
 		}
 	}
 
-	refName := "references.bib"
+	refName := "bibliography.bib"
 	preName := "preamble.bib"
 	if ieee {
-		refName = "bibliography.bib"
 		preName = "IEEEabrv.bib"
 	}
 

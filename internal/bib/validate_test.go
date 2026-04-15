@@ -753,6 +753,7 @@ func TestCacheReappliesAllFields(t *testing.T) {
 	c := cache{
 		"Smith2023StaleTitle": cacheEntry{
 			Source: "crossref",
+			Type:   "article",
 			Fields: map[string]string{
 				"author":  "Smith, John",
 				"title":   "Correct Title",
@@ -820,6 +821,7 @@ func TestCacheJournalAbbreviationOnReapply(t *testing.T) {
 	c := cache{
 		"Smith2023ATitle": cacheEntry{
 			Source: "crossref",
+			Type:   "article",
 			Fields: map[string]string{
 				"author":  "Smith, John",
 				"title":   "A Title",
@@ -878,6 +880,7 @@ func TestCacheRawURLPreservedOnReapply(t *testing.T) {
 	c := cache{
 		"Smith2023ATitle": cacheEntry{
 			Source: "crossref",
+			Type:   "article",
 			Fields: map[string]string{
 				"author":  "Smith, John",
 				"title":   "A Title",
@@ -1312,7 +1315,7 @@ func TestAllocateCacheEntries_NoIDEntryAdded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1334,7 +1337,7 @@ func TestAllocateCacheEntries_NoIDEntryAdded(t *testing.T) {
 func TestAllocateCacheEntries_NoIDDedup_ByCanonicalKey(t *testing.T) {
 	dir := t.TempDir()
 	// Pre-populate cache with the canonical key that the bib entry will produce.
-	saveCache(dir, cache{"Doe2024SomeTitle": cacheEntry{Source: "no-id"}})
+	saveCache(dir, cache{"Doe2024SomeTitle": cacheEntry{Source: "no-id", Type: "misc", Fields: map[string]string{"author": "Doe, Jane", "title": "Some Title", "year": "2024"}}})
 
 	bibContent := "@misc{AnyKey,\n  author = {Doe, Jane},\n  title = {Some Title},\n  year = {2024},\n}\n"
 	path := dir + "/test.bib"
@@ -1342,7 +1345,7 @@ func TestAllocateCacheEntries_NoIDDedup_ByCanonicalKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1357,6 +1360,7 @@ func TestAllocateCacheEntries_DOIDedup_ByDOI(t *testing.T) {
 	saveCache(dir, cache{
 		"Smith2020Title": cacheEntry{
 			Source: "crossref",
+			Type:   "article",
 			Fields: map[string]string{"doi": "10.1/existing"},
 		},
 	})
@@ -1368,7 +1372,7 @@ func TestAllocateCacheEntries_DOIDedup_ByDOI(t *testing.T) {
 	}
 
 	// No HTTP calls expected; if Crossref is reached the test will hang/fail.
-	added, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1382,6 +1386,7 @@ func TestAllocateCacheEntries_ArxivDedup_ByEprint(t *testing.T) {
 	saveCache(dir, cache{
 		"Doe2023Title": cacheEntry{
 			Source: "arxiv",
+			Type:   "misc",
 			Fields: map[string]string{"eprint": "2301.00001"},
 		},
 	})
@@ -1392,7 +1397,7 @@ func TestAllocateCacheEntries_ArxivDedup_ByEprint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1406,6 +1411,7 @@ func TestAllocateCacheEntries_DOIDedup_CaseInsensitive(t *testing.T) {
 	saveCache(dir, cache{
 		"Smith2020Title": cacheEntry{
 			Source: "crossref",
+			Type:   "article",
 			Fields: map[string]string{"doi": "10.1/UPPER"},
 		},
 	})
@@ -1416,7 +1422,7 @@ func TestAllocateCacheEntries_DOIDedup_CaseInsensitive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1443,7 +1449,7 @@ func TestAllocateCacheEntries_NewDOIEntry_ValidatedAndCached(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -288,10 +288,10 @@ func TestDoInit_BibFilesCondensed(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// references.bib created with the entry
-	ref := readTestFile(t, filepath.Join(dir, "references.bib"))
+	// bibliography.bib created with the entry
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
 	if !strings.Contains(ref, "@book") {
-		t.Errorf("references.bib missing @book entry:\n%s", ref)
+		t.Errorf("bibliography.bib missing @book entry:\n%s", ref)
 	}
 	// preamble.bib not created (no @string/@preamble)
 	if _, err := os.Stat(filepath.Join(dir, "preamble.bib")); err == nil {
@@ -320,17 +320,17 @@ func TestDoInit_BibPreambleSplit(t *testing.T) {
 	if !strings.Contains(pre, "@string") {
 		t.Errorf("preamble.bib missing @string:\n%s", pre)
 	}
-	ref := readTestFile(t, filepath.Join(dir, "references.bib"))
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
 	if !strings.Contains(ref, "@book") {
-		t.Errorf("references.bib missing @book:\n%s", ref)
+		t.Errorf("bibliography.bib missing @book:\n%s", ref)
 	}
 	if strings.Contains(ref, "@string") {
-		t.Error("references.bib should not contain @string")
+		t.Error("bibliography.bib should not contain @string")
 	}
 	// preamble listed first in config
 	cfg := readConfig(t, dir)
-	if len(cfg.BibFiles) != 2 || cfg.BibFiles[0] != "preamble.bib" || cfg.BibFiles[1] != "references.bib" {
-		t.Errorf("BibFiles = %v, want [preamble.bib references.bib]", cfg.BibFiles)
+	if len(cfg.BibFiles) != 2 || cfg.BibFiles[0] != "preamble.bib" || cfg.BibFiles[1] != "bibliography.bib" {
+		t.Errorf("BibFiles = %v, want [preamble.bib bibliography.bib]", cfg.BibFiles)
 	}
 }
 
@@ -366,9 +366,9 @@ func TestDoInit_BibAtCommentDropped(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ref := readTestFile(t, filepath.Join(dir, "references.bib"))
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
 	if strings.Contains(ref, "@comment") {
-		t.Error("references.bib should not contain @comment blocks")
+		t.Error("bibliography.bib should not contain @comment blocks")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "preamble.bib")); err == nil {
 		t.Error("preamble.bib should not be created when only @comment was present")
@@ -391,8 +391,8 @@ func TestDoInit_BibliographyRewritten(t *testing.T) {
 	if strings.Contains(tex, `\bibliography{refs}`) {
 		t.Error(`\bibliography{refs} not rewritten in main.tex`)
 	}
-	if !strings.Contains(tex, `\bibliography{references}`) {
-		t.Errorf("\\bibliography{references} not found in main.tex:\n%s", tex)
+	if !strings.Contains(tex, `\bibliography{bibliography}`) {
+		t.Errorf("\\bibliography{bibliography} not found in main.tex:\n%s", tex)
 	}
 }
 
@@ -411,13 +411,13 @@ func TestDoInit_MultipleBibFilesCondensed(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ref := readTestFile(t, filepath.Join(dir, "references.bib"))
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
 	if !strings.Contains(ref, "@book") {
-		t.Errorf("references.bib missing entries:\n%s", ref)
+		t.Errorf("bibliography.bib missing entries:\n%s", ref)
 	}
 	cfg := readConfig(t, dir)
-	if len(cfg.BibFiles) != 1 || cfg.BibFiles[0] != "references.bib" {
-		t.Errorf("BibFiles = %v, want [references.bib]", cfg.BibFiles)
+	if len(cfg.BibFiles) != 1 || cfg.BibFiles[0] != "bibliography.bib" {
+		t.Errorf("BibFiles = %v, want [bibliography.bib]", cfg.BibFiles)
 	}
 }
 
@@ -432,15 +432,15 @@ func TestDoInit_BibIdempotent(t *testing.T) {
 	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("first init: %v", err)
 	}
-	ref1 := readTestFile(t, filepath.Join(dir, "references.bib"))
+	ref1 := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
 
 	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("second init: %v", err)
 	}
-	ref2 := readTestFile(t, filepath.Join(dir, "references.bib"))
+	ref2 := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
 
 	if ref1 != ref2 {
-		t.Errorf("references.bib changed after second init:\nbefore:\n%s\nafter:\n%s", ref1, ref2)
+		t.Errorf("bibliography.bib changed after second init:\nbefore:\n%s\nafter:\n%s", ref1, ref2)
 	}
 }
 
@@ -467,10 +467,7 @@ func TestDoInit_IEEEFlag_FileNames(t *testing.T) {
 	if !strings.Contains(pre, "@string") {
 		t.Errorf("IEEEabrv.bib missing @string:\n%s", pre)
 	}
-	// standard names must not be created
-	if _, err := os.Stat(filepath.Join(dir, "references.bib")); err == nil {
-		t.Error("references.bib must not be created when --ieee is set")
-	}
+	// preamble.bib must not be created when --ieee is set
 	if _, err := os.Stat(filepath.Join(dir, "preamble.bib")); err == nil {
 		t.Error("preamble.bib must not be created when --ieee is set")
 	}

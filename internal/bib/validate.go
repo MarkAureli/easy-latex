@@ -1,6 +1,7 @@
 package bib
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 // stored as returned by the API or as present in the bib file.
 type cacheEntry struct {
 	Source string            `json:"source"`
+	Type   string            `json:"type"`
 	Fields map[string]string `json:"fields,omitempty"`
 }
 
@@ -45,11 +47,10 @@ func loadCache(auxDir string) cache {
 		// Unreadable or old-format cache: start fresh; entries will be re-validated.
 		return make(cache)
 	}
-	// Remove old-format crossref/arxiv entries that lack a Fields snapshot so
-	// they get re-validated and fully re-cached under the new schema.
-	// no-id entries legitimately have no fields and are preserved.
+	// Remove entries that lack a Type: these are old-format entries that predate
+	// the Type field. They will be re-allocated on the next parsebib run.
 	for k, v := range c {
-		if (v.Source == "crossref" || v.Source == "arxiv") && len(v.Fields) == 0 {
+		if v.Type == "" {
 			delete(c, k)
 		}
 	}
@@ -61,6 +62,68 @@ func saveCache(auxDir string, c cache) {
 	_ = os.WriteFile(filepath.Join(auxDir, "bib.json"), data, 0644)
 }
 
+// LoadRenames reads .el/renames.json and returns the old→new key map.
+// Returns an empty map if the file is absent or unreadable.
+func LoadRenames(auxDir string) map[string]string {
+	data, err := os.ReadFile(filepath.Join(auxDir, "renames.json"))
+	if err != nil {
+		return map[string]string{}
+	}
+	var r map[string]string
+	if err := json.Unmarshal(data, &r); err != nil {
+		return map[string]string{}
+	}
+	return r
+}
+
+// SaveRenames merges renames into .el/renames.json (creates if absent).
+func SaveRenames(auxDir string, renames map[string]string) {
+	if len(renames) == 0 {
+		return
+	}
+	existing := LoadRenames(auxDir)
+	for k, v := range renames {
+		existing[k] = v
+	}
+	data, _ := json.MarshalIndent(existing, "", "  ")
+	_ = os.WriteFile(filepath.Join(auxDir, "renames.json"), data, 0644)
+}
+
+// ClearRenames removes .el/renames.json.
+func ClearRenames(auxDir string) {
+	_ = os.Remove(filepath.Join(auxDir, "renames.json"))
+}
+
+// BibFileChanged reports whether bibPath has changed since the last
+// UpdateBibHash call. Returns false if the file cannot be read.
+func BibFileChanged(bibPath, auxDir string) bool {
+	data, err := os.ReadFile(bibPath)
+	if err != nil {
+		return false
+	}
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("%x", sum) != loadBibHash(auxDir)
+}
+
+// UpdateBibHash computes the SHA-256 hash of bibPath and saves it to
+// auxDir/bib_hash.
+func UpdateBibHash(bibPath, auxDir string) {
+	data, err := os.ReadFile(bibPath)
+	if err != nil {
+		return
+	}
+	sum := sha256.Sum256(data)
+	_ = os.WriteFile(filepath.Join(auxDir, "bib_hash"), []byte(fmt.Sprintf("%x", sum)), 0644)
+}
+
+func loadBibHash(auxDir string) string {
+	data, err := os.ReadFile(filepath.Join(auxDir, "bib_hash"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
 // AllocateCacheEntries parses each bib file and seeds the bib cache with any
 // entries not yet present, without rewriting the bib files.
 //
@@ -69,10 +132,11 @@ func saveCache(auxDir string, c cache) {
 //   - entries with arXiv ID → deduplicated by arXiv ID (arXiv validated)
 //   - no-ID entries       → deduplicated by canonical cite key
 //
-// Returns the number of newly added cache entries.
-func AllocateCacheEntries(bibFiles []string, auxDir string) (int, error) {
+// Returns the number of newly added cache entries and a map of old→new key
+// renames for any entries whose canonical key differs from their original key.
+func AllocateCacheEntries(bibFiles []string, auxDir string) (int, map[string]string, error) {
 	if len(bibFiles) == 0 {
-		return 0, nil
+		return 0, map[string]string{}, nil
 	}
 	c := loadCache(auxDir)
 
@@ -89,25 +153,38 @@ func AllocateCacheEntries(bibFiles []string, auxDir string) (int, error) {
 	}
 
 	added := 0
+	allRenames := map[string]string{}
 	for _, path := range bibFiles {
-		n, err := allocateBibFile(path, c, cachedDOIs, cachedArxivIDs)
+		n, renames, err := allocateBibFile(path, c, cachedDOIs, cachedArxivIDs)
 		if err != nil {
-			return added, err
+			return added, allRenames, err
 		}
 		added += n
+		for k, v := range renames {
+			allRenames[k] = v
+		}
 	}
 	if added > 0 {
 		saveCache(auxDir, c)
 	}
-	return added, nil
+	return added, allRenames, nil
 }
 
-func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string]bool) (int, error) {
+func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string]bool) (int, map[string]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return 0, fmt.Errorf("cannot read %s: %w", path, err)
+		return 0, nil, fmt.Errorf("cannot read %s: %w", path, err)
 	}
 	items := ParseFile(string(data))
+
+	// Record original keys before canonical assignment so we can detect renames.
+	originalKeys := make(map[int]string, len(items))
+	for i, item := range items {
+		if item.IsEntry {
+			originalKeys[i] = item.Entry.Key
+		}
+	}
+
 	assignCanonicalKeys(items)
 
 	type pendingEntry struct {
@@ -159,7 +236,27 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 			if _, seen := c[e.Key]; seen {
 				continue
 			}
-			c[e.Key] = cacheEntry{Source: "no-id"}
+			normalizeEntryFields(&e, false)
+			if title := FieldValue(e, "title"); title != "" {
+				if normalized := stripNonEscapedBraces(title); normalized != title {
+					SetField(&e, "title", "{"+normalized+"}")
+				}
+			}
+			if warn := warnMissingFields(e); warn != "" {
+				fmt.Printf("[bib] %s: %s\n", e.Key, warn)
+			}
+			fields := make(map[string]string, len(e.Fields))
+			for _, f := range e.Fields {
+				if v := FieldValue(e, f.Name); v != "" {
+					fields[f.Name] = v
+				}
+			}
+			delete(fields, "url")
+			if rawURL != "" {
+				fields["url"] = rawURL
+			}
+			items[i].Entry = e
+			pending = append(pending, pendingEntry{i, cacheEntry{Source: "no-id", Type: e.Type, Fields: fields}})
 			added++
 		}
 	}
@@ -169,13 +266,24 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 	for _, p := range pending {
 		c[items[p.itemIdx].Entry.Key] = p.entry
 	}
-	return added, nil
+
+	// Collect renames: entries whose canonical key differs from the original key.
+	renames := map[string]string{}
+	for i, item := range items {
+		if !item.IsEntry {
+			continue
+		}
+		if orig, ok := originalKeys[i]; ok && orig != item.Entry.Key {
+			renames[orig] = item.Entry.Key
+		}
+	}
+	return added, renames, nil
 }
 
 // buildCacheEntry constructs a cacheEntry from a validated entry and its raw API
 // response, mirroring the snapshot logic in processBibFile.
 func buildCacheEntry(e Entry, raw cacheEntry, source, rawURL string) cacheEntry {
-	entry := cacheEntry{Source: source}
+	entry := cacheEntry{Source: source, Type: e.Type}
 	if source == "crossref" || source == "arxiv" {
 		eCopy := e
 		normalizeEntryFields(&eCopy, false)
@@ -209,7 +317,62 @@ func LoadCacheKeys(auxDir string) []string {
 	return keys
 }
 
-// ProcessBibFiles formats and validates every registered .bib file.
+// WriteBibFromCache generates path from the bib cache for the given cited keys,
+// applying all config transforms. Returns an error if any key is absent from
+// the cache (caller should run 'el parsebib' first).
+func WriteBibFromCache(path string, citeKeys []string, auxDir string, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName, urlFromDOI bool) error {
+	if len(citeKeys) == 0 {
+		return nil
+	}
+	c := loadCache(auxDir)
+
+	items := make([]Item, 0, len(citeKeys))
+	for _, key := range citeKeys {
+		cached, ok := c[key]
+		if !ok {
+			return fmt.Errorf("cite key %q not found in bib cache; run 'el parsebib'", key)
+		}
+
+		e := Entry{Key: key, Type: cached.Type}
+		for name, val := range cached.Fields {
+			if name == "journal" && abbreviateJournals && cached.Source == "crossref" {
+				SetField(&e, name, "{"+AbbreviateISO4(val)+"}")
+			} else {
+				SetField(&e, name, "{"+val+"}")
+			}
+		}
+
+		normalizeEntryFields(&e, urlFromDOI)
+
+		if ieeeFormat && e.Type == "misc" && findArxivID(e) != "" {
+			transformArxivMiscToUnpublished(&e)
+		}
+
+		if author := FieldValue(e, "author"); author != "" {
+			SetField(&e, "author", "{"+formatAuthorField(author, maxAuthors, abbreviateFirstName)+"}")
+		}
+
+		if title := FieldValue(e, "title"); title != "" {
+			if normalized := stripNonEscapedBraces(title); normalized != title {
+				SetField(&e, "title", "{"+normalized+"}")
+			}
+		}
+
+		if braceTitles || ieeeFormat {
+			if title := FieldValue(e, "title"); title != "" {
+				SetField(&e, "title", "{{"+title+"}}")
+			}
+		}
+
+		ensureArticleOptionalFields(&e)
+		e.Fields = sortedFields(e.Type, e.Fields)
+
+		items = append(items, Item{IsEntry: true, Entry: e})
+	}
+
+	return os.WriteFile(path, []byte(renderItems(items)), 0644)
+}
+
 // ProcessBibFiles formats and validates every registered .bib file.
 // It returns a map of renamed citation keys (oldKey → newKey) across all files,
 // which the caller can use to update \cite{} references in .tex sources.

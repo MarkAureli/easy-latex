@@ -224,7 +224,7 @@ func TestRewriteBibReferences_Bibliography(t *testing.T) {
 \end{document}
 `)
 
-	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+	if err := RewriteBibReferences("main.tex", dir, []string{"bibliography.bib"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -232,8 +232,8 @@ func TestRewriteBibReferences_Bibliography(t *testing.T) {
 	if strings.Contains(got, `\bibliography{refs}`) {
 		t.Error(`\bibliography{refs} not replaced`)
 	}
-	if !strings.Contains(got, `\bibliography{references}`) {
-		t.Errorf("\\bibliography{references} not found in tex:\n%s", got)
+	if !strings.Contains(got, `\bibliography{bibliography}`) {
+		t.Errorf("\\bibliography{bibliography} not found in tex:\n%s", got)
 	}
 }
 
@@ -245,7 +245,7 @@ func TestRewriteBibReferences_AddBibResource(t *testing.T) {
 \end{document}
 `)
 
-	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+	if err := RewriteBibReferences("main.tex", dir, []string{"bibliography.bib"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -253,8 +253,8 @@ func TestRewriteBibReferences_AddBibResource(t *testing.T) {
 	if strings.Contains(got, `\addbibresource{refs.bib}`) {
 		t.Error(`\addbibresource{refs.bib} not replaced`)
 	}
-	if !strings.Contains(got, `\addbibresource{references.bib}`) {
-		t.Errorf("\\addbibresource{references.bib} not found in tex:\n%s", got)
+	if !strings.Contains(got, `\addbibresource{bibliography.bib}`) {
+		t.Errorf("\\addbibresource{bibliography.bib} not found in tex:\n%s", got)
 	}
 }
 
@@ -265,13 +265,13 @@ func TestRewriteBibReferences_TwoBibFiles(t *testing.T) {
 \end{document}
 `)
 
-	if err := RewriteBibReferences("main.tex", dir, []string{"preamble.bib", "references.bib"}); err != nil {
+	if err := RewriteBibReferences("main.tex", dir, []string{"preamble.bib", "bibliography.bib"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	got := readFile(t, filepath.Join(dir, "main.tex"))
-	if !strings.Contains(got, `\bibliography{preamble,references}`) {
-		t.Errorf("expected \\bibliography{preamble,references}, got:\n%s", got)
+	if !strings.Contains(got, `\bibliography{preamble,bibliography}`) {
+		t.Errorf("expected \\bibliography{preamble,bibliography}, got:\n%s", got)
 	}
 }
 
@@ -282,7 +282,7 @@ func TestRewriteBibReferences_TwoAddBibResources(t *testing.T) {
 \end{document}
 `)
 
-	if err := RewriteBibReferences("main.tex", dir, []string{"preamble.bib", "references.bib"}); err != nil {
+	if err := RewriteBibReferences("main.tex", dir, []string{"preamble.bib", "bibliography.bib"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -293,8 +293,8 @@ func TestRewriteBibReferences_TwoAddBibResources(t *testing.T) {
 	if !strings.Contains(got, `\addbibresource{preamble.bib}`) {
 		t.Errorf("preamble.bib addbibresource missing:\n%s", got)
 	}
-	if !strings.Contains(got, `\addbibresource{references.bib}`) {
-		t.Errorf("references.bib addbibresource missing:\n%s", got)
+	if !strings.Contains(got, `\addbibresource{bibliography.bib}`) {
+		t.Errorf("bibliography.bib addbibresource missing:\n%s", got)
 	}
 }
 
@@ -306,7 +306,7 @@ Hello world.
 `
 	writeTex(t, dir, "main.tex", original)
 
-	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+	if err := RewriteBibReferences("main.tex", dir, []string{"bibliography.bib"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -324,7 +324,7 @@ func TestRewriteBibReferences_DuplicateBibliographyDropped(t *testing.T) {
 \end{document}
 `)
 
-	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+	if err := RewriteBibReferences("main.tex", dir, []string{"bibliography.bib"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -342,13 +342,13 @@ func TestRewriteBibReferences_InIncludedFile(t *testing.T) {
 	writeTex(t, dir, "sub.tex", `\bibliography{refs}
 `)
 
-	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+	if err := RewriteBibReferences("main.tex", dir, []string{"bibliography.bib"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	got := readFile(t, filepath.Join(dir, "sub.tex"))
-	if !strings.Contains(got, `\bibliography{references}`) {
-		t.Errorf("expected \\bibliography{references} in sub.tex, got:\n%s", got)
+	if !strings.Contains(got, `\bibliography{bibliography}`) {
+		t.Errorf("expected \\bibliography{bibliography} in sub.tex, got:\n%s", got)
 	}
 }
 
@@ -360,7 +360,7 @@ func TestRewriteBibReferences_CommentedBibliographyIgnored(t *testing.T) {
 `
 	writeTex(t, dir, "main.tex", original)
 
-	if err := RewriteBibReferences("main.tex", dir, []string{"references.bib"}); err != nil {
+	if err := RewriteBibReferences("main.tex", dir, []string{"bibliography.bib"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
