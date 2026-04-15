@@ -102,8 +102,10 @@ func doInit(dir string, stdin io.Reader, ieee bool) error {
 		return err
 	}
 
-	if _, _, err := bib.AllocateCacheEntries(entryBibFiles, elDir); err != nil {
+	if _, renames, err := bib.AllocateCacheEntries(entryBibFiles, elDir); err != nil {
 		return err
+	} else if len(renames) > 0 {
+		bib.SaveRenames(elDir, renames)
 	}
 	if len(entryBibFiles) > 0 {
 		bib.UpdateBibHash(filepath.Join(dir, refName), elDir)
