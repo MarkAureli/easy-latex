@@ -31,7 +31,7 @@ func readConfig(t *testing.T, dir string) Config {
 
 func TestDoInit_NoTexFiles(t *testing.T) {
 	dir := t.TempDir()
-	err := doInit(dir, nil)
+	err := doInit(dir, nil, false)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -40,7 +40,7 @@ func TestDoInit_NoTexFiles(t *testing.T) {
 func TestDoInit_TexFileWithoutBeginDocument(t *testing.T) {
 	dir := t.TempDir()
 	writeTeX(t, dir, "fragment.tex", `\section{Intro}`)
-	err := doInit(dir, nil)
+	err := doInit(dir, nil, false)
 	if err == nil {
 		t.Fatal("expected error for tex file without \\begin{document}, got nil")
 	}
@@ -50,7 +50,7 @@ func TestDoInit_OneMainFile(t *testing.T) {
 	dir := t.TempDir()
 	writeTeX(t, dir, "main.tex", `\documentclass{article}`+"\n"+`\begin{document}`+"\n"+`Hello`+"\n"+`\end{document}`)
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestDoInit_CreatesElDir(t *testing.T) {
 	dir := t.TempDir()
 	writeTeX(t, dir, "main.tex", `\begin{document}`)
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestDoInit_SubdirTexIgnored(t *testing.T) {
 	}
 	writeTeX(t, sub, "nested.tex", `\begin{document}`)
 
-	err := doInit(dir, nil)
+	err := doInit(dir, nil, false)
 	if err == nil {
 		t.Fatal("expected error when only subdir contains tex file, got nil")
 	}
@@ -100,7 +100,7 @@ func TestDoInit_MultipleMainFiles_PicksCorrect(t *testing.T) {
 
 	// Simulate user entering "2" to pick bbb.tex
 	stdin := strings.NewReader("2\n")
-	if err := doInit(dir, stdin); err != nil {
+	if err := doInit(dir, stdin, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -117,7 +117,7 @@ func TestDoInit_MultipleMainFiles_InvalidThenValid(t *testing.T) {
 
 	// First input is invalid, second is valid
 	stdin := strings.NewReader("99\n1\n")
-	if err := doInit(dir, stdin); err != nil {
+	if err := doInit(dir, stdin, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -131,10 +131,10 @@ func TestDoInit_Idempotent(t *testing.T) {
 	dir := t.TempDir()
 	writeTeX(t, dir, "main.tex", `\begin{document}`)
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("first init: %v", err)
 	}
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("second init: %v", err)
 	}
 
@@ -247,7 +247,7 @@ func TestDoInit_UpdatesGitExclude(t *testing.T) {
 	gitDir := makeGitRepo(t, dir)
 	writeTeX(t, dir, "main.tex", `\begin{document}`)
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -284,7 +284,7 @@ func TestDoInit_BibFilesCondensed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -312,7 +312,7 @@ func TestDoInit_BibPreambleSplit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -343,7 +343,7 @@ func TestDoInit_BibCommentsDropped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -362,7 +362,7 @@ func TestDoInit_BibAtCommentDropped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -383,7 +383,7 @@ func TestDoInit_BibliographyRewritten(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -407,7 +407,7 @@ func TestDoInit_MultipleBibFilesCondensed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -429,18 +429,85 @@ func TestDoInit_BibIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("first init: %v", err)
 	}
 	ref1 := readTestFile(t, filepath.Join(dir, "references.bib"))
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("second init: %v", err)
 	}
 	ref2 := readTestFile(t, filepath.Join(dir, "references.bib"))
 
 	if ref1 != ref2 {
 		t.Errorf("references.bib changed after second init:\nbefore:\n%s\nafter:\n%s", ref1, ref2)
+	}
+}
+
+func TestDoInit_IEEEFlag_FileNames(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	content := "@string{pub = {Addison-Wesley}}\n\n" + bibBook
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// entries → bibliography.bib
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
+	if !strings.Contains(ref, "@book") {
+		t.Errorf("bibliography.bib missing @book entry:\n%s", ref)
+	}
+	// preamble → IEEEabrv.bib
+	pre := readTestFile(t, filepath.Join(dir, "IEEEabrv.bib"))
+	if !strings.Contains(pre, "@string") {
+		t.Errorf("IEEEabrv.bib missing @string:\n%s", pre)
+	}
+	// standard names must not be created
+	if _, err := os.Stat(filepath.Join(dir, "references.bib")); err == nil {
+		t.Error("references.bib must not be created when --ieee is set")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "preamble.bib")); err == nil {
+		t.Error("preamble.bib must not be created when --ieee is set")
+	}
+	// config bib_files order: IEEEabrv.bib first
+	cfg := readConfig(t, dir)
+	if len(cfg.BibFiles) != 2 || cfg.BibFiles[0] != "IEEEabrv.bib" || cfg.BibFiles[1] != "bibliography.bib" {
+		t.Errorf("BibFiles = %v, want [IEEEabrv.bib bibliography.bib]", cfg.BibFiles)
+	}
+}
+
+func TestDoInit_IEEEFlag_SetsIEEEFormat(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\begin{document}\n\\end{document}\n")
+
+	if err := doInit(dir, nil, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := readConfig(t, dir)
+	if cfg.IEEEFormat == nil || !*cfg.IEEEFormat {
+		t.Error("IEEEFormat should be true in config when --ieee flag is set")
+	}
+}
+
+func TestDoInit_NoIEEE_IEEEFormatUnset(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\begin{document}\n\\end{document}\n")
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := readConfig(t, dir)
+	if cfg.IEEEFormat != nil {
+		t.Errorf("IEEEFormat should be nil (unset) when --ieee flag is absent, got %v", *cfg.IEEEFormat)
 	}
 }
 

@@ -20,11 +20,18 @@ var initCmd = &cobra.Command{
 	RunE:  runInit,
 }
 
-func runInit(cmd *cobra.Command, args []string) error {
-	return doInit(".", os.Stdin)
+var flagInitIEEE bool
+
+func init() {
+	initCmd.Flags().BoolVar(&flagInitIEEE, "ieee", false,
+		"Use IEEE bib file names (IEEEabrv.bib, bibliography.bib) and enable IEEE formatting")
 }
 
-func doInit(dir string, stdin io.Reader) error {
+func runInit(cmd *cobra.Command, args []string) error {
+	return doInit(".", os.Stdin, flagInitIEEE)
+}
+
+func doInit(dir string, stdin io.Reader, ieee bool) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("cannot read current directory: %w", err)
@@ -64,19 +71,28 @@ func doInit(dir string, stdin io.Reader) error {
 
 	bibFiles := texscan.FindBibFiles(chosen, dir)
 
+	refName := "references.bib"
+	if ieee {
+		refName = "bibliography.bib"
+	}
+
 	var entryBibFiles []string
 	if len(bibFiles) > 0 {
-		bibFiles, err = condenseBibFiles(bibFiles, dir)
+		bibFiles, err = condenseBibFiles(bibFiles, dir, ieee)
 		if err != nil {
 			return err
 		}
 		if err := texscan.RewriteBibReferences(chosen, dir, bibFiles); err != nil {
 			return err
 		}
-		entryBibFiles = []string{"references.bib"}
+		entryBibFiles = []string{refName}
 	}
 
 	cfg := Config{Main: chosen, BibFiles: bibFiles}
+	if ieee {
+		t := true
+		cfg.IEEEFormat = &t
+	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
@@ -100,12 +116,11 @@ func doInit(dir string, stdin io.Reader) error {
 	return nil
 }
 
-// condenseBibFiles consolidates all bibFiles into at most two files in dir:
-//   - references.bib: all bib entries
-//   - preamble.bib: @string/@preamble blocks (no entries, no comments, no @comment blocks)
-//
+// condenseBibFiles consolidates all bibFiles into at most two files in dir.
+// Without ieee: entries → references.bib, @string/@preamble → preamble.bib.
+// With ieee:    entries → bibliography.bib, @string/@preamble → IEEEabrv.bib.
 // Original files are deleted. Returns the list of new bib files (preamble first if present).
-func condenseBibFiles(bibFiles []string, dir string) ([]string, error) {
+func condenseBibFiles(bibFiles []string, dir string, ieee bool) ([]string, error) {
 	var allEntries []bib.Entry
 	var preambleChunks []string
 
@@ -143,25 +158,32 @@ func condenseBibFiles(bibFiles []string, dir string) ([]string, error) {
 		}
 	}
 
-	refPath := filepath.Join(dir, "references.bib")
-	if err := os.WriteFile(refPath, []byte(bib.RenderEntries(allEntries)), 0644); err != nil {
-		return nil, fmt.Errorf("cannot write references.bib: %w", err)
+	refName := "references.bib"
+	preName := "preamble.bib"
+	if ieee {
+		refName = "bibliography.bib"
+		preName = "IEEEabrv.bib"
 	}
 
-	newBibFiles := []string{"references.bib"}
+	refPath := filepath.Join(dir, refName)
+	if err := os.WriteFile(refPath, []byte(bib.RenderEntries(allEntries)), 0644); err != nil {
+		return nil, fmt.Errorf("cannot write %s: %w", refName, err)
+	}
+
+	newBibFiles := []string{refName}
 
 	if len(preambleChunks) > 0 {
-		preamblePath := filepath.Join(dir, "preamble.bib")
+		preamblePath := filepath.Join(dir, preName)
 		content := strings.Join(preambleChunks, "\n\n") + "\n"
 		if err := os.WriteFile(preamblePath, []byte(content), 0644); err != nil {
-			return nil, fmt.Errorf("cannot write preamble.bib: %w", err)
+			return nil, fmt.Errorf("cannot write %s: %w", preName, err)
 		}
-		newBibFiles = []string{"preamble.bib", "references.bib"}
+		newBibFiles = []string{preName, refName}
 	}
 
 	// Delete original files that are not one of the new output files
 	newRefAbs, _ := filepath.Abs(refPath)
-	newPreAbs, _ := filepath.Abs(filepath.Join(dir, "preamble.bib"))
+	newPreAbs, _ := filepath.Abs(filepath.Join(dir, preName))
 	for _, bibFile := range bibFiles {
 		absPath, _ := filepath.Abs(filepath.Join(dir, bibFile))
 		if absPath != newRefAbs && absPath != newPreAbs {
