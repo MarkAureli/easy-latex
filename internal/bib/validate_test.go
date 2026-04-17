@@ -1468,6 +1468,40 @@ func TestAllocateCacheEntries_NewDOIEntry_ValidatedAndCached(t *testing.T) {
 	}
 }
 
+// TestValidateEntry_CrossrefHTTP429_Warning verifies that a 429 response from
+// Crossref results in a warning string and leaves the entry uncorrected.
+func TestValidateEntry_CrossrefHTTP429_Warning(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{
+		Type: "article",
+		Key:  "Smith2024Test",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, Jane}"},
+			{Name: "year", Value: "{2024}"},
+			{Name: "title", Value: "{Some Title}"},
+			{Name: "doi", Value: "{10.1000/test}"},
+		},
+	}
+	corrected, _, source, warn := validateEntry(e, false)
+	if corrected != nil {
+		t.Error("expected no correction on HTTP 429")
+	}
+	if source != "" {
+		t.Errorf("source = %q, want empty", source)
+	}
+	if !strings.Contains(warn, "429") {
+		t.Errorf("warning should mention 429, got %q", warn)
+	}
+}
+
 // rebaseTransport redirects all requests to a test server base URL.
 type rebaseTransport struct {
 	base string
