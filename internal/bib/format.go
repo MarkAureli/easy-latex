@@ -92,7 +92,7 @@ func formatEntry(e Entry) string {
 
 	for _, f := range fields {
 		pad := strings.Repeat(" ", maxLen-len(f.Name))
-		fmt.Fprintf(&buf, "  %s%s = %s,\n", f.Name, pad, f.Value)
+		fmt.Fprintf(&buf, "  %s%s = %s,\n", f.Name, pad, escapeAmpersand(f.Value))
 	}
 
 	buf.WriteString("}\n")
@@ -109,6 +109,25 @@ func stripNonEscapedBraces(s string) string {
 			continue
 		}
 		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// escapeAmpersand replaces unescaped & with \& inside a bib field value so
+// that bibtex/biber does not emit a bare & into the .bbl, which LaTeX would
+// interpret as a table column separator and fail.
+func escapeAmpersand(v string) string {
+	if !strings.Contains(v, "&") {
+		return v
+	}
+	var b strings.Builder
+	b.Grow(len(v) + 4)
+	for i := 0; i < len(v); i++ {
+		if v[i] == '&' && (i == 0 || v[i-1] != '\\') {
+			b.WriteString(`\&`)
+		} else {
+			b.WriteByte(v[i])
+		}
 	}
 	return b.String()
 }

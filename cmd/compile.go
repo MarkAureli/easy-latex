@@ -70,10 +70,21 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	// First pdflatex pass — buffer output; only print if no bib tool runs,
 	// since bib-related warnings (undefined citations, references) are expected
 	// at this stage and will be resolved by the subsequent bib tool pass.
+	//
+	// If the pass fails and a stale .bbl exists (e.g. from a previous failed
+	// compile with malformed bib content), delete it and retry once: the .bbl
+	// will be regenerated correctly by the bib tool on this run.
 	firstLines, err := runPdflatex(pdflatex, cfg)
 	if err != nil {
-		printLines(firstLines)
-		return err
+		bblPath := filepath.Join(auxDir, stem+".bbl")
+		if _, statErr := os.Stat(bblPath); statErr == nil {
+			os.Remove(bblPath) //nolint:errcheck
+			firstLines, err = runPdflatex(pdflatex, cfg)
+		}
+		if err != nil {
+			printLines(firstLines)
+			return err
+		}
 	}
 
 	// Update bib file list from artifacts if not already set by el init.
