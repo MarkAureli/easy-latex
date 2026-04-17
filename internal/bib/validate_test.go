@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -209,13 +210,17 @@ func makeCrossrefJSON(title, family, given, container, year, volume, issue, page
 		Status  string  `json:"status"`
 		Message message `json:"message"`
 	}
+	yr := 2023
+	if y, err := strconv.Atoi(year); err == nil {
+		yr = y
+	}
 	r := response{
 		Status: "ok",
 		Message: message{
 			Title:          []string{title},
 			Author:         []author{{Family: family, Given: given}},
 			ContainerTitle: []string{container},
-			Published:      published{DateParts: [][]int{{2023}}},
+			Published:      published{DateParts: [][]int{{yr}}},
 			Volume:         volume,
 			Issue:          issue,
 			Page:           page,

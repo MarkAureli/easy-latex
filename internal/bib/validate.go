@@ -6,11 +6,13 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -82,9 +84,7 @@ func SaveRenames(auxDir string, renames map[string]string) {
 		return
 	}
 	existing := LoadRenames(auxDir)
-	for k, v := range renames {
-		existing[k] = v
-	}
+	maps.Copy(existing, renames)
 	data, _ := json.MarshalIndent(existing, "", "  ")
 	_ = os.WriteFile(filepath.Join(auxDir, "renames.json"), data, 0644)
 }
@@ -113,7 +113,7 @@ func UpdateBibHash(bibPath, auxDir string) {
 		return
 	}
 	sum := sha256.Sum256(data)
-	_ = os.WriteFile(filepath.Join(auxDir, "bib_hash"), []byte(fmt.Sprintf("%x", sum)), 0644)
+	_ = os.WriteFile(filepath.Join(auxDir, "bib_hash"), fmt.Appendf(nil, "%x", sum), 0644)
 }
 
 func loadBibHash(auxDir string) string {
@@ -160,9 +160,7 @@ func AllocateCacheEntries(bibFiles []string, auxDir string) (int, map[string]str
 			return added, allRenames, err
 		}
 		added += n
-		for k, v := range renames {
-			allRenames[k] = v
-		}
+		maps.Copy(allRenames, renames)
 	}
 	if added > 0 {
 		saveCache(auxDir, c)
@@ -385,16 +383,14 @@ func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, brace
 	allRenames := make(map[string]string)
 
 	for _, path := range bibFiles {
-		renames, changed, err := processBibFile(path, auxDir, c, abbreviateJournals, braceTitles, ieeeFormat, maxAuthors, abbreviateFirstName, urlFromDOI)
+		renames, changed, err := processBibFile(path, c, abbreviateJournals, braceTitles, ieeeFormat, maxAuthors, abbreviateFirstName, urlFromDOI)
 		if err != nil {
 			return nil, err
 		}
 		if changed {
 			cacheChanged = true
 		}
-		for old, new := range renames {
-			allRenames[old] = new
-		}
+		maps.Copy(allRenames, renames)
 	}
 
 	if cacheChanged {
@@ -403,7 +399,7 @@ func ProcessBibFiles(bibFiles []string, auxDir string, abbreviateJournals, brace
 	return allRenames, nil
 }
 
-func processBibFile(path, auxDir string, c cache, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName, urlFromDOI bool) (renames map[string]string, cacheChanged bool, err error) {
+func processBibFile(path string, c cache, abbreviateJournals, braceTitles, ieeeFormat bool, maxAuthors int, abbreviateFirstName, urlFromDOI bool) (renames map[string]string, cacheChanged bool, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, false, fmt.Errorf("cannot read %s: %w", path, err)
@@ -844,12 +840,7 @@ func doiIsMandatory(entryType string) bool {
 	if !ok {
 		return false
 	}
-	for _, m := range spec.mandatory {
-		if m == "doi" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(spec.mandatory, "doi")
 }
 
 func findDOI(e Entry) string {
