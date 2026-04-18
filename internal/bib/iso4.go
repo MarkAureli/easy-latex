@@ -1,9 +1,9 @@
 package bib
 
 import (
-	_ "embed"
 	"bufio"
 	"bytes"
+	_ "embed"
 	"strings"
 	"sync"
 	"unicode"

@@ -37,9 +37,9 @@ func Serve(items []completionItem, r io.Reader, w io.Writer) error {
 }
 
 type server struct {
-	docs        map[string]string // uri → full text
-	items       []completionItem
-	w           io.Writer
+	docs         map[string]string // uri → full text
+	items        []completionItem
+	w            io.Writer
 	shuttingDown bool
 }
 

@@ -10,11 +10,11 @@ import (
 )
 
 var (
-	reBibliography       = regexp.MustCompile(`\\bibliography\{([^}]+)\}`)
-	reBibResource        = regexp.MustCompile(`\\addbibresource\{([^}]+)\}`)
-	reInclude            = regexp.MustCompile(`\\(?:input|include)\{([^}]+)\}`)
-	reFileContentsBegin  = regexp.MustCompile(`\\begin\{filecontents\*?\}(?:\[[^\]]*\])?\{([^}]+\.bib)\}`)
-	reFileContentsEnd    = regexp.MustCompile(`\\end\{filecontents\*?\}`)
+	reBibliography      = regexp.MustCompile(`\\bibliography\{([^}]+)\}`)
+	reBibResource       = regexp.MustCompile(`\\addbibresource\{([^}]+)\}`)
+	reInclude           = regexp.MustCompile(`\\(?:input|include)\{([^}]+)\}`)
+	reFileContentsBegin = regexp.MustCompile(`\\begin\{filecontents\*?\}(?:\[[^\]]*\])?\{([^}]+\.bib)\}`)
+	reFileContentsEnd   = regexp.MustCompile(`\\end\{filecontents\*?\}`)
 )
 
 // FindBibFiles scans mainTex (and recursively included .tex files) for

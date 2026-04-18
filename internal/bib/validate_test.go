@@ -264,14 +264,14 @@ func TestQueryCrossref_CorrectsMismatchedFields(t *testing.T) {
 	}
 	// raw.Fields must capture all API-provided fields.
 	wantFields := map[string]string{
-		"title":  "Correct Title",
-		"author": "Smith, John",
+		"title":   "Correct Title",
+		"author":  "Smith, John",
 		"journal": "Nature",
-		"year":   "2023",
-		"volume": "42",
-		"number": "3",
-		"pages":  "100--110",
-		"doi":    "10.1000/xyz",
+		"year":    "2023",
+		"volume":  "42",
+		"number":  "3",
+		"pages":   "100--110",
+		"doi":     "10.1000/xyz",
 	}
 	for k, want := range wantFields {
 		if got := raw.Fields[k]; got != want {
@@ -1515,9 +1515,9 @@ func TestNormalizeDOI(t *testing.T) {
 		{"https://doi.org/10.1000/xyz", "10.1000/xyz"},
 		{"http://doi.org/10.1000/xyz", "10.1000/xyz"},
 		{"doi.org/10.1000/xyz", "10.1000/xyz"},
-		{"2301.12345", ""},   // arXiv, not a DOI
+		{"2301.12345", ""}, // arXiv, not a DOI
 		{"notadoi", ""},
-		{"10.nodash", ""},    // no slash
+		{"10.nodash", ""}, // no slash
 	}
 	for _, tc := range tests {
 		if got := normalizeDOI(tc.in); got != tc.want {
@@ -1538,7 +1538,7 @@ func TestNormalizeArxivID(t *testing.T) {
 		{"hep-th/0603001", "hep-th/0603001"},
 		{"https://arxiv.org/abs/2301.12345", "2301.12345"},
 		{"http://arxiv.org/abs/hep-th/0603001", "hep-th/0603001"},
-		{"10.1000/xyz", ""},   // DOI, not arXiv
+		{"10.1000/xyz", ""}, // DOI, not arXiv
 		{"notanid", ""},
 	}
 	for _, tc := range tests {

@@ -124,7 +124,7 @@ func TestRunConfig_PreservesOtherFields(t *testing.T) {
 	if updated.Main != "thesis.tex" {
 		t.Errorf("Main = %q, want %q", updated.Main, "thesis.tex")
 	}
-if len(updated.BibFiles) != 2 {
+	if len(updated.BibFiles) != 2 {
 		t.Errorf("BibFiles = %v, want 2 entries", updated.BibFiles)
 	}
 }

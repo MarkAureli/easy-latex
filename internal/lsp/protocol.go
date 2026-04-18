@@ -12,10 +12,10 @@ type request struct {
 }
 
 type response struct {
-	JSONRPC string           `json:"jsonrpc"`
-	ID      json.RawMessage  `json:"id"`
-	Result  any              `json:"result,omitempty"`
-	Error   *responseError   `json:"error,omitempty"`
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Result  any             `json:"result,omitempty"`
+	Error   *responseError  `json:"error,omitempty"`
 }
 
 type responseError struct {
@@ -30,8 +30,8 @@ type initializeResult struct {
 }
 
 type serverCapabilities struct {
-	TextDocumentSync   int                 `json:"textDocumentSync"`
-	CompletionProvider *completionOptions  `json:"completionProvider,omitempty"`
+	TextDocumentSync   int                `json:"textDocumentSync"`
+	CompletionProvider *completionOptions `json:"completionProvider,omitempty"`
 }
 
 type completionOptions struct {
