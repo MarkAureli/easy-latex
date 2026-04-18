@@ -583,9 +583,18 @@ func ensureArticleOptionalFields(e *Entry) {
 // source used, and an optional warning.
 func validateEntry(e Entry, abbreviateJournals bool) (corrected *Entry, raw cacheEntry, source, warning string) {
 	if doi := findDOI(e); doi != "" {
-		result, raw, err := queryCrossref(e, doi)
+		result, raw, crType, err := queryCrossref(e, doi)
 		if err != nil {
 			return nil, cacheEntry{}, "", fmt.Sprintf("Crossref query failed: %v", err)
+		}
+		if crType != "" {
+			if result != nil {
+				result.Type = crType
+			} else {
+				cp := e
+				result = &cp
+				result.Type = crType
+			}
 		}
 		// Apply journal abbreviation to the corrected entry (raw.Fields["journal"] is always full).
 		if result != nil && raw.Fields["journal"] != "" && abbreviateJournals {
@@ -595,9 +604,34 @@ func validateEntry(e Entry, abbreviateJournals bool) (corrected *Entry, raw cach
 	}
 
 	if id := findArxivID(e); id != "" {
-		result, raw, err := queryArxiv(e, id)
+		result, raw, doi, err := queryArxiv(e, id)
 		if err != nil {
 			return nil, cacheEntry{}, "", fmt.Sprintf("arXiv query failed: %v", err)
+		}
+		if doi != "" {
+			// arXiv entry has a DOI — use Crossref validation instead.
+			fmt.Printf("[bib] %s: arXiv entry has DOI %s, using Crossref\n", e.Key, doi)
+			crResult, crRaw, crType, crErr := queryCrossref(e, doi)
+			if crErr != nil {
+				// Crossref failed — fall back to arXiv result.
+				fmt.Printf("[bib] %s: Crossref query failed (%v), falling back to arXiv\n", e.Key, crErr)
+				return result, raw, "arxiv", ""
+			}
+			entryType := crType
+			if entryType == "" {
+				entryType = "article"
+			}
+			if crResult != nil {
+				crResult.Type = entryType
+			} else {
+				cp := e
+				crResult = &cp
+				crResult.Type = entryType
+			}
+			if crRaw.Fields["journal"] != "" && abbreviateJournals {
+				SetField(crResult, "journal", "{"+AbbreviateISO4(crRaw.Fields["journal"])+"}")
+			}
+			return crResult, crRaw, "crossref", ""
 		}
 		return result, raw, "arxiv", ""
 	}
@@ -667,42 +701,76 @@ type crossrefResponse struct {
 		Issue  string `json:"issue"`
 		Page   string `json:"page"`
 		DOI    string `json:"DOI"`
+		Type   string `json:"type"`
 	} `json:"message"`
+}
+
+// mapCrossrefType maps a Crossref work type to a BibTeX entry type.
+// Returns empty string if the type is unknown.
+func mapCrossrefType(crType string) string {
+	switch crType {
+	case "journal-article":
+		return "article"
+	case "proceedings-article":
+		return "inproceedings"
+	case "book-chapter":
+		return "incollection"
+	case "book", "monograph", "edited-book", "reference-book":
+		return "book"
+	case "report", "report-component":
+		return "techreport"
+	case "dissertation":
+		return "phdthesis"
+	default:
+		return ""
+	}
+}
+
+// containerTitleField returns the BibTeX field name that Crossref's
+// container-title should map to for the given entry type.
+func containerTitleField(bibType string) string {
+	switch bibType {
+	case "inproceedings", "conference", "incollection":
+		return "booktitle"
+	default:
+		return "journal"
+	}
 }
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
-func queryCrossref(e Entry, doi string) (*Entry, cacheEntry, error) {
+func queryCrossref(e Entry, doi string) (*Entry, cacheEntry, string, error) {
 	req, err := http.NewRequest("GET", "https://api.crossref.org/works/"+url.PathEscape(doi), nil)
 	if err != nil {
-		return nil, cacheEntry{}, err
+		return nil, cacheEntry{}, "", err
 	}
 	req.Header.Set("User-Agent", "easy-latex/0.1 (https://github.com/MarkAureli/easy-latex)")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, cacheEntry{}, err
+		return nil, cacheEntry{}, "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, cacheEntry{}, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, cacheEntry{}, "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, cacheEntry{}, err
+		return nil, cacheEntry{}, "", err
 	}
 
 	var cr crossrefResponse
 	if err := json.Unmarshal(body, &cr); err != nil {
-		return nil, cacheEntry{}, err
+		return nil, cacheEntry{}, "", err
 	}
 	if cr.Status != "ok" {
-		return nil, cacheEntry{}, fmt.Errorf("status: %s", cr.Status)
+		return nil, cacheEntry{}, "", fmt.Errorf("status: %s", cr.Status)
 	}
 
 	m := cr.Message
+	bibType := mapCrossrefType(m.Type)
 	updated := e
 	raw := cacheEntry{Fields: make(map[string]string)}
 	var corrections []string
@@ -722,10 +790,11 @@ func queryCrossref(e Entry, doi string) (*Entry, cacheEntry, error) {
 		}
 	}
 	if len(m.ContainerTitle) > 0 {
-		// Store the full journal name; abbreviation is applied by the caller.
-		raw.Fields["journal"] = m.ContainerTitle[0]
-		if applyField(&updated, "journal", raw.Fields["journal"]) {
-			corrections = append(corrections, "journal")
+		// Map container-title to journal or booktitle based on entry type.
+		ctField := containerTitleField(bibType)
+		raw.Fields[ctField] = m.ContainerTitle[0]
+		if applyField(&updated, ctField, raw.Fields[ctField]) {
+			corrections = append(corrections, ctField)
 		}
 	}
 	if len(m.Published.DateParts) > 0 && len(m.Published.DateParts[0]) > 0 {
@@ -760,9 +829,9 @@ func queryCrossref(e Entry, doi string) (*Entry, cacheEntry, error) {
 	}
 
 	if len(corrections) > 0 {
-		return &updated, raw, nil
+		return &updated, raw, bibType, nil
 	}
-	return nil, raw, nil
+	return nil, raw, bibType, nil
 }
 
 func formatCrossrefAuthors(authors []crossrefAuthor) string {
@@ -790,6 +859,7 @@ type arxivEntry struct {
 	Title           string        `xml:"title"`
 	Authors         []arxivAuthor `xml:"author"`
 	Published       string        `xml:"published"`
+	DOI             string        `xml:"http://arxiv.org/schemas/atom doi"`
 	PrimaryCategory struct {
 		Term string `xml:"term,attr"`
 	} `xml:"http://arxiv.org/schemas/atom primary_category"`
@@ -799,31 +869,32 @@ type arxivAuthor struct {
 	Name string `xml:"name"`
 }
 
-func queryArxiv(e Entry, id string) (*Entry, cacheEntry, error) {
+func queryArxiv(e Entry, id string) (*Entry, cacheEntry, string, error) {
 	resp, err := httpClient.Get("https://export.arxiv.org/api/query?id_list=" + url.QueryEscape(id))
 	if err != nil {
-		return nil, cacheEntry{}, err
+		return nil, cacheEntry{}, "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, cacheEntry{}, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, cacheEntry{}, "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, cacheEntry{}, err
+		return nil, cacheEntry{}, "", err
 	}
 
 	var feed arxivFeed
 	if err := xml.Unmarshal(body, &feed); err != nil {
-		return nil, cacheEntry{}, err
+		return nil, cacheEntry{}, "", err
 	}
 	if len(feed.Entries) == 0 {
-		return nil, cacheEntry{}, fmt.Errorf("no entry found for %s", id)
+		return nil, cacheEntry{}, "", fmt.Errorf("no entry found for %s", id)
 	}
 
 	ax := feed.Entries[0]
+	doi := strings.TrimSpace(ax.DOI)
 	updated := e
 	raw := cacheEntry{Fields: make(map[string]string)}
 	var corrections []string
@@ -861,9 +932,9 @@ func queryArxiv(e Entry, id string) (*Entry, cacheEntry, error) {
 	}
 
 	if len(corrections) > 0 {
-		return &updated, raw, nil
+		return &updated, raw, doi, nil
 	}
-	return nil, raw, nil
+	return nil, raw, doi, nil
 }
 
 func formatArxivAuthors(authors []arxivAuthor) string {
@@ -952,13 +1023,16 @@ func AddEntryFromID(id, auxDir string) (string, error) {
 			}
 		}
 		base := Entry{Type: "article", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
-		corrected, raw, err := queryCrossref(base, doi)
+		corrected, raw, crType, err := queryCrossref(base, doi)
 		if err != nil {
 			return "", fmt.Errorf("Crossref query failed: %w", err)
 		}
 		e := base
 		if corrected != nil {
 			e = *corrected
+		}
+		if crType != "" {
+			e.Type = crType
 		}
 		raw.Fields["doi"] = strings.ToLower(doi)
 		cEntry := buildCacheEntry(e, raw, "crossref", "")
@@ -982,10 +1056,39 @@ func AddEntryFromID(id, auxDir string) (string, error) {
 				{Name: "archiveprefix", Value: "{arXiv}"},
 			},
 		}
-		corrected, raw, err := queryArxiv(base, arxivID)
+		corrected, raw, doi, err := queryArxiv(base, arxivID)
 		if err != nil {
 			return "", fmt.Errorf("arXiv query failed: %w", err)
 		}
+
+		if doi != "" {
+			// arXiv entry has a DOI — use Crossref instead.
+			for key, entry := range c {
+				if strings.EqualFold(entry.Fields["doi"], doi) {
+					return key, nil
+				}
+			}
+			crBase := Entry{Type: "article", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
+			crCorrected, crRaw, crType, crErr := queryCrossref(crBase, doi)
+			if crErr == nil {
+				e := crBase
+				if crCorrected != nil {
+					e = *crCorrected
+				}
+				if crType != "" {
+					e.Type = crType
+				}
+				crRaw.Fields["doi"] = strings.ToLower(doi)
+				cEntry := buildCacheEntry(e, crRaw, "crossref", "")
+				key := disambiguateKey(GenerateKey(e), c)
+				c[key] = cEntry
+				saveCache(auxDir, c)
+				return key, nil
+			}
+			// Crossref failed — fall back to arXiv result.
+			fmt.Printf("[bib] Crossref query failed for arXiv DOI %s (%v), falling back to arXiv\n", doi, crErr)
+		}
+
 		e := base
 		if corrected != nil {
 			e = *corrected

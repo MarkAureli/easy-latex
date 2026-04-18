@@ -189,6 +189,10 @@ func TestApplyField_AddsNewField(t *testing.T) {
 // ── queryCrossref (HTTP mock) ─────────────────────────────────────────────────
 
 func makeCrossrefJSON(title, family, given, container, year, volume, issue, page, doi string) []byte {
+	return makeCrossrefJSONWithType(title, family, given, container, year, volume, issue, page, doi, "journal-article")
+}
+
+func makeCrossrefJSONWithType(title, family, given, container, year, volume, issue, page, doi, crType string) []byte {
 	type author struct {
 		Family string `json:"family"`
 		Given  string `json:"given"`
@@ -205,6 +209,7 @@ func makeCrossrefJSON(title, family, given, container, year, volume, issue, page
 		Issue          string    `json:"issue"`
 		Page           string    `json:"page"`
 		DOI            string    `json:"DOI"`
+		Type           string    `json:"type"`
 	}
 	type response struct {
 		Status  string  `json:"status"`
@@ -225,6 +230,7 @@ func makeCrossrefJSON(title, family, given, container, year, volume, issue, page
 			Issue:          issue,
 			Page:           page,
 			DOI:            doi,
+			Type:           crType,
 		},
 	}
 	b, _ := json.Marshal(r)
@@ -252,12 +258,15 @@ func TestQueryCrossref_CorrectsMismatchedFields(t *testing.T) {
 			{Name: "doi", Value: "{10.1000/xyz}"},
 		},
 	}
-	result, raw, err := queryCrossref(e, "10.1000/xyz")
+	result, raw, crType, err := queryCrossref(e, "10.1000/xyz")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result == nil {
 		t.Fatal("expected correction, got nil")
+	}
+	if crType != "article" {
+		t.Errorf("crType = %q, want article", crType)
 	}
 	if got := FieldValue(*result, "title"); got != "Correct Title" {
 		t.Errorf("title = %q, want %q", got, "Correct Title")
@@ -307,12 +316,151 @@ func TestQueryCrossref_NoChangeWhenFieldsMatch(t *testing.T) {
 			{Name: "doi", Value: "{10.1/x}"},
 		},
 	}
-	result, _, err := queryCrossref(e, "10.1/x")
+	result, _, crType, err := queryCrossref(e, "10.1/x")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result != nil {
 		t.Errorf("expected nil (no change), got corrected entry")
+	}
+	if crType != "article" {
+		t.Errorf("crType = %q, want article", crType)
+	}
+}
+
+func TestQueryCrossref_ProceedingsType_MapsToInproceedings(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeCrossrefJSONWithType(
+			"A Conference Paper", "Doe", "Jane", "Proc. ICML",
+			"2023", "", "", "1-10", "10.1/conf", "proceedings-article",
+		))
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{
+		Key:    "Doe2023",
+		Fields: []Field{{Name: "doi", Value: "{10.1/conf}"}},
+	}
+	result, raw, crType, err := queryCrossref(e, "10.1/conf")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if crType != "inproceedings" {
+		t.Errorf("crType = %q, want inproceedings", crType)
+	}
+	if result == nil {
+		t.Fatal("expected correction, got nil")
+	}
+	// container-title should map to booktitle, not journal.
+	if got := raw.Fields["booktitle"]; got != "Proc. ICML" {
+		t.Errorf("raw.Fields[\"booktitle\"] = %q, want %q", got, "Proc. ICML")
+	}
+	if _, ok := raw.Fields["journal"]; ok {
+		t.Errorf("raw.Fields has \"journal\" key, want only \"booktitle\" for proceedings")
+	}
+	if got := FieldValue(*result, "booktitle"); got != "Proc. ICML" {
+		t.Errorf("booktitle = %q, want %q", got, "Proc. ICML")
+	}
+}
+
+func TestQueryCrossref_UnknownType_ReturnsEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeCrossrefJSONWithType(
+			"Something", "Doe", "Jane", "",
+			"2023", "", "", "", "10.1/x", "dataset",
+		))
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{
+		Key:    "Doe2023",
+		Fields: []Field{{Name: "doi", Value: "{10.1/x}"}},
+	}
+	_, _, crType, err := queryCrossref(e, "10.1/x")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if crType != "" {
+		t.Errorf("crType = %q, want empty for unknown type", crType)
+	}
+}
+
+func TestValidateEntry_DOI_SetsCrossrefType(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeCrossrefJSONWithType(
+			"A Conference Paper", "Doe", "Jane", "Proc. ICML",
+			"2023", "", "", "1-10", "10.1/conf", "proceedings-article",
+		))
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{
+		Type: "article",
+		Key:  "Doe2023",
+		Fields: []Field{
+			{Name: "title", Value: "{Wrong Title}"},
+			{Name: "doi", Value: "{10.1/conf}"},
+		},
+	}
+	result, _, source, warn := validateEntry(e, false)
+	if warn != "" {
+		t.Fatalf("unexpected warning: %s", warn)
+	}
+	if source != "crossref" {
+		t.Errorf("source = %q, want crossref", source)
+	}
+	if result == nil {
+		t.Fatal("expected corrected entry, got nil")
+	}
+	if result.Type != "inproceedings" {
+		t.Errorf("type = %q, want inproceedings", result.Type)
+	}
+}
+
+func TestAddEntryFromID_DOI_SetsCrossrefType(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeCrossrefJSONWithType(
+			"A Conference Paper", "Doe", "Jane", "Proc. NeurIPS",
+			"2023", "", "", "1-10", "10.1/conf", "proceedings-article",
+		))
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	dir := t.TempDir()
+	key, err := AddEntryFromID("10.1/conf", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c := loadCache(dir)
+	entry, ok := c[key]
+	if !ok {
+		t.Fatalf("key %q not in cache", key)
+	}
+	if entry.Type != "inproceedings" {
+		t.Errorf("type = %q, want inproceedings", entry.Type)
+	}
+	if entry.Source != "crossref" {
+		t.Errorf("source = %q, want crossref", entry.Source)
 	}
 }
 
@@ -360,6 +508,19 @@ func splitAuthors(s string) []string {
 	return []string{s}
 }
 
+// makeArxivXMLWithDOI produces an arXiv Atom feed with a <arxiv:doi> element.
+func makeArxivXMLWithDOI(title, authors, published, doi string) []byte {
+	return []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <title>` + title + `</title>
+    <author><name>` + authors + `</name></author>
+    <published>` + published + `</published>
+    <arxiv:doi>` + doi + `</arxiv:doi>
+  </entry>
+</feed>`)
+}
+
 func TestQueryArxiv_CorrectsMismatchedTitle(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -375,12 +536,15 @@ func TestQueryArxiv_CorrectsMismatchedTitle(t *testing.T) {
 		Key:    "Smith2023",
 		Fields: []Field{{Name: "title", Value: "{Wrong Title}"}},
 	}
-	result, raw, err := queryArxiv(e, "2301.00001")
+	result, raw, doi, err := queryArxiv(e, "2301.00001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result == nil {
 		t.Fatal("expected correction, got nil")
+	}
+	if doi != "" {
+		t.Errorf("doi = %q, want empty", doi)
 	}
 	if got := FieldValue(*result, "title"); got != "Correct Title" {
 		t.Errorf("title = %q, want %q", got, "Correct Title")
@@ -415,7 +579,7 @@ func TestQueryArxiv_ExtractsYearFromPublished(t *testing.T) {
 		Key:    "Doe2019",
 		Fields: []Field{{Name: "title", Value: "{A Title}"}},
 	}
-	result, _, err := queryArxiv(e, "1906.00001")
+	result, _, _, err := queryArxiv(e, "1906.00001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -446,7 +610,7 @@ func TestQueryArxiv_ExtractsPrimaryClass(t *testing.T) {
 			{Name: "archiveprefix", Value: "{arXiv}"},
 		},
 	}
-	_, raw, err := queryArxiv(e, "2301.00001")
+	_, raw, _, err := queryArxiv(e, "2301.00001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -455,6 +619,54 @@ func TestQueryArxiv_ExtractsPrimaryClass(t *testing.T) {
 	}
 	if got := raw.Fields["eprint"]; got != "2301.00001" {
 		t.Errorf("raw.Fields[\"eprint\"] = %q, want %q", got, "2301.00001")
+	}
+}
+
+func TestQueryArxiv_ExtractsDOI(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.Write(makeArxivXMLWithDOI("A Title", "Smith, John", "2023-01-15T00:00:00Z", "10.1016/j.test.2023.1234"))
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{
+		Key:    "Smith2023",
+		Fields: []Field{{Name: "title", Value: "{Wrong Title}"}},
+	}
+	_, _, doi, err := queryArxiv(e, "2301.00001")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if doi != "10.1016/j.test.2023.1234" {
+		t.Errorf("doi = %q, want %q", doi, "10.1016/j.test.2023.1234")
+	}
+}
+
+func TestQueryArxiv_NoDOI_ReturnsEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.Write(makeArxivXML("A Title", "Smith, John", "2023-01-15T00:00:00Z"))
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{
+		Key:    "Smith2023",
+		Fields: []Field{{Name: "title", Value: "{A Title}"}},
+	}
+	_, _, doi, err := queryArxiv(e, "2301.00001")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if doi != "" {
+		t.Errorf("doi = %q, want empty", doi)
 	}
 }
 
@@ -1680,6 +1892,184 @@ func TestAddEntryFromID_UnrecognizedID(t *testing.T) {
 	_, err := AddEntryFromID("not-an-id", dir)
 	if err != ErrUnrecognizedID {
 		t.Errorf("err = %v, want ErrUnrecognizedID", err)
+	}
+}
+
+func TestValidateEntry_ArxivWithDOI_UsesCrossref(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/api/query"):
+			w.Header().Set("Content-Type", "application/xml")
+			w.Write(makeArxivXMLWithDOI("Arxiv Title", "Smith, John", "2023-01-15T00:00:00Z", "10.1016/j.test.2023.1234"))
+		case strings.Contains(r.URL.Path, "/works/"):
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(makeCrossrefJSON("Crossref Title", "Smith", "John", "J. Testing", "2023", "1", "2", "10-20", "10.1016/j.test.2023.1234"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{
+		Type: "misc",
+		Key:  "Smith2023",
+		Fields: []Field{
+			{Name: "title", Value: "{Arxiv Title}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+		},
+	}
+	result, raw, source, warn := validateEntry(e, false)
+	if warn != "" {
+		t.Fatalf("unexpected warning: %s", warn)
+	}
+	if source != "crossref" {
+		t.Errorf("source = %q, want crossref", source)
+	}
+	if result == nil {
+		t.Fatal("expected corrected entry, got nil")
+	}
+	if result.Type != "article" {
+		t.Errorf("type = %q, want article", result.Type)
+	}
+	if got := FieldValue(*result, "title"); got != "Crossref Title" {
+		t.Errorf("title = %q, want %q", got, "Crossref Title")
+	}
+	if got := raw.Fields["journal"]; got != "J. Testing" {
+		t.Errorf("raw journal = %q, want %q", got, "J. Testing")
+	}
+	if got := raw.Fields["doi"]; got != "10.1016/j.test.2023.1234" {
+		t.Errorf("raw doi = %q, want %q", got, "10.1016/j.test.2023.1234")
+	}
+}
+
+func TestValidateEntry_ArxivWithDOI_CrossrefFails_FallsBackToArxiv(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/api/query"):
+			w.Header().Set("Content-Type", "application/xml")
+			w.Write(makeArxivXMLWithDOI("Arxiv Title", "Smith, John", "2023-01-15T00:00:00Z", "10.1016/j.test.2023.1234"))
+		case strings.Contains(r.URL.Path, "/works/"):
+			w.WriteHeader(http.StatusTooManyRequests)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{
+		Type: "misc",
+		Key:  "Smith2023",
+		Fields: []Field{
+			{Name: "title", Value: "{Wrong Title}"},
+			{Name: "eprint", Value: "{2301.00001}"},
+			{Name: "archiveprefix", Value: "{arXiv}"},
+		},
+	}
+	result, _, source, warn := validateEntry(e, false)
+	if warn != "" {
+		t.Fatalf("unexpected warning: %s", warn)
+	}
+	if source != "arxiv" {
+		t.Errorf("source = %q, want arxiv (fallback)", source)
+	}
+	if result == nil {
+		t.Fatal("expected corrected entry, got nil")
+	}
+	if got := FieldValue(*result, "title"); got != "Arxiv Title" {
+		t.Errorf("title = %q, want %q (from arXiv fallback)", got, "Arxiv Title")
+	}
+}
+
+func TestAddEntryFromID_ArxivWithDOI_UsesCrossref(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/api/query"):
+			w.Header().Set("Content-Type", "application/xml")
+			w.Write(makeArxivXMLWithDOI("Arxiv Title", "Smith, John", "2023-01-15T00:00:00Z", "10.1016/j.test.2023.1234"))
+		case strings.Contains(r.URL.Path, "/works/"):
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(makeCrossrefJSON("Crossref Title", "Smith", "John", "J. Testing", "2023", "1", "2", "10-20", "10.1016/j.test.2023.1234"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	dir := t.TempDir()
+	key, err := AddEntryFromID("2301.00001", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c := loadCache(dir)
+	entry, ok := c[key]
+	if !ok {
+		t.Fatalf("key %q not in cache", key)
+	}
+	if entry.Source != "crossref" {
+		t.Errorf("source = %q, want crossref", entry.Source)
+	}
+	if entry.Type != "article" {
+		t.Errorf("type = %q, want article", entry.Type)
+	}
+	if got := entry.Fields["doi"]; got != "10.1016/j.test.2023.1234" {
+		t.Errorf("doi = %q, want %q", got, "10.1016/j.test.2023.1234")
+	}
+	if got := entry.Fields["journal"]; got != "J. Testing" {
+		t.Errorf("journal = %q, want %q", got, "J. Testing")
+	}
+}
+
+func TestAddEntryFromID_ArxivWithDOI_DedupByDOI(t *testing.T) {
+	// Seed cache with an entry that has the same DOI. The arXiv lookup should
+	// find the DOI, then dedup against the existing cache entry.
+	dir := t.TempDir()
+	c := cache{"Smith2023Crossref": cacheEntry{
+		Source: "crossref",
+		Type:   "article",
+		Fields: map[string]string{"doi": "10.1016/j.test.2023.1234"},
+	}}
+	saveCache(dir, c)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/api/query"):
+			w.Header().Set("Content-Type", "application/xml")
+			w.Write(makeArxivXMLWithDOI("A Title", "Smith, John", "2023-01-15T00:00:00Z", "10.1016/j.test.2023.1234"))
+		default:
+			// Crossref should NOT be called — dedup by DOI should hit cache.
+			t.Error("unexpected request to", r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	key, err := AddEntryFromID("2301.00001", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if key != "Smith2023Crossref" {
+		t.Errorf("key = %q, want Smith2023Crossref", key)
+	}
+	// Cache must be unchanged.
+	if got := len(loadCache(dir)); got != 1 {
+		t.Errorf("cache size = %d, want 1", got)
 	}
 }
 

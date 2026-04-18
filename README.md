@@ -106,8 +106,8 @@ The file is only rewritten if the content actually changes.
 
 **Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in `.el/bib.json` and not re-fetched on subsequent compiles):
 
-- Entry has a `doi` field (or a `url` containing `doi.org`) → queried against the [Crossref API](https://api.crossref.org); mismatched fields are auto-corrected in place. For `@article` entries, the journal name returned by Crossref is mechanically abbreviated to its ISO 4 form using the [LTWA](https://www.issn.org/services/online-services/access-to-the-ltwa/) (e.g. `Nature Communications` → `Nat. Commun.`).
-- Entry has an `eprint` field with `archiveprefix`/`eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org` → queried against the arXiv API; title, author, and year are auto-corrected if needed.
+- Entry has a `doi` field (or a `url` containing `doi.org`) → queried against the [Crossref API](https://api.crossref.org); mismatched fields are auto-corrected in place and the entry type is set from Crossref's `type` field (e.g. `journal-article` → `@article`, `proceedings-article` → `@inproceedings`). For `@article` entries, the journal name is mechanically abbreviated to its ISO 4 form using the [LTWA](https://www.issn.org/services/online-services/access-to-the-ltwa/) (e.g. `Nature Communications` → `Nat. Commun.`). For proceedings and collection types, Crossref's `container-title` maps to `booktitle` instead of `journal`.
+- Entry has an `eprint` field with `archiveprefix`/`eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org` → queried against the arXiv API. If the arXiv response contains a DOI (i.e. the paper has been published), the entry is automatically redirected to Crossref validation with the correct entry type and full metadata. If Crossref is unavailable, it falls back to arXiv-only correction of title, author, and year.
 - Entry has neither → a one-time warning is printed for types where `doi` is mandatory (`@article`, `@inproceedings`, `@conference`, `@incollection`); silently skipped for all other types.
 
 Mandatory fields per type (a warning is printed for any that remain empty after validation):
@@ -162,7 +162,7 @@ $ el bibentry 2301.07041
 Added: Doe2023SomePreprint
 ```
 
-Accepts bare DOIs (`10.…`), `doi.org/` URLs, bare arXiv IDs (`2301.07041`, `2301.07041v2`), old-format arXiv IDs (`hep-th/0401234`), and `arxiv.org/abs/…` URLs. Duplicate entries (by DOI or arXiv ID) are detected and the existing key is returned.
+Accepts bare DOIs (`10.…`), `doi.org/` URLs, bare arXiv IDs (`2301.07041`, `2301.07041v2`), old-format arXiv IDs (`hep-th/0401234`), and `arxiv.org/abs/…` URLs. Duplicate entries (by DOI or arXiv ID) are detected and the existing key is returned. For arXiv IDs, if the paper has a published DOI, the entry is automatically upgraded to a full Crossref-validated `@article`.
 
 The entry will appear in `bibliography.bib` on the next `el compile` when cited.
 
