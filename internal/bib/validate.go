@@ -855,6 +855,7 @@ func findDOI(e Entry) string {
 }
 
 var reArxivURL = regexp.MustCompile(`arxiv\.org/abs/([0-9]{4}\.[0-9]{4,5}(?:v\d+)?|[a-z-]+/[0-9]{7})`)
+var reArxivBare = regexp.MustCompile(`^([0-9]{4}\.[0-9]{4,5}(?:v\d+)?|[a-z-]+/[0-9]{7})$`)
 
 func findArxivID(e Entry) string {
 	eprint := FieldValue(e, "eprint")
@@ -1128,4 +1129,117 @@ func applyField(e *Entry, name, value string) bool {
 
 func normalizeFieldValue(s string) string {
 	return strings.ToLower(strings.Join(strings.Fields(s), " "))
+}
+
+// ErrUnrecognizedID is returned by AddEntryFromID when the given string is
+// neither a DOI nor an arXiv identifier.
+var ErrUnrecognizedID = fmt.Errorf("not a valid DOI or arXiv identifier")
+
+// normalizeDOI strips common URL prefixes and returns the bare DOI (starting
+// with "10.") if s is a valid DOI, otherwise empty string.
+func normalizeDOI(s string) string {
+	low := strings.ToLower(s)
+	for _, prefix := range []string{"https://doi.org/", "http://doi.org/", "doi.org/"} {
+		if strings.HasPrefix(low, prefix) {
+			s = s[len(prefix):]
+			break
+		}
+	}
+	if strings.HasPrefix(s, "10.") && strings.ContainsRune(s, '/') {
+		return s
+	}
+	return ""
+}
+
+// normalizeArxivID returns the bare arXiv identifier from s (URL or bare form),
+// or empty string if s is not an arXiv identifier.
+func normalizeArxivID(s string) string {
+	if m := reArxivURL.FindStringSubmatch(s); m != nil {
+		return m[1]
+	}
+	if m := reArxivBare.FindStringSubmatch(s); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// AddEntryFromID fetches metadata for a DOI or arXiv ID and inserts the entry
+// into the bib cache at auxDir. Returns the canonical cite key on success.
+// Returns ErrUnrecognizedID if s is neither a DOI nor an arXiv identifier.
+// If the entry is already cached, its existing key is returned without error.
+func AddEntryFromID(id, auxDir string) (string, error) {
+	c := loadCache(auxDir)
+
+	if doi := normalizeDOI(id); doi != "" {
+		for key, entry := range c {
+			if strings.EqualFold(entry.Fields["doi"], doi) {
+				return key, nil
+			}
+		}
+		base := Entry{Type: "article", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
+		corrected, raw, err := queryCrossref(base, doi)
+		if err != nil {
+			return "", fmt.Errorf("Crossref query failed: %w", err)
+		}
+		e := base
+		if corrected != nil {
+			e = *corrected
+		}
+		raw.Fields["doi"] = strings.ToLower(doi)
+		cEntry := buildCacheEntry(e, raw, "crossref", "")
+		key := disambiguateKey(GenerateKey(e), c)
+		c[key] = cEntry
+		saveCache(auxDir, c)
+		return key, nil
+	}
+
+	if arxivID := normalizeArxivID(id); arxivID != "" {
+		for key, entry := range c {
+			if strings.EqualFold(entry.Fields["eprint"], arxivID) {
+				return key, nil
+			}
+		}
+		base := Entry{
+			Type: "misc",
+			Key:  "tmp",
+			Fields: []Field{
+				{Name: "eprint", Value: arxivID},
+				{Name: "archiveprefix", Value: "{arXiv}"},
+			},
+		}
+		corrected, raw, err := queryArxiv(base, arxivID)
+		if err != nil {
+			return "", fmt.Errorf("arXiv query failed: %w", err)
+		}
+		e := base
+		if corrected != nil {
+			e = *corrected
+		}
+		raw.Fields["eprint"] = arxivID
+		cEntry := buildCacheEntry(e, raw, "arxiv", "")
+		key := disambiguateKey(GenerateKey(e), c)
+		c[key] = cEntry
+		saveCache(auxDir, c)
+		return key, nil
+	}
+
+	return "", ErrUnrecognizedID
+}
+
+// disambiguateKey returns key if it is not already in c, otherwise appends a
+// lowercase letter suffix (a, b, c, …) until a free slot is found.
+func disambiguateKey(key string, c cache) string {
+	if key == "" || key == "tmp" {
+		key = "entry"
+	}
+	if _, exists := c[key]; !exists {
+		return key
+	}
+	for i := 'a'; i <= 'z'; i++ {
+		candidate := key + string(i)
+		if _, exists := c[candidate]; !exists {
+			return candidate
+		}
+	}
+	return key
 }

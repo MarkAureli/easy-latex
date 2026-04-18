@@ -1523,3 +1523,201 @@ func (r rebaseTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	return rt.RoundTrip(req2)
 }
+
+// ── normalizeDOI ──────────────────────────────────────────────────────────────
+
+func TestNormalizeDOI(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"10.1000/xyz", "10.1000/xyz"},
+		{"https://doi.org/10.1000/xyz", "10.1000/xyz"},
+		{"http://doi.org/10.1000/xyz", "10.1000/xyz"},
+		{"doi.org/10.1000/xyz", "10.1000/xyz"},
+		{"2301.12345", ""},   // arXiv, not a DOI
+		{"notadoi", ""},
+		{"10.nodash", ""},    // no slash
+	}
+	for _, tc := range tests {
+		if got := normalizeDOI(tc.in); got != tc.want {
+			t.Errorf("normalizeDOI(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// ── normalizeArxivID ──────────────────────────────────────────────────────────
+
+func TestNormalizeArxivID(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"2301.12345", "2301.12345"},
+		{"2301.12345v2", "2301.12345v2"},
+		{"hep-th/0603001", "hep-th/0603001"},
+		{"https://arxiv.org/abs/2301.12345", "2301.12345"},
+		{"http://arxiv.org/abs/hep-th/0603001", "hep-th/0603001"},
+		{"10.1000/xyz", ""},   // DOI, not arXiv
+		{"notanid", ""},
+	}
+	for _, tc := range tests {
+		if got := normalizeArxivID(tc.in); got != tc.want {
+			t.Errorf("normalizeArxivID(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// ── AddEntryFromID ────────────────────────────────────────────────────────────
+
+func TestAddEntryFromID_DOI_CreatesEntry(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeCrossrefJSON("Great Paper", "Jones", "Alice", "Nature", "2021", "10", "2", "1--5", "10.1/test"))
+	}))
+	defer srv.Close()
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	dir := t.TempDir()
+	key, err := AddEntryFromID("10.1/test", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if key == "" {
+		t.Fatal("expected non-empty key")
+	}
+	c := loadCache(dir)
+	entry, ok := c[key]
+	if !ok {
+		t.Fatalf("key %q not found in cache", key)
+	}
+	if entry.Source != "crossref" {
+		t.Errorf("source = %q, want crossref", entry.Source)
+	}
+	if entry.Fields["doi"] != "10.1/test" {
+		t.Errorf("doi = %q, want 10.1/test", entry.Fields["doi"])
+	}
+}
+
+func TestAddEntryFromID_DOI_URLPrefix(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeCrossrefJSON("Paper", "Lee", "Bob", "Science", "2020", "5", "1", "10--20", "10.2/abc"))
+	}))
+	defer srv.Close()
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	dir := t.TempDir()
+	key, err := AddEntryFromID("https://doi.org/10.2/abc", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c := loadCache(dir)
+	if _, ok := c[key]; !ok {
+		t.Fatalf("key %q not in cache", key)
+	}
+}
+
+func TestAddEntryFromID_ArxivID_CreatesEntry(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.Write(makeArxivXMLWithCategory("Attention Is All You Need", "Vaswani, Ashish", "2017-06-12T00:00:00Z", "cs.LG"))
+	}))
+	defer srv.Close()
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	dir := t.TempDir()
+	key, err := AddEntryFromID("1706.03762", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c := loadCache(dir)
+	entry, ok := c[key]
+	if !ok {
+		t.Fatalf("key %q not in cache", key)
+	}
+	if entry.Source != "arxiv" {
+		t.Errorf("source = %q, want arxiv", entry.Source)
+	}
+	if entry.Fields["eprint"] != "1706.03762" {
+		t.Errorf("eprint = %q, want 1706.03762", entry.Fields["eprint"])
+	}
+	if entry.Fields["primaryclass"] != "cs.LG" {
+		t.Errorf("primaryclass = %q, want cs.LG", entry.Fields["primaryclass"])
+	}
+}
+
+func TestAddEntryFromID_DOI_DeduplicatesExisting(t *testing.T) {
+	// Seed cache with a DOI entry; second call must not hit the network.
+	dir := t.TempDir()
+	c := cache{"Jones2021Great": cacheEntry{
+		Source: "crossref",
+		Type:   "article",
+		Fields: map[string]string{"doi": "10.1/dup"},
+	}}
+	saveCache(dir, c)
+
+	// No HTTP server — any network call would fail.
+	key, err := AddEntryFromID("10.1/dup", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if key != "Jones2021Great" {
+		t.Errorf("key = %q, want Jones2021Great", key)
+	}
+	// Cache must be unchanged.
+	if got := len(loadCache(dir)); got != 1 {
+		t.Errorf("cache size = %d, want 1", got)
+	}
+}
+
+func TestAddEntryFromID_ArxivID_DeduplicatesExisting(t *testing.T) {
+	dir := t.TempDir()
+	c := cache{"Vaswani2017Attention": cacheEntry{
+		Source: "arxiv",
+		Type:   "misc",
+		Fields: map[string]string{"eprint": "1706.03762"},
+	}}
+	saveCache(dir, c)
+
+	key, err := AddEntryFromID("1706.03762", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if key != "Vaswani2017Attention" {
+		t.Errorf("key = %q, want Vaswani2017Attention", key)
+	}
+}
+
+func TestAddEntryFromID_UnrecognizedID(t *testing.T) {
+	dir := t.TempDir()
+	_, err := AddEntryFromID("not-an-id", dir)
+	if err != ErrUnrecognizedID {
+		t.Errorf("err = %v, want ErrUnrecognizedID", err)
+	}
+}
+
+func TestAddEntryFromID_DOI_APIFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	dir := t.TempDir()
+	_, err := AddEntryFromID("10.1/fail", dir)
+	if err == nil {
+		t.Fatal("expected error for API failure, got nil")
+	}
+	if err == ErrUnrecognizedID {
+		t.Error("API failure should not return ErrUnrecognizedID")
+	}
+}
