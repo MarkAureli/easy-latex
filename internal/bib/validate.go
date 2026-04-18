@@ -457,35 +457,7 @@ func processBibFile(path string, c cache, abbreviateJournals, braceTitles, ieeeF
 				e = *corrected
 			}
 			if source != "" {
-				entry := cacheEntry{Source: source}
-				if source == "crossref" || source == "arxiv" {
-					// Build a full snapshot of all allowed fields for this entry.
-					// Normalize a copy to get canonical field names and drop unknown fields,
-					// but skip urlFromDOI so we preserve the raw url from the bib file.
-					eCopy := e
-					normalizeEntryFields(&eCopy, false)
-					fields := make(map[string]string, len(eCopy.Fields))
-					for _, f := range eCopy.Fields {
-						if v := FieldValue(eCopy, f.Name); v != "" {
-							fields[f.Name] = v
-						}
-					}
-					// Overlay raw API values (pre-config-transform: full journal name,
-					// unformatted authors, pre-brace title, pre-abbreviation year/vol/etc).
-					for k, v := range raw.Fields {
-						if v != "" {
-							fields[k] = v
-						}
-					}
-					// Restore raw url: store what was in the bib file, not any
-					// doi-derived value. urlFromDOI is re-applied each compile.
-					delete(fields, "url")
-					if rawURL != "" {
-						fields["url"] = rawURL
-					}
-					entry.Fields = fields
-				}
-				pending = append(pending, pendingEntry{i, entry})
+				pending = append(pending, pendingEntry{i, buildCacheEntry(e, raw, source, rawURL)})
 				cacheChanged = true
 			}
 			if source == "crossref" || source == "arxiv" {
@@ -507,10 +479,6 @@ func processBibFile(path string, c cache, abbreviateJournals, braceTitles, ieeeF
 		}
 
 		normalizeEntryFields(&e, urlFromDOI)
-
-		if ieeeFormat && e.Type == "misc" && findArxivID(e) != "" {
-			transformArxivMiscToUnpublished(&e)
-		}
 
 		if author := FieldValue(e, "author"); author != "" {
 			SetField(&e, "author", "{"+formatAuthorField(author, maxAuthors, abbreviateFirstName)+"}")

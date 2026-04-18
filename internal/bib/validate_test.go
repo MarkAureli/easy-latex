@@ -1205,29 +1205,55 @@ func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true, false); err != nil {
+	if _, err := ProcessBibFiles([]string{path}, dir, false, false, true, 0, false, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	// User's bib file must remain @misc — transform must not touch it.
 	data, _ := os.ReadFile(path)
 	items := ParseFile(string(data))
-	var entry Entry
+	var bibEntry Entry
 	for _, it := range items {
 		if it.IsEntry {
-			entry = it.Entry
+			bibEntry = it.Entry
 			break
 		}
 	}
-
-	if entry.Type != "unpublished" {
-		t.Errorf("type = %q, want %q", entry.Type, "unpublished")
+	if bibEntry.Type != "misc" {
+		t.Errorf("bib file type = %q, want %q (ieeeFormat must not modify user bib)", bibEntry.Type, "misc")
 	}
-	for _, name := range []string{"eprint", "archiveprefix", "primaryclass"} {
-		if FieldValue(entry, name) != "" {
-			t.Errorf("field %q should have been dropped", name)
+	if FieldValue(bibEntry, "eprint") == "" {
+		t.Error("eprint should be preserved in user bib file")
+	}
+
+	// WriteBibFromCache must apply the transform: @misc arXiv -> @unpublished.
+	outPath := dir + "/bibliography.bib"
+	keys := LoadCacheKeys(dir)
+	if len(keys) == 0 {
+		t.Fatal("cache is empty after ProcessBibFiles")
+	}
+	if err := WriteBibFromCache(outPath, keys, dir, false, false, true, 0, false, false); err != nil {
+		t.Fatalf("WriteBibFromCache: %v", err)
+	}
+
+	data, _ = os.ReadFile(outPath)
+	items = ParseFile(string(data))
+	var outEntry Entry
+	for _, it := range items {
+		if it.IsEntry {
+			outEntry = it.Entry
+			break
 		}
 	}
-	note := FieldValue(entry, "note")
+	if outEntry.Type != "unpublished" {
+		t.Errorf("bibliography.bib type = %q, want %q", outEntry.Type, "unpublished")
+	}
+	for _, name := range []string{"eprint", "archiveprefix", "primaryclass"} {
+		if FieldValue(outEntry, name) != "" {
+			t.Errorf("field %q should have been dropped in bibliography.bib", name)
+		}
+	}
+	note := FieldValue(outEntry, "note")
 	if !strings.Contains(note, "2301.00001") {
 		t.Errorf("note %q does not reference eprint", note)
 	}
