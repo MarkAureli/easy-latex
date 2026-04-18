@@ -6,19 +6,28 @@ A minimal CLI tool for compiling LaTeX documents without the noise.
 
 ### `el init`
 
-Run in a folder containing a `.tex` file with `\begin{document}`. Detects the main file, creates an `.aux_dir/` for auxiliary files, and saves the configuration to `.el.json`.
+Run in a folder containing a `.tex` file with `\begin{document}`. Detects the main file, creates an `.el/` working directory, and saves the configuration to `.el/config.json`.
 
 ```
 $ el init
 Initialized. Main file: thesis.tex
-Bib files: refs.bib
+Bib files: bibliography.bib
 ```
 
 If multiple eligible `.tex` files are found, you will be prompted to pick one.
 
-`el init` also scans the main file (and any files pulled in via `\input{}`/`\include{}`) for bibliography declarations — both `\bibliography{}` (bibtex) and `\addbibresource{}` (biblatex) — and stores the discovered `.bib` file paths in `.el.json`.
+`el init` scans the main file (and any files pulled in via `\input{}`/`\include{}`) for bibliography declarations — both `\bibliography{}` (bibtex) and `\addbibresource{}` (biblatex) — and consolidates all discovered `.bib` files into at most two files in the project root:
 
-If the project is a git repository, `el init` also appends `.aux_dir` and `.el.json` to `.git/info/exclude` (local-only gitignore) so generated files are never accidentally committed.
+- `bibliography.bib` — all regular entries
+- `preamble.bib` — `@string` and `@preamble` definitions (only created if non-empty)
+
+Original `.bib` files are removed and all `\bibliography`/`\addbibresource` references in `.tex` files are rewritten to point to the new files.
+
+Embedded bib content (`\begin{filecontents}{*.bib}...`) is extracted to disk before processing.
+
+In a git repository, `el init` appends `.el` to `.git/info/exclude` automatically, so generated files are never accidentally committed.
+
+Use `--ieee` to use IEEE-style bib file names (`IEEEabrv.bib` instead of `preamble.bib`) and enable IEEE formatting in the config.
 
 ### `el compile`
 
@@ -34,11 +43,23 @@ If the document uses a bibliography, `el` automatically detects the required too
 - `\bibliography{}` (natbib, plain bibtex) → `pdflatex` → `bibtex` → `pdflatex`
 - `\usepackage{biblatex}` → `pdflatex` → `biber` → `pdflatex`
 
-Detection is based on the auxiliary files produced by the first `pdflatex` pass (`.bcf` for biber, `\bibdata` in `.aux` for bibtex), so it works regardless of whether the bibliography is defined in a separate `.bib` file or embedded in the document.
+Detection is based on the auxiliary files produced by the first `pdflatex` pass (`.bcf` for biber, `\bibdata` in `.aux` for bibtex), so it works regardless of how the bibliography is set up.
 
-If `el init` was run before any `.bib` files existed, `el compile` discovers them from those same auxiliary files and updates `.el.json` automatically.
+If `el init` was run before any `.bib` files existed, `el compile` discovers them from those same auxiliary files and updates `.el/config.json` automatically.
 
-After each successful compilation, `el compile` formats and validates every registered `.bib` file:
+A third pdflatex pass runs automatically if needed (e.g. when LaTeX reports "rerun").
+
+Use `-o` / `--open` to open the PDF immediately after compilation:
+
+```
+$ el compile -o
+```
+
+#### Bib processing
+
+The bib cache (`.el/bib.json`) is the source of truth for all bibliography entries. After each successful compilation, `el compile` writes `bibliography.bib` from the cache, including only cited entries with all configured transforms applied.
+
+If `bibliography.bib` changed since the last compile, new entries are automatically parsed and added to the cache. When a new entry's canonical key differs from its original key, `\cite{}` references in all `.tex` files are rewritten automatically.
 
 **Citation key normalisation** — each entry's key is rewritten to the canonical form `{LastName}{Year}{Title}`:
 
@@ -61,7 +82,7 @@ Example: an entry for "A Great Paper" by Smith in 2023 becomes `Smith2023AGreatP
 | `@phdthesis` / `@mastersthesis` | `author, year, title, school, doi, url` |
 | `@techreport` | `author, year, title, institution, doi, url` |
 | `@misc` | `author, year, title, doi, url` — or for arXiv entries: `author, year, title, eprint, archiveprefix, primaryclass` |
-| `@unpublished` | `author, year, title, doi, url, note` |
+| `@unpublished` | `author, title, note, year, doi, url` |
 
 **Author formatting** — the `author` field is normalised uniformly across all entry types. Individual authors are written as `Last, F. M.` (last name followed by space-separated abbreviated initials); multiple authors are separated by ` and `:
 
@@ -83,7 +104,7 @@ Additional rules:
 
 The file is only rewritten if the content actually changes.
 
-**Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in `.aux_dir/bib.json` and not re-fetched on subsequent compiles):
+**Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in `.el/bib.json` and not re-fetched on subsequent compiles):
 
 - Entry has a `doi` field (or a `url` containing `doi.org`) → queried against the [Crossref API](https://api.crossref.org); mismatched fields are auto-corrected in place. For `@article` entries, the journal name returned by Crossref is mechanically abbreviated to its ISO 4 form using the [LTWA](https://www.issn.org/services/online-services/access-to-the-ltwa/) (e.g. `Nature Communications` → `Nat. Commun.`).
 - Entry has an `eprint` field with `archiveprefix`/`eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org` → queried against the arXiv API; title, author, and year are auto-corrected if needed.
@@ -111,15 +132,58 @@ Corrections are reported on the terminal:
 [bib] Brown2020Study: missing mandatory fields: doi, url
 ```
 
-Use `-o` / `--open` to open the PDF immediately after compilation:
+### `el config`
+
+View or update processing options stored in `.el/config.json`. All flags are optional; at least one must be given.
+
+| Flag | Type | Default | Effect |
+|---|---|---|---|
+| `--abbreviate-journals` | bool | true | Abbreviate journal names to ISO 4 form |
+| `--abbreviate-first-name` | bool | true | Abbreviate first/middle names to initials |
+| `--brace-titles` | bool | false | Wrap title field in double braces `{{…}}` |
+| `--ieee-format` | bool | false | IEEE mode: forces brace titles, max 5 authors, converts arXiv `@misc` to `@unpublished` |
+| `--max-authors` | int | 0 | Truncate author list (0 = unlimited); IEEE implies 5 if unset |
+| `--url-from-doi` | bool | false | Replace `url` field with `https://doi.org/<doi>` when DOI is present |
 
 ```
-$ el compile -o
+$ el config --ieee-format=true
+$ el config --max-authors=3
 ```
+
+### `el bibentry`
+
+Add a single bibliography entry to the cache from a DOI or arXiv ID, without needing a `.bib` file.
+
+```
+$ el bibentry 10.1038/s41586-023-06096-3
+Added: Smith2023AGreatPaper
+
+$ el bibentry 2301.07041
+Added: Doe2023SomePreprint
+```
+
+Accepts bare DOIs (`10.…`), `doi.org/` URLs, bare arXiv IDs (`2301.07041`, `2301.07041v2`), old-format arXiv IDs (`hep-th/0401234`), and `arxiv.org/abs/…` URLs. Duplicate entries (by DOI or arXiv ID) are detected and the existing key is returned.
+
+The entry will appear in `bibliography.bib` on the next `el compile` when cited.
+
+### `el parsebib`
+
+Pre-populate the bib cache from registered `.bib` files without compiling. Useful for validating entries against Crossref/arXiv ahead of time, or for re-populating the cache after deleting `.el/bib.json`.
+
+```
+$ el parsebib
+Cached 5 new entries
+```
+
+### `el lsp`
+
+Start a Language Server Protocol server over stdio that provides cite-key completions. Intended for editor integration (VS Code, Neovim, etc.).
+
+Typing `\cite{`, `\citet{`, or `\citep{` triggers completion with all known cite keys from the bib cache. Keys are loaded once at startup — restart the LSP to pick up new entries.
 
 ## Installation
 
-Requires Go 1.21+ and a working TeX Live / MacTeX installation.
+Requires Go 1.26+ and a working TeX Live / MacTeX installation.
 
 ```bash
 git clone git@github.com:MarkAureli/easy-latex.git
@@ -144,9 +208,9 @@ Running `el init` and `el compile` in a LaTeX project creates the following:
 
 | Path | Purpose |
 |---|---|
-| `.el.json` | Main `.tex` file, aux directory path, and registered `.bib` files |
-| `.aux_dir/` | All pdflatex/bibtex/biber intermediate files, kept out of the project root |
-| `.aux_dir/bib.json` | Tracks which bib entries have already been validated |
-| `<name>.pdf` | Symlink into `.aux_dir/`; open this in your PDF viewer |
+| `.el/config.json` | Main `.tex` file, aux directory path, registered `.bib` files, and processing options |
+| `.el/bib.json` | Bib cache: validated entry data (source of truth for bibliography generation) |
+| `.el/` | All pdflatex/bibtex/biber intermediate files, kept out of the project root |
+| `<name>.pdf` | Symlink into `.el/`; open this in your PDF viewer |
 
-In a git repository, `el init` registers `.aux_dir` and `.el.json` in `.git/info/exclude` automatically, so none of these files need to be added to `.gitignore`.
+In a git repository, `el init` registers `.el` in `.git/info/exclude` automatically, so none of these files need to be added to `.gitignore`.
