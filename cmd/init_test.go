@@ -31,7 +31,7 @@ func readConfig(t *testing.T, dir string) Config {
 
 func TestDoInit_NoTexFiles(t *testing.T) {
 	dir := t.TempDir()
-	err := doInit(dir, nil)
+	err := doInit(dir, nil, false)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -40,7 +40,7 @@ func TestDoInit_NoTexFiles(t *testing.T) {
 func TestDoInit_TexFileWithoutBeginDocument(t *testing.T) {
 	dir := t.TempDir()
 	writeTeX(t, dir, "fragment.tex", `\section{Intro}`)
-	err := doInit(dir, nil)
+	err := doInit(dir, nil, false)
 	if err == nil {
 		t.Fatal("expected error for tex file without \\begin{document}, got nil")
 	}
@@ -50,7 +50,7 @@ func TestDoInit_OneMainFile(t *testing.T) {
 	dir := t.TempDir()
 	writeTeX(t, dir, "main.tex", `\documentclass{article}`+"\n"+`\begin{document}`+"\n"+`Hello`+"\n"+`\end{document}`)
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestDoInit_CreatesElDir(t *testing.T) {
 	dir := t.TempDir()
 	writeTeX(t, dir, "main.tex", `\begin{document}`)
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestDoInit_SubdirTexIgnored(t *testing.T) {
 	}
 	writeTeX(t, sub, "nested.tex", `\begin{document}`)
 
-	err := doInit(dir, nil)
+	err := doInit(dir, nil, false)
 	if err == nil {
 		t.Fatal("expected error when only subdir contains tex file, got nil")
 	}
@@ -100,7 +100,7 @@ func TestDoInit_MultipleMainFiles_PicksCorrect(t *testing.T) {
 
 	// Simulate user entering "2" to pick bbb.tex
 	stdin := strings.NewReader("2\n")
-	if err := doInit(dir, stdin); err != nil {
+	if err := doInit(dir, stdin, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -117,7 +117,7 @@ func TestDoInit_MultipleMainFiles_InvalidThenValid(t *testing.T) {
 
 	// First input is invalid, second is valid
 	stdin := strings.NewReader("99\n1\n")
-	if err := doInit(dir, stdin); err != nil {
+	if err := doInit(dir, stdin, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -131,10 +131,10 @@ func TestDoInit_Idempotent(t *testing.T) {
 	dir := t.TempDir()
 	writeTeX(t, dir, "main.tex", `\begin{document}`)
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("first init: %v", err)
 	}
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("second init: %v", err)
 	}
 
@@ -247,13 +247,264 @@ func TestDoInit_UpdatesGitExclude(t *testing.T) {
 	gitDir := makeGitRepo(t, dir)
 	writeTeX(t, dir, "main.tex", `\begin{document}`)
 
-	if err := doInit(dir, nil); err != nil {
+	if err := doInit(dir, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	content := readExclude(t, gitDir)
 	if !strings.Contains(content, ".el") {
 		t.Errorf("exclude missing %q after init", ".el")
+	}
+}
+
+// readTestFile reads the content of a file for use in assertions.
+func readTestFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("readTestFile %s: %v", path, err)
+	}
+	return string(data)
+}
+
+// bibBook is a simple book entry without DOI/arXiv — avoids network calls in AllocateCacheEntries.
+const bibBook = `@book{knuth1984,
+  author    = {Knuth, Donald E.},
+  year      = {1984},
+  title     = {The TeXbook},
+  publisher = {Addison-Wesley},
+}
+`
+
+func TestDoInit_BibFilesCondensed(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(bibBook), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// bibliography.bib created with the entry
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
+	if !strings.Contains(ref, "@book") {
+		t.Errorf("bibliography.bib missing @book entry:\n%s", ref)
+	}
+	// preamble.bib not created (no @string/@preamble)
+	if _, err := os.Stat(filepath.Join(dir, "preamble.bib")); err == nil {
+		t.Error("preamble.bib should not be created when there is no preamble content")
+	}
+	// original deleted
+	if _, err := os.Stat(filepath.Join(dir, "refs.bib")); err == nil {
+		t.Error("original refs.bib should be deleted after condensation")
+	}
+}
+
+func TestDoInit_BibPreambleSplit(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	content := "@string{pub = {Addison-Wesley}}\n\n" + bibBook
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pre := readTestFile(t, filepath.Join(dir, "preamble.bib"))
+	if !strings.Contains(pre, "@string") {
+		t.Errorf("preamble.bib missing @string:\n%s", pre)
+	}
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
+	if !strings.Contains(ref, "@book") {
+		t.Errorf("bibliography.bib missing @book:\n%s", ref)
+	}
+	if strings.Contains(ref, "@string") {
+		t.Error("bibliography.bib should not contain @string")
+	}
+	// preamble listed first in config
+	cfg := readConfig(t, dir)
+	if len(cfg.BibFiles) != 2 || cfg.BibFiles[0] != "preamble.bib" || cfg.BibFiles[1] != "bibliography.bib" {
+		t.Errorf("BibFiles = %v, want [preamble.bib bibliography.bib]", cfg.BibFiles)
+	}
+}
+
+func TestDoInit_BibCommentsDropped(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	content := "% top-level comment\n@string{pub = {Addison-Wesley}}\n" + bibBook
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pre := readTestFile(t, filepath.Join(dir, "preamble.bib"))
+	if strings.Contains(pre, "% top-level comment") {
+		t.Error("preamble.bib should not contain % comment lines")
+	}
+}
+
+func TestDoInit_BibAtCommentDropped(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	content := "@comment{This should be dropped}\n" + bibBook
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
+	if strings.Contains(ref, "@comment") {
+		t.Error("bibliography.bib should not contain @comment blocks")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "preamble.bib")); err == nil {
+		t.Error("preamble.bib should not be created when only @comment was present")
+	}
+}
+
+func TestDoInit_BibliographyRewritten(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(bibBook), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	tex := readTestFile(t, filepath.Join(dir, "main.tex"))
+	if strings.Contains(tex, `\bibliography{refs}`) {
+		t.Error(`\bibliography{refs} not rewritten in main.tex`)
+	}
+	if !strings.Contains(tex, `\bibliography{bibliography}`) {
+		t.Errorf("\\bibliography{bibliography} not found in main.tex:\n%s", tex)
+	}
+}
+
+func TestDoInit_MultipleBibFilesCondensed(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{a,b}\n\\end{document}\n")
+	if err := os.WriteFile(filepath.Join(dir, "a.bib"), []byte(bibBook), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.bib"), []byte("@book{extra,\n  author = {A, B},\n  year   = {2000},\n  title  = {Extra},\n}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
+	if !strings.Contains(ref, "@book") {
+		t.Errorf("bibliography.bib missing entries:\n%s", ref)
+	}
+	cfg := readConfig(t, dir)
+	if len(cfg.BibFiles) != 1 || cfg.BibFiles[0] != "bibliography.bib" {
+		t.Errorf("BibFiles = %v, want [bibliography.bib]", cfg.BibFiles)
+	}
+}
+
+func TestDoInit_BibIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(bibBook), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("first init: %v", err)
+	}
+	ref1 := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("second init: %v", err)
+	}
+	ref2 := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
+
+	if ref1 != ref2 {
+		t.Errorf("bibliography.bib changed after second init:\nbefore:\n%s\nafter:\n%s", ref1, ref2)
+	}
+}
+
+func TestDoInit_IEEEFlag_FileNames(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{refs}\n\\end{document}\n")
+	content := "@string{pub = {Addison-Wesley}}\n\n" + bibBook
+	if err := os.WriteFile(filepath.Join(dir, "refs.bib"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// entries → bibliography.bib
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
+	if !strings.Contains(ref, "@book") {
+		t.Errorf("bibliography.bib missing @book entry:\n%s", ref)
+	}
+	// preamble → IEEEabrv.bib
+	pre := readTestFile(t, filepath.Join(dir, "IEEEabrv.bib"))
+	if !strings.Contains(pre, "@string") {
+		t.Errorf("IEEEabrv.bib missing @string:\n%s", pre)
+	}
+	// preamble.bib must not be created when --ieee is set
+	if _, err := os.Stat(filepath.Join(dir, "preamble.bib")); err == nil {
+		t.Error("preamble.bib must not be created when --ieee is set")
+	}
+	// config bib_files order: IEEEabrv.bib first
+	cfg := readConfig(t, dir)
+	if len(cfg.BibFiles) != 2 || cfg.BibFiles[0] != "IEEEabrv.bib" || cfg.BibFiles[1] != "bibliography.bib" {
+		t.Errorf("BibFiles = %v, want [IEEEabrv.bib bibliography.bib]", cfg.BibFiles)
+	}
+}
+
+func TestDoInit_IEEEFlag_SetsIEEEFormat(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\begin{document}\n\\end{document}\n")
+
+	if err := doInit(dir, nil, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := readConfig(t, dir)
+	if cfg.IEEEFormat == nil || !*cfg.IEEEFormat {
+		t.Error("IEEEFormat should be true in config when --ieee flag is set")
+	}
+}
+
+func TestDoInit_NoIEEE_IEEEFormatUnset(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\begin{document}\n\\end{document}\n")
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := readConfig(t, dir)
+	if cfg.IEEEFormat != nil {
+		t.Errorf("IEEEFormat should be nil (unset) when --ieee flag is absent, got %v", *cfg.IEEEFormat)
 	}
 }
 

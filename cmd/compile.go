@@ -56,13 +56,35 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	stem := filepath.Base(strings.TrimSuffix(cfg.Main, ".tex"))
 
+	// If bibliography.bib changed since the last compile or parsebib run,
+	// auto-allocate new cache entries and record any renames before compiling.
+	if ef := entriesBibFile(cfg.BibFiles); ef != "" && bib.BibFileChanged(ef, auxDir) {
+		_, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir)
+		if err != nil {
+			return err
+		}
+		bib.SaveRenames(auxDir, renames)
+		bib.UpdateBibHash(ef, auxDir)
+	}
+
 	// First pdflatex pass — buffer output; only print if no bib tool runs,
 	// since bib-related warnings (undefined citations, references) are expected
 	// at this stage and will be resolved by the subsequent bib tool pass.
+	//
+	// If the pass fails and a stale .bbl exists (e.g. from a previous failed
+	// compile with malformed bib content), delete it and retry once: the .bbl
+	// will be regenerated correctly by the bib tool on this run.
 	firstLines, err := runPdflatex(pdflatex, cfg)
 	if err != nil {
-		printLines(firstLines)
-		return err
+		bblPath := filepath.Join(auxDir, stem+".bbl")
+		if _, statErr := os.Stat(bblPath); statErr == nil {
+			os.Remove(bblPath) //nolint:errcheck
+			firstLines, err = runPdflatex(pdflatex, cfg)
+		}
+		if err != nil {
+			printLines(firstLines)
+			return err
+		}
 	}
 
 	// Update bib file list from artifacts if not already set by el init.
@@ -73,21 +95,28 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Normalise bib files before the bib tool runs so bibtex/biber processes
-	// the corrected entries (canonical keys, formatted fields, etc.).
-	renames, err := bib.ProcessBibFiles(cfg.BibFiles, auxDir, cfg.abbreviateJournals(), cfg.braceTitles(), cfg.ieeeFormat(), cfg.maxAuthors(), cfg.abbreviateFirstName(), cfg.urlFromDOI())
-	if err != nil {
-		return err
-	}
-	// If any bib keys were renamed, update \cite{} references in all .tex files
-	// and re-run pdflatex so the .aux/.bcf reflects the new keys before the bib tool.
-	if len(renames) > 0 {
+	// Apply pending cite-key renames produced by el parsebib: update \cite{}
+	// references in all .tex files and re-run pdflatex so the .aux/.bcf reflects
+	// the new keys before the bib tool.
+	if renames := bib.LoadRenames(auxDir); len(renames) > 0 {
 		texFiles := texscan.FindTexFiles(cfg.Main, ".")
 		if err := rewriteCiteKeys(texFiles, renames); err != nil {
 			return err
 		}
+		bib.ClearRenames(auxDir)
 		if _, err := runPdflatex(pdflatex, cfg); err != nil {
 			return err
+		}
+	}
+
+	// Generate bibliography.bib from cache for cited entries only.
+	if ef := entriesBibFile(cfg.BibFiles); ef != "" {
+		citeKeys := citedKeysFromArtifacts(stem, auxDir)
+		if len(citeKeys) > 0 {
+			if err := bib.WriteBibFromCache(ef, citeKeys, auxDir, cfg.abbreviateJournals(), cfg.braceTitles(), cfg.ieeeFormat(), cfg.maxAuthors(), cfg.abbreviateFirstName(), cfg.urlFromDOI()); err != nil {
+				return err
+			}
+			bib.UpdateBibHash(ef, auxDir)
 		}
 	}
 
@@ -251,6 +280,8 @@ func findPdflatex() (string, error) {
 var (
 	reBibData       = regexp.MustCompile(`\\bibdata\{([^}]+)\}`)
 	reBcfDatasource = regexp.MustCompile(`<bcf:datasource[^>]*datatype="bibtex"[^>]*>([^<]+)</bcf:datasource>`)
+	reAuxCitation   = regexp.MustCompile(`\\citation\{([^}]+)\}`)
+	reBcfCitekey    = regexp.MustCompile(`<bcf:citekey[^>]*>([^<]+)</bcf:citekey>`)
 )
 
 // bibFilesFromArtifacts discovers .bib file names from the .aux and .bcf
@@ -284,6 +315,33 @@ func bibFilesFromArtifacts(stem, auxDir string) []string {
 	}
 
 	return files
+}
+
+// citedKeysFromArtifacts extracts the set of citation keys from the .aux and
+// .bcf artifacts produced by pdflatex, preserving first-seen order.
+func citedKeysFromArtifacts(stem, auxDir string) []string {
+	seen := map[string]bool{}
+	var keys []string
+	add := func(key string) {
+		key = strings.TrimSpace(key)
+		if key != "" && !seen[key] {
+			seen[key] = true
+			keys = append(keys, key)
+		}
+	}
+	if data, err := os.ReadFile(filepath.Join(auxDir, stem+".aux")); err == nil {
+		for _, m := range reAuxCitation.FindAllStringSubmatch(string(data), -1) {
+			for _, k := range strings.Split(m[1], ",") {
+				add(k)
+			}
+		}
+	}
+	if data, err := os.ReadFile(filepath.Join(auxDir, stem+".bcf")); err == nil {
+		for _, m := range reBcfCitekey.FindAllStringSubmatch(string(data), -1) {
+			add(m[1])
+		}
+	}
+	return keys
 }
 
 // rewriteCiteKeys replaces old citation keys with their renamed counterparts in

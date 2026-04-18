@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -101,4 +102,16 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(compileCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(parsebibCmd)
+}
+
+// entriesBibFile returns the path of the entries bib file (bibliography.bib)
+// from bibFiles, or empty string if not present.
+func entriesBibFile(bibFiles []string) string {
+	for _, f := range bibFiles {
+		if filepath.Base(f) == "bibliography.bib" {
+			return f
+		}
+	}
+	return ""
 }

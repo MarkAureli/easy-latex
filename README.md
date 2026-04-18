@@ -83,7 +83,7 @@ Additional rules:
 
 The file is only rewritten if the content actually changes.
 
-**Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in `.aux_dir/bib_cache.json` and not re-fetched on subsequent compiles):
+**Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in `.aux_dir/bib.json` and not re-fetched on subsequent compiles):
 
 - Entry has a `doi` field (or a `url` containing `doi.org`) → queried against the [Crossref API](https://api.crossref.org); mismatched fields are auto-corrected in place. For `@article` entries, the journal name returned by Crossref is mechanically abbreviated to its ISO 4 form using the [LTWA](https://www.issn.org/services/online-services/access-to-the-ltwa/) (e.g. `Nature Communications` → `Nat. Commun.`).
 - Entry has an `eprint` field with `archiveprefix`/`eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org` → queried against the arXiv API; title, author, and year are auto-corrected if needed.
@@ -146,7 +146,7 @@ Running `el init` and `el compile` in a LaTeX project creates the following:
 |---|---|
 | `.el.json` | Main `.tex` file, aux directory path, and registered `.bib` files |
 | `.aux_dir/` | All pdflatex/bibtex/biber intermediate files, kept out of the project root |
-| `.aux_dir/bib_cache.json` | Tracks which bib entries have already been validated |
+| `.aux_dir/bib.json` | Tracks which bib entries have already been validated |
 | `<name>.pdf` | Symlink into `.aux_dir/`; open this in your PDF viewer |
 
 In a git repository, `el init` registers `.aux_dir` and `.el.json` in `.git/info/exclude` automatically, so none of these files need to be added to `.gitignore`.
