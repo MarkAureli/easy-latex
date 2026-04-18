@@ -753,8 +753,6 @@ func TestValidateEntry_NoIDWarning_BookSuppressed(t *testing.T) {
 // bib file, overriding whatever was in the file.
 func TestCacheReappliesAllFields(t *testing.T) {
 	dir := t.TempDir()
-	// Cache key must match the canonical key computed from the bib file's current
-	// content: author=Smith, year=2023, title="Stale Title" → Smith2023StaleTitle.
 	c := cache{
 		"Smith2023StaleTitle": cacheEntry{
 			Source: "crossref",
@@ -773,29 +771,12 @@ func TestCacheReappliesAllFields(t *testing.T) {
 	}
 	saveCache(dir, c)
 
-	// Bib file has stale/wrong values for most fields.
-	bib := `@article{Smith2023Test,
-  author  = {Smith, John},
-  year    = {2023},
-  title   = {Stale Title},
-  journal = {Stale Journal},
-  volume  = {},
-  number  = {},
-  pages   = {},
-  doi     = {10.1/x},
-  url     = {https://doi.org/10.1/x},
-}
-`
-	path := dir + "/test.bib"
-	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := ProcessBibFiles([]string{path}, dir, false, false, false, 0, true, false); err != nil {
+	outPath := dir + "/bibliography.bib"
+	if err := WriteBibFromCache(outPath, []string{"Smith2023StaleTitle"}, dir, false, false, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(outPath)
 	items := ParseFile(string(data))
 	var entry Entry
 	for _, it := range items {
@@ -822,7 +803,6 @@ func TestCacheReappliesAllFields(t *testing.T) {
 // the cache is abbreviated when abbreviateJournals=true, even for cached entries.
 func TestCacheJournalAbbreviationOnReapply(t *testing.T) {
 	dir := t.TempDir()
-	// Key matches canonical form for author=Smith, year=2023, title="A Title".
 	c := cache{
 		"Smith2023ATitle": cacheEntry{
 			Source: "crossref",
@@ -838,28 +818,12 @@ func TestCacheJournalAbbreviationOnReapply(t *testing.T) {
 	}
 	saveCache(dir, c)
 
-	bib := `@article{Smith2023ATitle,
-  author  = {Smith, John},
-  year    = {2023},
-  title   = {A Title},
-  journal = {Nature Communications},
-  volume  = {},
-  number  = {},
-  pages   = {},
-  doi     = {10.1/x},
-  url     = {https://doi.org/10.1/x},
-}
-`
-	path := dir + "/test.bib"
-	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true, false); err != nil {
+	outPath := dir + "/bibliography.bib"
+	if err := WriteBibFromCache(outPath, []string{"Smith2023ATitle"}, dir, true, false, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(outPath)
 	items := ParseFile(string(data))
 	var entry Entry
 	for _, it := range items {
@@ -881,7 +845,6 @@ func TestCacheJournalAbbreviationOnReapply(t *testing.T) {
 // cache is written back and not overridden when urlFromDOI=false.
 func TestCacheRawURLPreservedOnReapply(t *testing.T) {
 	dir := t.TempDir()
-	// Key matches canonical form for author=Smith, year=2023, title="A Title".
 	c := cache{
 		"Smith2023ATitle": cacheEntry{
 			Source: "crossref",
@@ -898,28 +861,12 @@ func TestCacheRawURLPreservedOnReapply(t *testing.T) {
 	}
 	saveCache(dir, c)
 
-	bib := `@article{Smith2023ATitle,
-  author  = {Smith, John},
-  year    = {2023},
-  title   = {A Title},
-  journal = {Nature},
-  volume  = {},
-  number  = {},
-  pages   = {},
-  doi     = {10.1/x},
-  url     = {https://doi.org/10.1/x},
-}
-`
-	path := dir + "/test.bib"
-	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := ProcessBibFiles([]string{path}, dir, false, false, false, 0, true, false); err != nil {
+	outPath := dir + "/bibliography.bib"
+	if err := WriteBibFromCache(outPath, []string{"Smith2023ATitle"}, dir, false, false, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(outPath)
 	items := ParseFile(string(data))
 	var entry Entry
 	for _, it := range items {
@@ -937,25 +884,27 @@ func TestCacheRawURLPreservedOnReapply(t *testing.T) {
 
 func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
 	dir := t.TempDir()
-	bib := `@article{Smith2023Test,
-  author  = {Smith, John},
-  year    = {2023},
-  title   = {My Test Title},
-  journal = {Nature},
-  doi     = {10.1/x},
-  url     = {https://doi.org/10.1/x},
-}
-`
-	path := dir + "/test.bib"
-	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
-		t.Fatal(err)
-	}
+	saveCache(dir, cache{
+		"Smith2023Test": cacheEntry{
+			Source: "crossref",
+			Type:   "article",
+			Fields: map[string]string{
+				"author":  "Smith, John",
+				"title":   "My Test Title",
+				"journal": "Nature",
+				"year":    "2023",
+				"doi":     "10.1/x",
+				"url":     "https://doi.org/10.1/x",
+			},
+		},
+	})
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true, false); err != nil {
+	outPath := dir + "/bibliography.bib"
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, true, true, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(outPath)
 	items := ParseFile(string(data))
 	var entry Entry
 	for _, it := range items {
@@ -979,26 +928,28 @@ func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
 
 func TestBraceTitles_Idempotent(t *testing.T) {
 	dir := t.TempDir()
-	// Start with an already double-braced title (as written by a previous run).
-	bib := `@article{Smith2023Test,
-  author  = {Smith, John},
-  year    = {2023},
-  title   = {{My Test Title}},
-  journal = {Nature},
-  doi     = {10.1/x},
-  url     = {https://doi.org/10.1/x},
-}
-`
-	path := dir + "/test.bib"
-	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
-		t.Fatal(err)
-	}
+	// Cache stores the title without braces; WriteBibFromCache applies braceTitles fresh.
+	saveCache(dir, cache{
+		"Smith2023Test": cacheEntry{
+			Source: "crossref",
+			Type:   "article",
+			Fields: map[string]string{
+				"author":  "Smith, John",
+				"title":   "My Test Title",
+				"journal": "Nature",
+				"year":    "2023",
+				"doi":     "10.1/x",
+				"url":     "https://doi.org/10.1/x",
+			},
+		},
+	})
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, true, false, 0, true, false); err != nil {
+	outPath := dir + "/bibliography.bib"
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, true, true, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(outPath)
 	items := ParseFile(string(data))
 	var entry Entry
 	for _, it := range items {
@@ -1021,25 +972,27 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 
 func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 	dir := t.TempDir()
-	bib := `@article{Smith2023Test,
-  author  = {Smith, John},
-  year    = {2023},
-  title   = {My Test Title},
-  journal = {Nature},
-  doi     = {10.1/x},
-  url     = {https://doi.org/10.1/x},
-}
-`
-	path := dir + "/test.bib"
-	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
-		t.Fatal(err)
-	}
+	saveCache(dir, cache{
+		"Smith2023Test": cacheEntry{
+			Source: "crossref",
+			Type:   "article",
+			Fields: map[string]string{
+				"author":  "Smith, John",
+				"title":   "My Test Title",
+				"journal": "Nature",
+				"year":    "2023",
+				"doi":     "10.1/x",
+				"url":     "https://doi.org/10.1/x",
+			},
+		},
+	})
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true, false); err != nil {
+	outPath := dir + "/bibliography.bib"
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, true, false, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(outPath)
 	items := ParseFile(string(data))
 	var entry Entry
 	for _, it := range items {
@@ -1062,26 +1015,29 @@ func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 
 func TestBraceTitles_DisabledNormalizesDoubleBraced(t *testing.T) {
 	dir := t.TempDir()
-	// If braceTitles is later disabled, existing double-braced titles should be stripped.
-	bib := `@article{Smith2023Test,
-  author  = {Smith, John},
-  year    = {2023},
-  title   = {{My Test Title}},
-  journal = {Nature},
-  doi     = {10.1/x},
-  url     = {https://doi.org/10.1/x},
-}
-`
-	path := dir + "/test.bib"
-	if err := os.WriteFile(path, []byte(bib), 0644); err != nil {
-		t.Fatal(err)
-	}
+	// Cache stores title without braces (they were stripped at allocation time).
+	// With braceTitles disabled, WriteBibFromCache should produce single-braced output.
+	saveCache(dir, cache{
+		"Smith2023Test": cacheEntry{
+			Source: "crossref",
+			Type:   "article",
+			Fields: map[string]string{
+				"author":  "Smith, John",
+				"title":   "My Test Title",
+				"journal": "Nature",
+				"year":    "2023",
+				"doi":     "10.1/x",
+				"url":     "https://doi.org/10.1/x",
+			},
+		},
+	})
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, false, 0, true, false); err != nil {
+	outPath := dir + "/bibliography.bib"
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, true, false, false, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(outPath)
 	items := ParseFile(string(data))
 	var entry Entry
 	for _, it := range items {
@@ -1205,39 +1161,33 @@ func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ProcessBibFiles([]string{path}, dir, false, false, true, 0, false, false); err != nil {
+	if _, _, err := AllocateCacheEntries([]string{path}, dir); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// User's bib file must remain @misc — transform must not touch it.
-	data, _ := os.ReadFile(path)
-	items := ParseFile(string(data))
-	var bibEntry Entry
-	for _, it := range items {
-		if it.IsEntry {
-			bibEntry = it.Entry
-			break
+	// Cache must store the arXiv entry as @misc with eprint preserved.
+	keys := LoadCacheKeys(dir)
+	if len(keys) == 0 {
+		t.Fatal("cache is empty after AllocateCacheEntries")
+	}
+	c := loadCache(dir)
+	for _, k := range keys {
+		if e := c[k]; e.Type != "misc" {
+			t.Errorf("cache type = %q, want %q (arXiv entries must be cached as @misc)", e.Type, "misc")
 		}
-	}
-	if bibEntry.Type != "misc" {
-		t.Errorf("bib file type = %q, want %q (ieeeFormat must not modify user bib)", bibEntry.Type, "misc")
-	}
-	if FieldValue(bibEntry, "eprint") == "" {
-		t.Error("eprint should be preserved in user bib file")
+		if e := c[k]; e.Fields["eprint"] == "" {
+			t.Error("eprint should be preserved in cache")
+		}
 	}
 
 	// WriteBibFromCache must apply the transform: @misc arXiv -> @unpublished.
 	outPath := dir + "/bibliography.bib"
-	keys := LoadCacheKeys(dir)
-	if len(keys) == 0 {
-		t.Fatal("cache is empty after ProcessBibFiles")
-	}
 	if err := WriteBibFromCache(outPath, keys, dir, false, false, true, 0, false, false); err != nil {
 		t.Fatalf("WriteBibFromCache: %v", err)
 	}
 
-	data, _ = os.ReadFile(outPath)
-	items = ParseFile(string(data))
+	data, _ := os.ReadFile(outPath)
+	items := ParseFile(string(data))
 	var outEntry Entry
 	for _, it := range items {
 		if it.IsEntry {
@@ -1264,26 +1214,28 @@ func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
 
 func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
 	dir := t.TempDir()
-	bibContent := `@article{Smith2023Test,
-  author  = {Smith, John},
-  year    = {2023},
-  title   = {My Test Title},
-  journal = {Nature},
-  doi     = {10.1/x},
-  url     = {https://doi.org/10.1/x},
-}
-`
-	path := dir + "/test.bib"
-	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
-		t.Fatal(err)
-	}
+	saveCache(dir, cache{
+		"Smith2023Test": cacheEntry{
+			Source: "crossref",
+			Type:   "article",
+			Fields: map[string]string{
+				"author":  "Smith, John",
+				"title":   "My Test Title",
+				"journal": "Nature",
+				"year":    "2023",
+				"doi":     "10.1/x",
+				"url":     "https://doi.org/10.1/x",
+			},
+		},
+	})
 
+	outPath := dir + "/bibliography.bib"
 	// ieee_format=true, brace_titles=false — should still double-brace
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true, false); err != nil {
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, true, false, true, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(outPath)
 	items := ParseFile(string(data))
 	var entry Entry
 	for _, it := range items {
@@ -1306,23 +1258,25 @@ func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
 
 func TestIEEEFormat_NonArxivMiscUnchanged(t *testing.T) {
 	dir := t.TempDir()
-	bibContent := `@misc{Smith2023Software,
-  author = {Smith, John},
-  year   = {2023},
-  title  = {Some Software},
-  url    = {https://example.com},
-}
-`
-	path := dir + "/test.bib"
-	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
-		t.Fatal(err)
-	}
+	saveCache(dir, cache{
+		"Smith2023Software": cacheEntry{
+			Source: "no-id",
+			Type:   "misc",
+			Fields: map[string]string{
+				"author": "Smith, John",
+				"year":   "2023",
+				"title":  "Some Software",
+				"url":    "https://example.com",
+			},
+		},
+	})
 
-	if _, err := ProcessBibFiles([]string{path}, dir, true, false, true, 0, true, false); err != nil {
+	outPath := dir + "/bibliography.bib"
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Software"}, dir, true, false, true, 0, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(outPath)
 	items := ParseFile(string(data))
 	var entry Entry
 	for _, it := range items {
