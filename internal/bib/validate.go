@@ -778,7 +778,9 @@ func queryCrossref(e Entry, doi string) (*Entry, cacheEntry, string, error) {
 	if len(m.Title) > 0 {
 		// Strip non-escaped braces here (non-configurable preprocessing) so the
 		// cached title is already in its final pre-transformation state.
-		raw.Fields["title"] = stripNonEscapedBraces(m.Title[0])
+		// cleanCrossrefTitle runs after brace stripping to convert MathML and
+		// Crossref face markup (e.g. <i>, <sub>) to LaTeX equivalents.
+		raw.Fields["title"] = cleanCrossrefTitle(stripNonEscapedBraces(m.Title[0]))
 		if applyField(&updated, "title", raw.Fields["title"]) {
 			corrections = append(corrections, "title")
 		}
