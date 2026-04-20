@@ -839,13 +839,15 @@ func queryCrossref(e Entry, doi string) (*Entry, cacheEntry, string, error) {
 func formatCrossrefAuthors(authors []crossrefAuthor) string {
 	parts := make([]string, 0, len(authors))
 	for _, a := range authors {
+		family := normalizeAllCapsName(a.Family)
+		given := normalizeAllCapsName(a.Given)
 		switch {
-		case a.Family != "" && a.Given != "":
-			parts = append(parts, a.Family+", "+a.Given)
-		case a.Family != "":
-			parts = append(parts, a.Family)
+		case family != "" && given != "":
+			parts = append(parts, family+", "+given)
+		case family != "":
+			parts = append(parts, family)
 		default:
-			parts = append(parts, a.Given)
+			parts = append(parts, given)
 		}
 	}
 	return strings.Join(parts, " and ")
@@ -942,7 +944,7 @@ func queryArxiv(e Entry, id string) (*Entry, cacheEntry, string, error) {
 func formatArxivAuthors(authors []arxivAuthor) string {
 	parts := make([]string, 0, len(authors))
 	for _, a := range authors {
-		name := strings.TrimSpace(a.Name)
+		name := normalizeAllCapsName(strings.TrimSpace(a.Name))
 		if name != "" {
 			parts = append(parts, reverseArxivName(name))
 		}

@@ -110,6 +110,42 @@ func abbreviateGivenNames(givens string, abbreviateFirstName bool) string {
 	return strings.Join(out, " ")
 }
 
+// normalizeAllCapsName converts a fully uppercase name to title case.
+// If any letter in name is lowercase, the string is returned unchanged.
+// Word boundaries are detected at spaces, hyphens, and apostrophes so that
+// "JEAN-PIERRE" → "Jean-Pierre" and "O'BRIAN" → "O'Brian".
+func normalizeAllCapsName(name string) string {
+	hasLetter := false
+	for _, r := range name {
+		if unicode.IsLetter(r) {
+			hasLetter = true
+			if unicode.IsLower(r) {
+				return name
+			}
+		}
+	}
+	if !hasLetter {
+		return name
+	}
+	var buf strings.Builder
+	buf.Grow(len(name))
+	afterSep := true // start of string counts as separator
+	for _, r := range name {
+		if unicode.IsLetter(r) {
+			if afterSep {
+				buf.WriteRune(r) // keep uppercase
+			} else {
+				buf.WriteRune(unicode.ToLower(r))
+			}
+			afterSep = false
+		} else {
+			buf.WriteRune(r)
+			afterSep = r == ' ' || r == '-' || r == '\''
+		}
+	}
+	return buf.String()
+}
+
 // initialOf returns the abbreviated initial for a single name part.
 //
 // Names already in abbreviated form ("J.") are returned unchanged.

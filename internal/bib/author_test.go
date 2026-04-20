@@ -118,6 +118,36 @@ func TestSplitByAnd(t *testing.T) {
 	}
 }
 
+func TestNormalizeAllCapsName(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		// All-caps → title case
+		{"SMITH", "Smith"},
+		{"JEAN-PIERRE", "Jean-Pierre"},
+		{"O'BRIAN", "O'Brian"},
+		{"A. J.", "A. J."},
+		// Mixed case → unchanged
+		{"Smith", "Smith"},
+		{"McDonald", "McDonald"},
+		{"de Bruijn", "de Bruijn"},
+		// Single letter → unchanged (still uppercase)
+		{"J", "J"},
+		// Empty → unchanged
+		{"", ""},
+		// Multi-word all-caps
+		{"VAN DER BERG", "Van Der Berg"},
+		{"JOHN FRANK", "John Frank"},
+	}
+	for _, tc := range tests {
+		got := normalizeAllCapsName(tc.in)
+		if got != tc.want {
+			t.Errorf("normalizeAllCapsName(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestInitialOf(t *testing.T) {
 	tests := []struct {
 		in   string
