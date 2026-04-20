@@ -7,7 +7,7 @@ Pass sequence:
 4. **Cite-key rewrite** — if `.el/renames.json` non-empty (`bib.LoadRenames`), rewrite `\cite{}` in all `.tex` files via `rewriteCiteKeys`, clear renames, re-run pdflatex
 5. **Write bibliography** — `bib.WriteBibFromCache`: extract cited keys from `.aux`/`.bcf` (`citedKeysFromArtifacts`), write only those entries to `bibliography.bib` with all config transforms applied; update hash
 6. **Detect bib tool** — `.bcf` present → `biber`; `.aux` contains `\bibdata{` → `bibtex`; else none
-7. **Bib pass** — `runBibTool`; biber uses `--input/output-directory`; bibtex runs from inside aux dir with `BIBINPUTS=..:`
+7. **Bib pass** — `runBibTool`; biber uses `--input/output-directory`; bibtex runs from inside aux dir with `BIBINPUTS=..:` and `BSTINPUTS=..:` (both needed so bibtex finds `.bib` and `.bst` files in project root)
 8. **Pass 2** — `runPdflatex`; print filtered output
 9. **Pass 3** — if pass 2 output contains "rerun", run once more
 
