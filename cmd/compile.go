@@ -39,6 +39,42 @@ var warningPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^(?:Over|Under)full`),
 }
 
+var contextLinePattern = regexp.MustCompile(`^l\.\d+`)
+
+var (
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorYellow = "\033[33m"
+	colorBold   = "\033[1m"
+)
+
+func init() {
+	if !isTerminal() {
+		colorReset, colorRed, colorYellow, colorBold = "", "", "", ""
+	}
+}
+
+func isTerminal() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+func lineType(line string) string {
+	for _, pat := range errorPatterns {
+		if pat.MatchString(line) {
+			return "error"
+		}
+	}
+	return "warning"
+}
+
+func isContextLine(line string) bool {
+	return contextLinePattern.MatchString(line)
+}
+
 func runCompile(cmd *cobra.Command, args []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -205,8 +241,28 @@ func filterLines(output []byte) []string {
 }
 
 func printLines(lines []string) {
-	for _, line := range lines {
-		fmt.Println(line)
+	if len(lines) == 0 {
+		return
+	}
+
+	typ := lineType(lines[0])
+
+	if typ == "error" {
+		fmt.Printf("%s%sError:%s\n", colorBold, colorRed, colorReset)
+	} else {
+		fmt.Printf("%s%sWarnings:%s\n", colorBold, colorYellow, colorReset)
+	}
+
+	color := colorRed
+	if typ == "warning" {
+		color = colorYellow
+	}
+
+	for i, line := range lines {
+		if i > 0 && !isContextLine(line) {
+			fmt.Println()
+		}
+		fmt.Printf("  %s%s%s\n", color, line, colorReset)
 	}
 }
 

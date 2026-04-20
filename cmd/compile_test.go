@@ -288,3 +288,55 @@ func TestRunPdflatex_ErrorSuppressesWarnings(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterLines_ErrorsOnly(t *testing.T) {
+	input := []byte("! Undefined control sequence.\nl.4 \\badcommand\nLaTeX Warning: Citation undefined\n")
+	lines := filterLines(input)
+	for _, line := range lines {
+		isErr := false
+		for _, pat := range errorPatterns {
+			if pat.MatchString(line) {
+				isErr = true
+				break
+			}
+		}
+		if !isErr {
+			t.Errorf("non-error line when errors present: %q", line)
+		}
+	}
+}
+
+func TestFilterLines_WarningsWhenNoErrors(t *testing.T) {
+	input := []byte("LaTeX Warning: Citation 'foo' undefined.\nOverfull \\hbox in paragraph\n")
+	lines := filterLines(input)
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 warning lines, got %d: %v", len(lines), lines)
+	}
+}
+
+func TestLineType(t *testing.T) {
+	tests := []struct {
+		line string
+		want string
+	}{
+		{"! Undefined control sequence.", "error"},
+		{"l.4 \\badcommand", "error"},
+		{"./main.tex:12: Undefined control sequence", "warning"},
+		{"LaTeX Warning: Citation undefined", "warning"},
+		{"Overfull \\hbox (12.3pt too wide)", "warning"},
+	}
+	for _, tc := range tests {
+		if got := lineType(tc.line); got != tc.want {
+			t.Errorf("lineType(%q) = %q, want %q", tc.line, got, tc.want)
+		}
+	}
+}
+
+func TestIsContextLine(t *testing.T) {
+	if !isContextLine("l.4 \\badcommand") {
+		t.Error("expected l.4 line to be context")
+	}
+	if isContextLine("! Undefined control sequence.") {
+		t.Error("! line should not be context")
+	}
+}
