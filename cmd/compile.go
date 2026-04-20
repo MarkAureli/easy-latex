@@ -16,20 +16,24 @@ import (
 var openAfter bool
 
 var compileCmd = &cobra.Command{
-	Use:   "compile",
-	Short: "Compile the LaTeX document",
-	RunE:  runCompile,
+	Use:          "compile",
+	Short:        "Compile the LaTeX document",
+	SilenceUsage: true,
+	RunE:         runCompile,
 }
 
 func init() {
 	compileCmd.Flags().BoolVarP(&openAfter, "open", "o", false, "Open PDF after successful compilation")
 }
 
-var keepPatterns = []*regexp.Regexp{
+var errorPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^!`),
 	regexp.MustCompile(`^l\.\d+`),
-	regexp.MustCompile(`(?i)warning`),
 	regexp.MustCompile(`(?i)error`),
+}
+
+var warningPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)warning`),
 	regexp.MustCompile(`(?i)undefined`),
 	regexp.MustCompile(`(?i)multiply defined`),
 	regexp.MustCompile(`^(?:Over|Under)full`),
@@ -179,16 +183,25 @@ func needsRerun(lines []string) bool {
 }
 
 func filterLines(output []byte) []string {
-	var lines []string
+	var errors, warnings []string
 	for _, line := range strings.Split(string(output), "\n") {
-		for _, pat := range keepPatterns {
+		for _, pat := range errorPatterns {
 			if pat.MatchString(line) {
-				lines = append(lines, line)
+				errors = append(errors, line)
+				break
+			}
+		}
+		for _, pat := range warningPatterns {
+			if pat.MatchString(line) {
+				warnings = append(warnings, line)
 				break
 			}
 		}
 	}
-	return lines
+	if len(errors) > 0 {
+		return errors
+	}
+	return warnings
 }
 
 func printLines(lines []string) {
@@ -200,6 +213,7 @@ func printLines(lines []string) {
 func runPdflatex(pdflatex string, cfg *Config) ([]string, error) {
 	c := exec.Command(pdflatex,
 		"-interaction=nonstopmode",
+		"-halt-on-error",
 		"-file-line-error",
 		"-output-directory="+auxDir,
 		cfg.Main,
