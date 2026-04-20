@@ -29,7 +29,6 @@ func init() {
 
 var errorPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^!`),
-	regexp.MustCompile(`^l\.\d+`),
 	regexp.MustCompile(`(?i)error`),
 }
 
@@ -218,16 +217,29 @@ func needsRerun(lines []string) bool {
 
 func filterLines(output []byte) []string {
 	var errors, warnings []string
+	lastKind := "" // "error" or "warning"
 	for line := range strings.SplitSeq(string(output), "\n") {
+		// Context lines (l.123 ...) inherit the category of the preceding diagnostic.
+		if contextLinePattern.MatchString(line) {
+			switch lastKind {
+			case "error":
+				errors = append(errors, line)
+			case "warning":
+				warnings = append(warnings, line)
+			}
+			continue
+		}
 		for _, pat := range errorPatterns {
 			if pat.MatchString(line) {
 				errors = append(errors, line)
+				lastKind = "error"
 				break
 			}
 		}
 		for _, pat := range warningPatterns {
 			if pat.MatchString(line) {
 				warnings = append(warnings, line)
+				lastKind = "warning"
 				break
 			}
 		}

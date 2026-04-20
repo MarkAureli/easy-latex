@@ -283,7 +283,7 @@ func TestRunPdflatex_ErrorSuppressesWarnings(t *testing.T) {
 				break
 			}
 		}
-		if !isError {
+		if !isError && !isContextLine(line) {
 			t.Errorf("non-error line in output when errors present: %q", line)
 		}
 	}
@@ -300,7 +300,7 @@ func TestFilterLines_ErrorsOnly(t *testing.T) {
 				break
 			}
 		}
-		if !isErr {
+		if !isErr && !isContextLine(line) {
 			t.Errorf("non-error line when errors present: %q", line)
 		}
 	}
@@ -320,7 +320,7 @@ func TestLineType(t *testing.T) {
 		want string
 	}{
 		{"! Undefined control sequence.", "error"},
-		{"l.4 \\badcommand", "error"},
+		{"l.4 \\badcommand", "warning"},
 		{"./main.tex:12: Undefined control sequence", "warning"},
 		{"LaTeX Warning: Citation undefined", "warning"},
 		{"Overfull \\hbox (12.3pt too wide)", "warning"},
