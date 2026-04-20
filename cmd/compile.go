@@ -321,7 +321,7 @@ func runBibTool(tool, stem, auxDir string) error {
 		// BIBINPUTS=..: tells bibtex to look for .bib files in the project root first.
 		c = exec.Command(toolPath, stem)
 		c.Dir = auxDir
-		c.Env = append(os.Environ(), "BIBINPUTS=..:")
+		c.Env = append(os.Environ(), "BIBINPUTS=..:", "BSTINPUTS=..:")
 	}
 
 	output, runErr := c.CombinedOutput()
