@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
@@ -210,17 +211,14 @@ func runCompile(cmd *cobra.Command, args []string) error {
 var rerunPattern = regexp.MustCompile(`(?i)rerun`)
 
 func needsRerun(lines []string) bool {
-	for _, line := range lines {
-		if rerunPattern.MatchString(line) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(lines, func(line string) bool {
+		return rerunPattern.MatchString(line)
+	})
 }
 
 func filterLines(output []byte) []string {
 	var errors, warnings []string
-	for _, line := range strings.Split(string(output), "\n") {
+	for line := range strings.SplitSeq(string(output), "\n") {
 		for _, pat := range errorPatterns {
 			if pat.MatchString(line) {
 				errors = append(errors, line)
@@ -372,7 +370,7 @@ func bibFilesFromArtifacts(stem, auxDir string) []string {
 
 	if data, err := os.ReadFile(filepath.Join(auxDir, stem+".aux")); err == nil {
 		for _, m := range reBibData.FindAllStringSubmatch(string(data), -1) {
-			for _, name := range strings.Split(m[1], ",") {
+			for name := range strings.SplitSeq(m[1], ",") {
 				add(strings.TrimSpace(name))
 			}
 		}
@@ -401,7 +399,7 @@ func citedKeysFromArtifacts(stem, auxDir string) []string {
 	}
 	if data, err := os.ReadFile(filepath.Join(auxDir, stem+".aux")); err == nil {
 		for _, m := range reAuxCitation.FindAllStringSubmatch(string(data), -1) {
-			for _, k := range strings.Split(m[1], ",") {
+			for k := range strings.SplitSeq(m[1], ",") {
 				add(k)
 			}
 		}
