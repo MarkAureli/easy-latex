@@ -32,9 +32,9 @@ Only these messages handled:
 
 ## Completion trigger detection (`server.go: detectCitePrefix`)
 
-Regex `\\cite[tp]?\{[^}]*$` on line up to cursor. If match, partial key = text after last `{` or `,` (trimmed). Empty prefix = return all items. Non-empty prefix = filter by `strings.HasPrefix`.
+Regex on line up to cursor matches cite commands then `{[^}]*$`. Partial key = text after last `{` or `,` (trimmed). Empty prefix = return all items. Non-empty prefix = filter by `strings.HasPrefix`.
 
-Supported commands: `\cite`, `\citet`, `\citep`.
+Supported commands: `\cite`, `\citet`, `\citep`, `\citealt`, `\citealp`, `\citeauthor`, `\citeyear`, `\citeyearpar`, `\citenum`, capitalised `\Cite*` variants, starred forms (`\citet*`, etc.), and optional `[...]` arguments before the brace.
 
 ## Bib key loading (`index.go: BuildItems`)
 

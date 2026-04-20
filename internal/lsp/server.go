@@ -118,9 +118,12 @@ func (s *server) complete(p completionParams) []completionItem {
 	return out
 }
 
-// reCiteTrigger matches a \cite, \citet, or \citep command open brace with
-// any content up to (but not including) the closing brace.
-var reCiteTrigger = regexp.MustCompile(`\\cite[tp]?\{[^}]*$`)
+// reCiteTrigger matches a cite command open brace with any content up to
+// (but not including) the closing brace. Covers standard \cite plus natbib
+// commands: \citet, \citep, \citealt, \citealp, \citeauthor, \citeyear,
+// \citeyearpar, \citenum, capitalised \Cite* variants, and starred forms.
+// Optional [...] arguments before the brace are skipped.
+var reCiteTrigger = regexp.MustCompile(`\\[Cc]ite(?:t|p|alt|alp|author|year(?:par)?|num)?\*?(?:\[[^\]]*\])*\{[^}]*$`)
 
 // detectCitePrefix returns the partially-typed key at cursor and true when
 // the cursor is inside a \cite{...} argument. prefix="" means show all items.

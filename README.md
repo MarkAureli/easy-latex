@@ -179,7 +179,7 @@ Cached 5 new entries
 
 Start a Language Server Protocol server over stdio that provides cite-key completions. Intended for editor integration (VS Code, Neovim, etc.).
 
-Typing `\cite{`, `\citet{`, or `\citep{` triggers completion with all known cite keys from the bib cache. Keys are loaded once at startup — restart the LSP to pick up new entries.
+Typing any cite command (`\cite{`, `\citet{`, `\citep{`, `\citealt{`, `\citeauthor{`, `\citeyear{`, etc.) triggers completion with all known cite keys from the bib cache. Capitalised (`\Citet{`), starred (`\citet*{`), and optional-argument (`\citep[see]{`) forms are also supported. Keys are loaded once at startup — restart the LSP to pick up new entries.
 
 ## Installation
 
