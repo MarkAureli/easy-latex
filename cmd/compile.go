@@ -192,10 +192,14 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	pdfName := stem + ".pdf"
 	srcPDF := filepath.Join(auxDir, pdfName)
 
-	// Remove stale symlink or file, then create symlink
+	// Copy compiled PDF from aux dir to working dir
 	_ = os.Remove(pdfName)
-	if err := os.Symlink(srcPDF, pdfName); err != nil {
-		return fmt.Errorf("cannot create symlink for %s: %w", pdfName, err)
+	srcData, err := os.ReadFile(srcPDF)
+	if err != nil {
+		return fmt.Errorf("cannot read %s: %w", srcPDF, err)
+	}
+	if err := os.WriteFile(pdfName, srcData, 0644); err != nil {
+		return fmt.Errorf("cannot write %s: %w", pdfName, err)
 	}
 
 	fmt.Printf("Compiled successfully -> %s\n", pdfName)

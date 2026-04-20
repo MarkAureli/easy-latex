@@ -194,18 +194,17 @@ func setupCompileDir(t *testing.T, texContent, bibContent string) string {
 	return dir
 }
 
-func assertPDFSymlink(t *testing.T) {
+func assertPDFCopy(t *testing.T) {
 	t.Helper()
 	info, err := os.Lstat("main.pdf")
 	if err != nil {
 		t.Fatalf("main.pdf not created: %v", err)
 	}
-	if info.Mode()&os.ModeSymlink == 0 {
-		t.Error("main.pdf is not a symlink")
+	if !info.Mode().IsRegular() {
+		t.Error("main.pdf is not a regular file")
 	}
-	target, _ := os.Readlink("main.pdf")
-	if !strings.Contains(target, ".el") {
-		t.Errorf("symlink target %q does not point into .el", target)
+	if info.Size() == 0 {
+		t.Error("main.pdf is empty")
 	}
 }
 
@@ -227,7 +226,7 @@ func TestRunCompile_NoBib(t *testing.T) {
 	if err := runCompile(nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	assertPDFSymlink(t)
+	assertPDFCopy(t)
 }
 
 func TestRunCompile_Bibtex(t *testing.T) {
@@ -238,7 +237,7 @@ func TestRunCompile_Bibtex(t *testing.T) {
 	if err := runCompile(nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	assertPDFSymlink(t)
+	assertPDFCopy(t)
 	assertBBLContains(t, "Knuth1984TheTexbook")
 }
 
@@ -250,7 +249,7 @@ func TestRunCompile_Biber(t *testing.T) {
 	if err := runCompile(nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	assertPDFSymlink(t)
+	assertPDFCopy(t)
 	assertBBLContains(t, "Knuth1984TheTexbook")
 }
 
