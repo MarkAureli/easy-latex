@@ -130,6 +130,13 @@ func TestRunCompile_MissingMainFile(t *testing.T) {
 
 // --- Integration tests ---
 
+const texErrorWithCite = `\documentclass{article}
+\begin{document}
+A citation~\cite{knuth1984}.
+\badcommand
+\end{document}
+`
+
 const texNoBib = `\documentclass{article}
 \begin{document}
 Hello world.
@@ -245,4 +252,39 @@ func TestRunCompile_Biber(t *testing.T) {
 	}
 	assertPDFSymlink(t)
 	assertBBLContains(t, "Knuth1984TheTexbook")
+}
+
+func TestRunPdflatex_ErrorSuppressesWarnings(t *testing.T) {
+	skipIfToolMissing(t, "pdflatex")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "main.tex"), []byte(texErrorWithCite), 0644)
+	chdir(t, dir)
+	os.MkdirAll(auxDir, 0755)
+
+	pdflatex, err := findPdflatex()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lines, err := runPdflatex(pdflatex, &Config{Main: "main.tex"})
+	if err == nil {
+		t.Fatal("expected compilation error")
+	}
+
+	if len(lines) == 0 {
+		t.Fatal("expected error lines in output, got none")
+	}
+
+	for _, line := range lines {
+		isError := false
+		for _, pat := range errorPatterns {
+			if pat.MatchString(line) {
+				isError = true
+				break
+			}
+		}
+		if !isError {
+			t.Errorf("non-error line in output when errors present: %q", line)
+		}
+	}
 }
