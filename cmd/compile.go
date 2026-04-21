@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -216,7 +217,18 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Compiled successfully -> %s\n", pdfName)
 
 	if openAfter {
-		exec.Command("open", pdfName).Start() //nolint:errcheck
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "darwin":
+			cmd = exec.Command("open", pdfName)
+		case "linux":
+			cmd = exec.Command("xdg-open", pdfName)
+		case "windows":
+			cmd = exec.Command("cmd", "/c", "start", pdfName)
+		}
+		if cmd != nil {
+			cmd.Start() //nolint:errcheck
+		}
 	}
 
 	return nil
@@ -383,11 +395,21 @@ func findTool(name string) (string, error) {
 	if path, err := exec.LookPath(name); err == nil {
 		return path, nil
 	}
-	fallback := "/Library/TeX/texbin/" + name
-	if _, err := os.Stat(fallback); err == nil {
+	// macOS — MacTeX
+	if fallback := "/Library/TeX/texbin/" + name; statExists(fallback) {
 		return fallback, nil
 	}
-	return "", fmt.Errorf("%s not found in PATH or %s. Install TeX Live or MacTeX", name, fallback)
+	// Linux — TeX Live (year and arch vary)
+	matches, _ := filepath.Glob("/usr/local/texlive/*/bin/*/" + name)
+	if len(matches) > 0 {
+		return matches[len(matches)-1], nil // latest year
+	}
+	return "", fmt.Errorf("%s not found in PATH or common TeX Live installation directories. Install TeX Live or MacTeX", name)
+}
+
+func statExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 var (
