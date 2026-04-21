@@ -235,9 +235,17 @@ func rewriteBibRefsInFile(path string, newBibFiles []string) error {
 
 // StripComment returns the portion of line before any unescaped % comment marker.
 func StripComment(line string) string {
-	idx := strings.Index(line, "%")
-	if idx < 0 {
-		return line
+	for i := 0; i < len(line); i++ {
+		if line[i] == '%' {
+			// Check if this % is escaped (preceded by \)
+			if i > 0 && line[i-1] == '\\' {
+				// This is an escaped \%, continue looking
+				continue
+			}
+			// This is an unescaped %, return everything before it
+			return line[:i]
+		}
 	}
-	return line[:idx]
+	// No unescaped % found
+	return line
 }

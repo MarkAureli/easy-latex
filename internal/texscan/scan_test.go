@@ -392,3 +392,44 @@ func TestResolveFileContents_CommentedOutBlock(t *testing.T) {
 		t.Error("refs.bib created for commented-out block")
 	}
 }
+
+// --- StripComment ---
+
+func TestStripComment_EscapedPercent(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{
+			input:    "Cost is 50\\% of total",
+			expected: "Cost is 50\\% of total",
+		},
+		{
+			input:    "Price: \\$100\\% markup",
+			expected: "Price: \\$100\\% markup",
+		},
+		{
+			input:    "Discount \\% % this is a comment",
+			expected: "Discount \\% ",
+		},
+		{
+			input:    "No percent sign here",
+			expected: "No percent sign here",
+		},
+		{
+			input:    "Regular comment % this is stripped",
+			expected: "Regular comment ",
+		},
+		{
+			input:    "Multiple \\% signs \\% preserved",
+			expected: "Multiple \\% signs \\% preserved",
+		},
+	}
+
+	for _, tc := range tests {
+		got := StripComment(tc.input)
+		if got != tc.expected {
+			t.Errorf("StripComment(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
