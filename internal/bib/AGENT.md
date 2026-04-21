@@ -2,26 +2,12 @@
 
 Handle `.bib` file processing.
 
-## Pipeline (`validate.go`)
+## Architecture (`validate.go`)
 
-Entry point: `ProcessBibFiles(bibFiles, auxDir, abbreviateJournals, braceTitles, ieeeFormat, maxAuthors, abbreviateFirstName, urlFromDOI)`.
+Two-phase design: **cache allocation** (parse + validate) and **bib generation** (cache → file with config transforms).
 
-For each bib file:
-1. Parse → `[]Item` (entries + raw chunks)
-2. `assignCanonicalKeys` (first pass)
-3. Each unseen entry: `validateEntry` → Crossref/arXiv fix (arXiv entries with DOI redirect to Crossref); Crossref titles cleaned via `cleanCrossrefTitle` (MathML→LaTeX `$...$`, face markup→LaTeX commands, remaining XML tags stripped); store pending cache
-4. `normalizeEntryFields` — drop disallowed fields, resolve synonyms, derive url from doi
-5. If `ieeeFormat` and `@misc` arXiv: `transformArxivMiscToUnpublished` — type→`unpublished`, drop eprint/archiveprefix/primaryclass, add `note = {[arXiv preprint \href{...}{arXiv:<id>}]}`
-6. Format author (truncate to `maxAuthors` if > 0, append `and others`; abbrev first name per `abbreviateFirstName`)
-7. Strip non-escaped braces from title (`stripNonEscapedBraces`)
-8. If `braceTitles` or `ieeeFormat`: wrap title as `{{inner}}` (idempotent — step 7 norm first)
-9. `warnMissingFields` — print `[bib] <key>: missing mandatory fields: ...`
-10. `ensureArticleOptionalFields` — add blank `{}` for `volume`, `number`, `pages` on `@article`
-11. `sortedFields` — reorder to canonical field order
-12. For newly validated entries (crossref/arxiv, not cached): compare final field values against pre-processing originals; print `[bib] <key>: reformatted <fields>` for fields that actually changed
-13. `assignCanonicalKeys` (second pass — keys may shift after Crossref fix)
-14. Flush pending cache under final canonical keys
-15. Rewrite file if changed
+- `AllocateCacheEntries` — seeds `.el/bib.json` from bib files (used by `el init`, `el parsebib`, auto-triggered by `el compile` when `bibliography.bib` hash changes)
+- `WriteBibFromCache` — reconstructs entries from cache for cited keys, applies all config transforms, writes `bibliography.bib` (used by `el compile` after pass 1)
 
 ## Single-entry insertion from ID (`validate.go`)
 
@@ -47,7 +33,7 @@ Deduplication:
 - **Entries with arXiv ID**: matched by eprint field (case-insensitive). arXiv-validated if new.
 - **No-ID entries**: matched by canonical cite key. Added as `source: "no-id"` placeholder if new.
 
-For new DOI/arXiv entries, runs `validateEntry` and stores full field snapshot like `processBibFile` does. Does not apply config transforms (abbreviateJournals, braceTitles, etc.) — those are applied at compile time.
+For new DOI/arXiv entries, runs `validateEntry` and stores full field snapshot. Does not apply config transforms (abbreviateJournals, braceTitles, etc.) — those are applied at compile time.
 
 ## Bib generation from cache (`validate.go`)
 
@@ -65,7 +51,7 @@ Produced by `AllocateCacheEntries` when canonical key differs from bib file key.
 
 ## Bib hash tracking (`validate.go`)
 
-- `BibFileChanged(bibPath, auxDir) bool` — true if `bibliography.bib` SHA256 differs from stored hash in `.el/bib_hash.json`
+- `BibFileChanged(bibPath, auxDir) bool` — true if `bibliography.bib` SHA256 differs from stored hash in `.el/bib_hash`
 - `UpdateBibHash(bibPath, auxDir)` — update stored hash after write
 
 ## Key generation (`key.go`)
@@ -100,7 +86,7 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 
 ## Validation sources
 
-- **Crossref**: corrects title, author, journal/booktitle (full name), year, volume, number, pages, doi; title cleaned via `cleanCrossrefTitle` (converts MathML to `$...$` and Crossref face markup `<i>/<sub>/<sup>/...` to LaTeX commands); author names normalised from all-caps to title case via `normalizeAllCapsName`; maps `type` to BibTeX entry type (`journal-article`→`@article`, `proceedings-article`→`@inproceedings`, `book-chapter`→`@incollection`, `book`/`monograph`/`edited-book`→`@book`, `report`→`@techreport`, `dissertation`→`@phdthesis`; unknown types leave entry type unchanged); `container-title` maps to `journal` or `booktitle` based on mapped type; `@article` journal → `AbbreviateISO4` on live entry when `abbreviateJournals=true`
+- **Crossref**: corrects title, author, journal/booktitle (full name), year, volume, number, pages, doi; title cleaned via `cleanCrossrefTitle` (converts MathML to `$...$` and Crossref face markup `<i>/<sub>/<sup>/...` to LaTeX commands); author names normalised from all-caps to title case via `normalizeAllCapsName`; maps `type` to BibTeX entry type (`journal-article`→`@article`, `proceedings-article`→`@inproceedings`, `book-chapter`→`@incollection`, `book`/`monograph`/`edited-book`/`reference-book`→`@book`, `report`/`report-component`→`@techreport`, `dissertation`→`@phdthesis`; unknown types leave entry type unchanged); `container-title` maps to `journal` or `booktitle` based on mapped type; `@article` journal → `AbbreviateISO4` on live entry when `abbreviateJournals=true`
 - **arXiv**: corrects title, author, year; author names normalised from all-caps to title case via `normalizeAllCapsName`; if `<arxiv:doi>` present in API response, redirects to Crossref validation (entry becomes `@article`, `source: "crossref"`); falls back to arXiv-only on Crossref failure
 - Cache in `.el/bib.json` under final canonical key; stores entry `Type`, all allowed fields as snapshot (pre-config-transform: full journal, raw authors, pre-brace title, raw url from bib file)
 - On subsequent compiles, all cached fields re-applied to entry before pipeline; journal re-abbreviated if `abbreviateJournals=true`; old-format crossref/arxiv entries (nil Fields) evicted and re-validated
@@ -124,8 +110,9 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 |---|---|
 | `parse.go` | `ParseFile`, `Entry`, `Field`, `Item`, `FieldValue`, `SetField` |
 | `key.go` | `GenerateKey`, `assignCanonicalKeys`, `latexToASCII`, accent maps |
-| `format.go` | `canonicalOrder`, `renderItems`, `formatEntry`, `sortedFields` |
-| `validate.go` | `ProcessBibFiles`, `entrySpecs`, normalization, validation, Crossref/arXiv queries |
+| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand` |
+| `author.go` | `formatAuthorField`, `formatSingleAuthor`, `abbreviateGivenNames`, `normalizeAllCapsName`, `initialOf`, `splitByAnd` |
+| `validate.go` | `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation, Crossref/arXiv queries |
 | `xmltitle.go` | `cleanCrossrefTitle`, MathML→LaTeX converter (`encoding/xml` Decoder), Crossref face markup→LaTeX, XML tag stripper |
 | `iso4.go` | `AbbreviateISO4`, LTWA loader, prefix matcher, stop word list |
 | `ltwa.tsv` | Embedded LTWA data (tab-separated: WORD, ABBREVIATION, LANGUAGES) |

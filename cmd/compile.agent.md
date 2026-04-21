@@ -9,9 +9,9 @@ Pass sequence:
 6. **Detect bib tool** — `.bcf` present → `biber`; `.aux` contains `\bibdata{` → `bibtex`; else none
 7. **Bib pass** — `runBibTool`; biber uses `--input/output-directory`; bibtex runs from inside aux dir with `BIBINPUTS=..:` and `BSTINPUTS=..:` (both needed so bibtex finds `.bib` and `.bst` files in project root)
 8. **Pass 2** — `runPdflatex`; print filtered output
-9. **Pass 3** — if pass 2 output contains "rerun", run once more
+9. **Pass 3–4** — up to 2 additional passes if output contains "rerun" (`for range 2` loop), stabilizing cross-references and citations
 
-Post-compile: remove stale symlink, create `<stem>.pdf → .el/<stem>.pdf`.
+Post-compile: copy `<stem>.pdf` from `.el/` to project root.
 
 Flags: `--open` / `-o` — call `open <pdf>` after success.
 

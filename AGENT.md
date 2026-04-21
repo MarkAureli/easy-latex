@@ -14,14 +14,12 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 | `internal/texscan/` | Tex file scanner for bib declarations |
 | `internal/lsp/` | Minimal LSP server (JSON-RPC over stdio, cite-key completions) |
 
-## Bib processing (post-compile)
+## Bib processing
 
-After each successful compile, every registered `.bib` file is:
-1. Parsed, canonical keys assigned (`{LastName}{Year}{Title}`)
-2. Unseen entries validated via Crossref (DOI) or arXiv (eprint)
-3. Fields normalised to allowed set; unknown fields dropped
-4. Mandatory fields checked; warnings for missing ones
-5. File rewritten only if changed
+Two-phase design: **cache allocation** and **bib generation from cache**.
+
+- `AllocateCacheEntries` — parses bib files, assigns canonical keys (`{LastName}{Year}{Title}`), validates unseen entries via Crossref (DOI) or arXiv (eprint), seeds `.el/bib.json`. Used by `el init`, `el parsebib`, and auto-triggered by `el compile` when `bibliography.bib` changes.
+- `WriteBibFromCache` — reconstructs entries from cache for cited keys only, applies config transforms (journal abbreviation, author formatting, brace titles, etc.), writes `bibliography.bib`. Called by `el compile` after pass 1.
 
 See `internal/bib/AGENT.md` for entry-type specs.
 
