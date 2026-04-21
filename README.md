@@ -159,28 +159,58 @@ $ el config --ieee-format=true
 $ el config --max-authors=3
 ```
 
-### `el bibentry`
+### `el bib`
 
-Add a single bibliography entry to the cache from a DOI or arXiv ID, without needing a `.bib` file.
+Manage the bibliography cache.
+
+#### `el bib add <ID>`
+
+Add a single bibliography entry to the cache from a DOI or arXiv ID, without needing a `.bib` file. Shows progress during API calls and entry details on success.
 
 ```
-$ el bibentry 10.1038/s41586-023-06096-3
+$ el bib add 10.1038/s41586-023-06096-3
+[bib] tmp: fetching metadata from Crossref...
 Added "Smith2023AGreatPaper" to bib cache.
+  Title:  A Great Paper
+  Author: Smith, John et al.
+  Source: crossref
 
-$ el bibentry 2301.07041
+$ el bib add 2301.07041
+[bib] tmp: fetching metadata from arXiv...
 Added "Doe2023SomePreprint" to bib cache.
+  Title:  Some Preprint
+  Author: Doe, Jane
+  Source: arxiv
 ```
 
 Accepts bare DOIs (`10.…`), `doi.org/` URLs, bare arXiv IDs (`2301.07041`, `2301.07041v2`), old-format arXiv IDs (`hep-th/0401234`), and `arxiv.org/abs/…` URLs. Duplicate entries (by DOI or arXiv ID) are detected and the existing key is returned. For arXiv IDs, if the paper has a published DOI, the entry is automatically upgraded to a full Crossref-validated `@article`.
 
+Network requests retry automatically on transient failures (rate limits, server errors, timeouts) with exponential backoff.
+
 The entry will appear in `bibliography.bib` on the next `el compile` when cited.
+
+`el bibentry` is kept as a hidden alias for backward compatibility.
+
+#### `el bib list`
+
+Show all entries in the bib cache as a table.
+
+```
+$ el bib list
+KEY                         TYPE      SOURCE    TITLE
+Smith2023AGreatPaper        article   crossref  A Great Paper
+Doe2023SomePreprint         misc      arxiv     Some Preprint
+
+2 entries in bib cache.
+```
 
 ### `el parsebib`
 
-Pre-populate the bib cache from registered `.bib` files without compiling. Useful for validating entries against Crossref/arXiv ahead of time, or for re-populating the cache after deleting `.el/bib.json`.
+Pre-populate the bib cache from registered `.bib` files without compiling. Useful for validating entries against Crossref/arXiv ahead of time, or for re-populating the cache after deleting `.el/bib.json`. Shows progress during API calls and announces key renames.
 
 ```
 $ el parsebib
+[bib] key renamed: smith23 -> Smith2023AGreatPaper
 Allocated 5 new bib cache entries.
 ```
 

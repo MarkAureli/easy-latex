@@ -66,21 +66,28 @@ func containerTitleField(bibType string) string {
 	}
 }
 
-func queryCrossref(e Entry, doi string) (*Entry, cacheEntry, string, error) {
+func queryCrossref(e Entry, doi string, log Logger) (*Entry, cacheEntry, string, error) {
+	log = logOrNop(log)
+	log.Progress(e.Key, "fetching metadata from Crossref...")
 	req, err := http.NewRequest("GET", "https://api.crossref.org/works/"+url.PathEscape(doi), nil)
 	if err != nil {
 		return nil, cacheEntry{}, "", err
 	}
 	req.Header.Set("User-Agent", "easy-latex/"+Version+" (https://github.com/MarkAureli/easy-latex)")
 
-	resp, err := httpClient.Do(req)
+	resp, err := doWithRetry(func() (*http.Response, error) {
+		return httpClient.Do(req)
+	}, log, e.Key)
 	if err != nil {
-		return nil, cacheEntry{}, "", err
+		if isRetryableError(err) {
+			return nil, cacheEntry{}, "", fmt.Errorf("Crossref request timed out")
+		}
+		return nil, cacheEntry{}, "", fmt.Errorf("Crossref query failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, cacheEntry{}, "", fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, cacheEntry{}, "", friendlyHTTPError(resp.StatusCode, "Crossref")
 	}
 
 	body, err := io.ReadAll(resp.Body)

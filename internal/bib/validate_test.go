@@ -258,7 +258,7 @@ func TestQueryCrossref_CorrectsMismatchedFields(t *testing.T) {
 			{Name: "doi", Value: "{10.1000/xyz}"},
 		},
 	}
-	result, raw, crType, err := queryCrossref(e, "10.1000/xyz")
+	result, raw, crType, err := queryCrossref(e, "10.1000/xyz", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestQueryCrossref_NoChangeWhenFieldsMatch(t *testing.T) {
 			{Name: "doi", Value: "{10.1/x}"},
 		},
 	}
-	result, _, crType, err := queryCrossref(e, "10.1/x")
+	result, _, crType, err := queryCrossref(e, "10.1/x", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestQueryCrossref_ProceedingsType_MapsToInproceedings(t *testing.T) {
 		Key:    "Doe2023",
 		Fields: []Field{{Name: "doi", Value: "{10.1/conf}"}},
 	}
-	result, raw, crType, err := queryCrossref(e, "10.1/conf")
+	result, raw, crType, err := queryCrossref(e, "10.1/conf", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestQueryCrossref_UnknownType_ReturnsEmpty(t *testing.T) {
 		Key:    "Doe2023",
 		Fields: []Field{{Name: "doi", Value: "{10.1/x}"}},
 	}
-	_, _, crType, err := queryCrossref(e, "10.1/x")
+	_, _, crType, err := queryCrossref(e, "10.1/x", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -417,7 +417,7 @@ func TestValidateEntry_DOI_SetsCrossrefType(t *testing.T) {
 			{Name: "doi", Value: "{10.1/conf}"},
 		},
 	}
-	result, _, source, warn := validateEntry(e, false)
+	result, _, source, warn := validateEntry(e, false, nil)
 	if warn != "" {
 		t.Fatalf("unexpected warning: %s", warn)
 	}
@@ -447,7 +447,7 @@ func TestAddEntryFromID_DOI_SetsCrossrefType(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	key, err := AddEntryFromID("10.1/conf", dir)
+	key, _, err := AddEntryFromID("10.1/conf", dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -536,7 +536,7 @@ func TestQueryArxiv_CorrectsMismatchedTitle(t *testing.T) {
 		Key:    "Smith2023",
 		Fields: []Field{{Name: "title", Value: "{Wrong Title}"}},
 	}
-	result, raw, doi, err := queryArxiv(e, "2301.00001")
+	result, raw, doi, err := queryArxiv(e, "2301.00001", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -579,7 +579,7 @@ func TestQueryArxiv_ExtractsYearFromPublished(t *testing.T) {
 		Key:    "Doe2019",
 		Fields: []Field{{Name: "title", Value: "{A Title}"}},
 	}
-	result, _, _, err := queryArxiv(e, "1906.00001")
+	result, _, _, err := queryArxiv(e, "1906.00001", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -610,7 +610,7 @@ func TestQueryArxiv_ExtractsPrimaryClass(t *testing.T) {
 			{Name: "archiveprefix", Value: "{arXiv}"},
 		},
 	}
-	_, raw, _, err := queryArxiv(e, "2301.00001")
+	_, raw, _, err := queryArxiv(e, "2301.00001", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -637,7 +637,7 @@ func TestQueryArxiv_ExtractsDOI(t *testing.T) {
 		Key:    "Smith2023",
 		Fields: []Field{{Name: "title", Value: "{Wrong Title}"}},
 	}
-	_, _, doi, err := queryArxiv(e, "2301.00001")
+	_, _, doi, err := queryArxiv(e, "2301.00001", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -661,7 +661,7 @@ func TestQueryArxiv_NoDOI_ReturnsEmpty(t *testing.T) {
 		Key:    "Smith2023",
 		Fields: []Field{{Name: "title", Value: "{A Title}"}},
 	}
-	_, _, doi, err := queryArxiv(e, "2301.00001")
+	_, _, doi, err := queryArxiv(e, "2301.00001", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -935,7 +935,7 @@ func containsField(warn, field string) bool {
 
 func TestValidateEntry_NoIDWarning_ArticleWarns(t *testing.T) {
 	e := Entry{Type: "article", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
-	corrected, _, source, warn := validateEntry(e, true)
+	corrected, _, source, warn := validateEntry(e, true, nil)
 	if corrected != nil {
 		t.Error("expected no correction")
 	}
@@ -949,7 +949,7 @@ func TestValidateEntry_NoIDWarning_ArticleWarns(t *testing.T) {
 
 func TestValidateEntry_NoIDWarning_BookSuppressed(t *testing.T) {
 	e := Entry{Type: "book", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
-	_, _, source, warn := validateEntry(e, true)
+	_, _, source, warn := validateEntry(e, true, nil)
 	if source != "no-id" {
 		t.Errorf("source = %q, want %q", source, "no-id")
 	}
@@ -981,7 +981,7 @@ func TestCacheReappliesAllFields(t *testing.T) {
 			},
 		},
 	}
-	saveCache(dir, c)
+	saveCache(dir, c, nil)
 
 	outPath := dir + "/bibliography.bib"
 	if err := WriteBibFromCache(outPath, []string{"Smith2023StaleTitle"}, dir, WriteOptions{AbbreviateFirstName: true}); err != nil {
@@ -1028,7 +1028,7 @@ func TestCacheJournalAbbreviationOnReapply(t *testing.T) {
 			},
 		},
 	}
-	saveCache(dir, c)
+	saveCache(dir, c, nil)
 
 	outPath := dir + "/bibliography.bib"
 	if err := WriteBibFromCache(outPath, []string{"Smith2023ATitle"}, dir, WriteOptions{AbbreviateJournals: true, AbbreviateFirstName: true}); err != nil {
@@ -1071,7 +1071,7 @@ func TestCacheRawURLPreservedOnReapply(t *testing.T) {
 			},
 		},
 	}
-	saveCache(dir, c)
+	saveCache(dir, c, nil)
 
 	outPath := dir + "/bibliography.bib"
 	if err := WriteBibFromCache(outPath, []string{"Smith2023ATitle"}, dir, WriteOptions{AbbreviateFirstName: true}); err != nil {
@@ -1109,7 +1109,7 @@ func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
 				"url":     "https://doi.org/10.1/x",
 			},
 		},
-	})
+	}, nil)
 
 	outPath := dir + "/bibliography.bib"
 	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
@@ -1154,7 +1154,7 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 				"url":     "https://doi.org/10.1/x",
 			},
 		},
-	})
+	}, nil)
 
 	outPath := dir + "/bibliography.bib"
 	// First write
@@ -1190,7 +1190,7 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 		break
 	}
 
-	saveCache(dir, cache{"Smith2023Test": cachedEntry})
+	saveCache(dir, cache{"Smith2023Test": cachedEntry}, nil)
 
 	outPath2 := dir + "/bibliography2.bib"
 	if err := WriteBibFromCache(outPath2, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
@@ -1218,7 +1218,7 @@ func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 				"url":     "https://doi.org/10.1/x",
 			},
 		},
-	})
+	}, nil)
 
 	outPath := dir + "/bibliography.bib"
 	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, AbbreviateFirstName: true}); err != nil {
@@ -1350,7 +1350,7 @@ func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := AllocateCacheEntries([]string{path}, dir); err != nil {
+	if _, _, err := AllocateCacheEntries([]string{path}, dir, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1416,7 +1416,7 @@ func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
 				"url":     "https://doi.org/10.1/x",
 			},
 		},
-	})
+	}, nil)
 
 	outPath := dir + "/bibliography.bib"
 	// ieee_format=true, brace_titles=false — should still double-brace
@@ -1458,7 +1458,7 @@ func TestIEEEFormat_NonArxivMiscUnchanged(t *testing.T) {
 				"url":    "https://example.com",
 			},
 		},
-	})
+	}, nil)
 
 	outPath := dir + "/bibliography.bib"
 	if err := WriteBibFromCache(outPath, []string{"Smith2023Software"}, dir, WriteOptions{AbbreviateJournals: true, IEEEFormat: true, AbbreviateFirstName: true}); err != nil {
@@ -1489,7 +1489,7 @@ func TestAllocateCacheEntries_NoIDEntryAdded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1511,7 +1511,7 @@ func TestAllocateCacheEntries_NoIDEntryAdded(t *testing.T) {
 func TestAllocateCacheEntries_NoIDDedup_ByCanonicalKey(t *testing.T) {
 	dir := t.TempDir()
 	// Pre-populate cache with the canonical key that the bib entry will produce.
-	saveCache(dir, cache{"Doe2024SomeTitle": cacheEntry{Source: "no-id", Type: "misc", Fields: map[string]string{"author": "Doe, Jane", "title": "Some Title", "year": "2024"}}})
+	saveCache(dir, cache{"Doe2024SomeTitle": cacheEntry{Source: "no-id", Type: "misc", Fields: map[string]string{"author": "Doe, Jane", "title": "Some Title", "year": "2024"}}}, nil)
 
 	bibContent := "@misc{AnyKey,\n  author = {Doe, Jane},\n  title = {Some Title},\n  year = {2024},\n}\n"
 	path := dir + "/test.bib"
@@ -1519,7 +1519,7 @@ func TestAllocateCacheEntries_NoIDDedup_ByCanonicalKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1537,7 +1537,7 @@ func TestAllocateCacheEntries_DOIDedup_ByDOI(t *testing.T) {
 			Type:   "article",
 			Fields: map[string]string{"doi": "10.1/existing"},
 		},
-	})
+	}, nil)
 
 	bibContent := "@article{AnyKey,\n  author = {Smith, A.},\n  title = {Title},\n  year = {2020},\n  doi = {10.1/existing},\n}\n"
 	path := dir + "/test.bib"
@@ -1546,7 +1546,7 @@ func TestAllocateCacheEntries_DOIDedup_ByDOI(t *testing.T) {
 	}
 
 	// No HTTP calls expected; if Crossref is reached the test will hang/fail.
-	added, _, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1563,7 +1563,7 @@ func TestAllocateCacheEntries_ArxivDedup_ByEprint(t *testing.T) {
 			Type:   "misc",
 			Fields: map[string]string{"eprint": "2301.00001"},
 		},
-	})
+	}, nil)
 
 	bibContent := "@misc{AnyKey,\n  author = {Doe, Jane},\n  title = {Title},\n  year = {2023},\n  eprint = {2301.00001},\n  archiveprefix = {arXiv},\n}\n"
 	path := dir + "/test.bib"
@@ -1571,7 +1571,7 @@ func TestAllocateCacheEntries_ArxivDedup_ByEprint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1588,7 +1588,7 @@ func TestAllocateCacheEntries_DOIDedup_CaseInsensitive(t *testing.T) {
 			Type:   "article",
 			Fields: map[string]string{"doi": "10.1/UPPER"},
 		},
-	})
+	}, nil)
 
 	bibContent := "@article{AnyKey,\n  author = {Smith, A.},\n  title = {Title},\n  year = {2020},\n  doi = {10.1/upper},\n}\n"
 	path := dir + "/test.bib"
@@ -1596,7 +1596,7 @@ func TestAllocateCacheEntries_DOIDedup_CaseInsensitive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1623,7 +1623,7 @@ func TestAllocateCacheEntries_NewDOIEntry_ValidatedAndCached(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1664,7 +1664,7 @@ func TestValidateEntry_CrossrefHTTP429_Warning(t *testing.T) {
 			{Name: "doi", Value: "{10.1000/test}"},
 		},
 	}
-	corrected, _, source, warn := validateEntry(e, false)
+	corrected, _, source, warn := validateEntry(e, false, nil)
 	if corrected != nil {
 		t.Error("expected no correction on HTTP 429")
 	}
@@ -1750,7 +1750,7 @@ func TestAddEntryFromID_DOI_CreatesEntry(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	key, err := AddEntryFromID("10.1/test", dir)
+	key, _, err := AddEntryFromID("10.1/test", dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1781,7 +1781,7 @@ func TestAddEntryFromID_DOI_URLPrefix(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	key, err := AddEntryFromID("https://doi.org/10.2/abc", dir)
+	key, _, err := AddEntryFromID("https://doi.org/10.2/abc", dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1802,7 +1802,7 @@ func TestAddEntryFromID_ArxivID_CreatesEntry(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	key, err := AddEntryFromID("1706.03762", dir)
+	key, _, err := AddEntryFromID("1706.03762", dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1830,10 +1830,10 @@ func TestAddEntryFromID_DOI_DeduplicatesExisting(t *testing.T) {
 		Type:   "article",
 		Fields: map[string]string{"doi": "10.1/dup"},
 	}}
-	saveCache(dir, c)
+	saveCache(dir, c, nil)
 
 	// No HTTP server — any network call would fail.
-	key, err := AddEntryFromID("10.1/dup", dir)
+	key, _, err := AddEntryFromID("10.1/dup", dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1853,9 +1853,9 @@ func TestAddEntryFromID_ArxivID_DeduplicatesExisting(t *testing.T) {
 		Type:   "misc",
 		Fields: map[string]string{"eprint": "1706.03762"},
 	}}
-	saveCache(dir, c)
+	saveCache(dir, c, nil)
 
-	key, err := AddEntryFromID("1706.03762", dir)
+	key, _, err := AddEntryFromID("1706.03762", dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1866,7 +1866,7 @@ func TestAddEntryFromID_ArxivID_DeduplicatesExisting(t *testing.T) {
 
 func TestAddEntryFromID_UnrecognizedID(t *testing.T) {
 	dir := t.TempDir()
-	_, err := AddEntryFromID("not-an-id", dir)
+	_, _, err := AddEntryFromID("not-an-id", dir, nil)
 	if err != ErrUnrecognizedID {
 		t.Errorf("err = %v, want ErrUnrecognizedID", err)
 	}
@@ -1900,7 +1900,7 @@ func TestValidateEntry_ArxivWithDOI_UsesCrossref(t *testing.T) {
 			{Name: "archiveprefix", Value: "{arXiv}"},
 		},
 	}
-	result, raw, source, warn := validateEntry(e, false)
+	result, raw, source, warn := validateEntry(e, false, nil)
 	if warn != "" {
 		t.Fatalf("unexpected warning: %s", warn)
 	}
@@ -1951,7 +1951,7 @@ func TestValidateEntry_ArxivWithDOI_CrossrefFails_FallsBackToArxiv(t *testing.T)
 			{Name: "archiveprefix", Value: "{arXiv}"},
 		},
 	}
-	result, _, source, warn := validateEntry(e, false)
+	result, _, source, warn := validateEntry(e, false, nil)
 	if warn != "" {
 		t.Fatalf("unexpected warning: %s", warn)
 	}
@@ -1986,7 +1986,7 @@ func TestAddEntryFromID_ArxivWithDOI_UsesCrossref(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	key, err := AddEntryFromID("2301.00001", dir)
+	key, _, err := AddEntryFromID("2301.00001", dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -2018,7 +2018,7 @@ func TestAddEntryFromID_ArxivWithDOI_DedupByDOI(t *testing.T) {
 		Type:   "article",
 		Fields: map[string]string{"doi": "10.1016/j.test.2023.1234"},
 	}}
-	saveCache(dir, c)
+	saveCache(dir, c, nil)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -2037,7 +2037,7 @@ func TestAddEntryFromID_ArxivWithDOI_DedupByDOI(t *testing.T) {
 	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
 	defer func() { httpClient = orig }()
 
-	key, err := AddEntryFromID("2301.00001", dir)
+	key, _, err := AddEntryFromID("2301.00001", dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -2060,7 +2060,7 @@ func TestAddEntryFromID_DOI_APIFailure(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	_, err := AddEntryFromID("10.1/fail", dir)
+	_, _, err := AddEntryFromID("10.1/fail", dir, nil)
 	if err == nil {
 		t.Fatal("expected error for API failure, got nil")
 	}

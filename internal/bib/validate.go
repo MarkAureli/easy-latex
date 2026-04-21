@@ -22,7 +22,8 @@ const Version = "0.1.0"
 //
 // Returns the number of newly added cache entries and a map of old→new key
 // renames for any entries whose canonical key differs from their original key.
-func AllocateCacheEntries(bibFiles []string, auxDir string) (int, map[string]string, error) {
+func AllocateCacheEntries(bibFiles []string, auxDir string, log Logger) (int, map[string]string, error) {
+	log = logOrNop(log)
 	if len(bibFiles) == 0 {
 		return 0, map[string]string{}, nil
 	}
@@ -43,7 +44,7 @@ func AllocateCacheEntries(bibFiles []string, auxDir string) (int, map[string]str
 	added := 0
 	allRenames := map[string]string{}
 	for _, path := range bibFiles {
-		n, renames, err := allocateBibFile(path, c, cachedDOIs, cachedArxivIDs)
+		n, renames, err := allocateBibFile(path, c, cachedDOIs, cachedArxivIDs, log)
 		if err != nil {
 			return added, allRenames, err
 		}
@@ -51,12 +52,12 @@ func AllocateCacheEntries(bibFiles []string, auxDir string) (int, map[string]str
 		maps.Copy(allRenames, renames)
 	}
 	if added > 0 {
-		saveCache(auxDir, c)
+		saveCache(auxDir, c, log)
 	}
 	return added, allRenames, nil
 }
 
-func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string]bool) (int, map[string]string, error) {
+func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string]bool, log Logger) (int, map[string]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0, nil, fmt.Errorf("cannot read %s: %w", path, err)
@@ -94,9 +95,9 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 			if cachedDOIs[strings.ToLower(doi)] {
 				continue
 			}
-			corrected, raw, source, warn := validateEntry(e, false)
+			corrected, raw, source, warn := validateEntry(e, false, log)
 			if warn != "" {
-				fmt.Printf("[bib] %s: %s\n", e.Key, warn)
+				log.Warn(e.Key, warn)
 			}
 			if corrected != nil {
 				items[i].Entry = *corrected
@@ -108,9 +109,9 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 			if cachedArxivIDs[strings.ToLower(arxivID)] {
 				continue
 			}
-			corrected, raw, source, warn := validateEntry(e, false)
+			corrected, raw, source, warn := validateEntry(e, false, log)
 			if warn != "" {
-				fmt.Printf("[bib] %s: %s\n", e.Key, warn)
+				log.Warn(e.Key, warn)
 			}
 			if corrected != nil {
 				items[i].Entry = *corrected
@@ -129,7 +130,7 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 				}
 			}
 			if warn := warnMissingFields(e); warn != "" {
-				fmt.Printf("[bib] %s: %s\n", e.Key, warn)
+				log.Warn(e.Key, warn)
 			}
 			fields := make(map[string]string, len(e.Fields))
 			for _, f := range e.Fields {
@@ -466,9 +467,10 @@ func ensureArticleOptionalFields(e *Entry) {
 // validateEntry looks up the entry via Crossref or arXiv and returns a
 // corrected entry (nil if nothing changed), the raw fields for caching, the
 // source used, and an optional warning.
-func validateEntry(e Entry, abbreviateJournals bool) (corrected *Entry, raw cacheEntry, source, warning string) {
+func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Entry, raw cacheEntry, source, warning string) {
+	log = logOrNop(log)
 	if doi := findDOI(e); doi != "" {
-		result, raw, crType, err := queryCrossref(e, doi)
+		result, raw, crType, err := queryCrossref(e, doi, log)
 		if err != nil {
 			return nil, cacheEntry{}, "", fmt.Sprintf("Crossref query failed: %v", err)
 		}
@@ -489,17 +491,17 @@ func validateEntry(e Entry, abbreviateJournals bool) (corrected *Entry, raw cach
 	}
 
 	if id := findArxivID(e); id != "" {
-		result, raw, doi, err := queryArxiv(e, id)
+		result, raw, doi, err := queryArxiv(e, id, log)
 		if err != nil {
 			return nil, cacheEntry{}, "", fmt.Sprintf("arXiv query failed: %v", err)
 		}
 		if doi != "" {
 			// arXiv entry has a DOI — use Crossref validation instead.
-			fmt.Printf("[bib] %s: arXiv entry has DOI %s, using Crossref\n", e.Key, doi)
-			crResult, crRaw, crType, crErr := queryCrossref(e, doi)
+			log.Info(e.Key, fmt.Sprintf("arXiv entry has DOI %s, using Crossref", doi))
+			crResult, crRaw, crType, crErr := queryCrossref(e, doi, log)
 			if crErr != nil {
 				// Crossref failed — fall back to arXiv result.
-				fmt.Printf("[bib] %s: Crossref query failed (%v), falling back to arXiv\n", e.Key, crErr)
+				log.Warn(e.Key, fmt.Sprintf("Crossref query failed (%v), falling back to arXiv", crErr))
 				return result, raw, "arxiv", ""
 			}
 			entryType := crType
@@ -607,20 +609,21 @@ func normalizeArxivID(s string) string {
 // AddEntryFromID fetches metadata for a DOI or arXiv ID and inserts the entry
 // into the bib cache at auxDir. Returns the canonical cite key on success.
 // Returns ErrUnrecognizedID if s is neither a DOI nor an arXiv identifier.
-// If the entry is already cached, its existing key is returned without error.
-func AddEntryFromID(id, auxDir string) (string, error) {
+// If the entry is already cached, its existing key is returned with isNew=false.
+func AddEntryFromID(id, auxDir string, log Logger) (key string, isNew bool, err error) {
+	log = logOrNop(log)
 	c := loadCache(auxDir)
 
 	if doi := normalizeDOI(id); doi != "" {
 		for key, entry := range c {
 			if strings.EqualFold(entry.Fields["doi"], doi) {
-				return key, nil
+				return key, false, nil
 			}
 		}
 		base := Entry{Type: "article", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
-		corrected, raw, crType, err := queryCrossref(base, doi)
+		corrected, raw, crType, err := queryCrossref(base, doi, log)
 		if err != nil {
-			return "", fmt.Errorf("Crossref query failed: %w", err)
+			return "", false, err
 		}
 		e := base
 		if corrected != nil {
@@ -633,14 +636,14 @@ func AddEntryFromID(id, auxDir string) (string, error) {
 		cEntry := buildCacheEntry(e, raw, "crossref", "")
 		key := disambiguateKey(GenerateKey(e), c)
 		c[key] = cEntry
-		saveCache(auxDir, c)
-		return key, nil
+		saveCache(auxDir, c, log)
+		return key, true, nil
 	}
 
 	if arxivID := normalizeArxivID(id); arxivID != "" {
 		for key, entry := range c {
 			if strings.EqualFold(entry.Fields["eprint"], arxivID) {
-				return key, nil
+				return key, false, nil
 			}
 		}
 		base := Entry{
@@ -651,20 +654,20 @@ func AddEntryFromID(id, auxDir string) (string, error) {
 				{Name: "archiveprefix", Value: "{arXiv}"},
 			},
 		}
-		corrected, raw, doi, err := queryArxiv(base, arxivID)
+		corrected, raw, doi, err := queryArxiv(base, arxivID, log)
 		if err != nil {
-			return "", fmt.Errorf("arXiv query failed: %w", err)
+			return "", false, err
 		}
 
 		if doi != "" {
 			// arXiv entry has a DOI — use Crossref instead.
 			for key, entry := range c {
 				if strings.EqualFold(entry.Fields["doi"], doi) {
-					return key, nil
+					return key, false, nil
 				}
 			}
 			crBase := Entry{Type: "article", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
-			crCorrected, crRaw, crType, crErr := queryCrossref(crBase, doi)
+			crCorrected, crRaw, crType, crErr := queryCrossref(crBase, doi, log)
 			if crErr == nil {
 				e := crBase
 				if crCorrected != nil {
@@ -677,11 +680,11 @@ func AddEntryFromID(id, auxDir string) (string, error) {
 				cEntry := buildCacheEntry(e, crRaw, "crossref", "")
 				key := disambiguateKey(GenerateKey(e), c)
 				c[key] = cEntry
-				saveCache(auxDir, c)
-				return key, nil
+				saveCache(auxDir, c, log)
+				return key, true, nil
 			}
 			// Crossref failed — fall back to arXiv result.
-			fmt.Printf("[bib] Crossref query failed for arXiv DOI %s (%v), falling back to arXiv\n", doi, crErr)
+			log.Warn("", fmt.Sprintf("Crossref failed for DOI %s (%v), falling back to arXiv", doi, crErr))
 		}
 
 		e := base
@@ -692,11 +695,11 @@ func AddEntryFromID(id, auxDir string) (string, error) {
 		cEntry := buildCacheEntry(e, raw, "arxiv", "")
 		key := disambiguateKey(GenerateKey(e), c)
 		c[key] = cEntry
-		saveCache(auxDir, c)
-		return key, nil
+		saveCache(auxDir, c, log)
+		return key, true, nil
 	}
 
-	return "", ErrUnrecognizedID
+	return "", false, ErrUnrecognizedID
 }
 
 // disambiguateKey returns key if it is not already in c, otherwise appends a

@@ -27,15 +27,23 @@ type arxivAuthor struct {
 	Name string `xml:"name"`
 }
 
-func queryArxiv(e Entry, id string) (*Entry, cacheEntry, string, error) {
-	resp, err := httpClient.Get("https://export.arxiv.org/api/query?id_list=" + url.QueryEscape(id))
+func queryArxiv(e Entry, id string, log Logger) (*Entry, cacheEntry, string, error) {
+	log = logOrNop(log)
+	log.Progress(e.Key, "fetching metadata from arXiv...")
+	apiURL := "https://export.arxiv.org/api/query?id_list=" + url.QueryEscape(id)
+	resp, err := doWithRetry(func() (*http.Response, error) {
+		return httpClient.Get(apiURL)
+	}, log, e.Key)
 	if err != nil {
-		return nil, cacheEntry{}, "", err
+		if isRetryableError(err) {
+			return nil, cacheEntry{}, "", fmt.Errorf("arXiv request timed out")
+		}
+		return nil, cacheEntry{}, "", fmt.Errorf("arXiv query failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, cacheEntry{}, "", fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, cacheEntry{}, "", friendlyHTTPError(resp.StatusCode, "arXiv")
 	}
 
 	body, err := io.ReadAll(resp.Body)

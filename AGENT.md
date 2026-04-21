@@ -9,8 +9,9 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 | `.el/` | Working directory: config, all pdflatex/bibtex/biber intermediates, bib cache |
 | `.el/config.json` | Config: main tex file, aux dir, bib paths, processing options |
 | `.el/bib.json` | Per-entry validation source cache |
-| `cmd/` | Cobra commands (`bibentry`, `compile`, `config`, `init`, `lsp`, `parsebib`) |
-| `internal/bib/` | Bib parsing, key gen, formatting, validation |
+| `cmd/` | Cobra commands (`bib`, `bibentry`, `compile`, `config`, `init`, `lsp`, `parsebib`) |
+| `internal/bib/` | Bib parsing, key gen, formatting, validation, Logger interface, retry logic |
+| `internal/term/` | Shared terminal detection (`IsTerminal`) + ANSI color codes (`Colors` struct, `Detect()`) |
 | `internal/texscan/` | Tex file scanner for bib declarations |
 | `internal/lsp/` | Minimal LSP server (JSON-RPC over stdio, cite-key completions) |
 
@@ -18,8 +19,17 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 
 Two-phase design: **cache allocation** and **bib generation from cache**.
 
-- `AllocateCacheEntries` — parses bib files, assigns canonical keys (`{LastName}{Year}{Title}`), validates unseen entries via Crossref (DOI) or arXiv (eprint), seeds `.el/bib.json`. Used by `el init`, `el parsebib`, and auto-triggered by `el compile` when `bibliography.bib` changes.
+- `AllocateCacheEntries(bibFiles, auxDir, log Logger)` — parses bib files, assigns canonical keys (`{LastName}{Year}{Title}`), validates unseen entries via Crossref (DOI) or arXiv (eprint), seeds `.el/bib.json`. Used by `el init`, `el parsebib`, and auto-triggered by `el compile` when `bibliography.bib` changes.
 - `WriteBibFromCache` — reconstructs entries from cache for cited keys only, applies config transforms (journal abbreviation, author formatting, brace titles, etc.), writes `bibliography.bib`. Called by `el compile` after pass 1.
+- `AddEntryFromID(id, auxDir, log Logger) (key, isNew, err)` — single-entry insertion from bare DOI/arXiv ID. Used by `el bib add`.
+
+### Logger architecture
+
+`bib.Logger` interface (`logger.go`): `Info`, `Warn`, `Progress` methods. All `[bib]` warnings go to stderr, info/success to stdout. Commands provide their own implementation (e.g. `cmd/biblog.go` — `bibLogger` with colored output via `internal/term`). `nopLogger` used when no output desired.
+
+### HTTP retry
+
+`doWithRetry` (`retry.go`): exponential backoff (1s/2s/4s, max 3 attempts), retries on 429/5xx/timeouts. `friendlyHTTPError` converts HTTP status codes to human-readable messages. Progress messages shown via Logger ("fetching metadata from Crossref/arXiv…").
 
 See `internal/bib/AGENT.md` for entry-type specs.
 
@@ -28,6 +38,7 @@ See `internal/bib/AGENT.md` for entry-type specs.
 | File | Scope |
 |---|---|
 | `cmd/root.agent.md` | Config struct (shared by commands) |
+| `cmd/bib.agent.md` | `el bib` command group (`list`, `add`) |
 | `cmd/compile.agent.md` | `el compile` pass sequence |
 | `cmd/config.agent.md` | `el config` flags |
 | `cmd/init.agent.md` | `el init` steps |

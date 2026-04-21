@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
+	"github.com/MarkAureli/easy-latex/internal/term"
 	"github.com/MarkAureli/easy-latex/internal/texscan"
 	"github.com/spf13/cobra"
 )
@@ -43,26 +44,7 @@ var warningPatterns = []*regexp.Regexp{
 
 var contextLinePattern = regexp.MustCompile(`^l\.\d+`)
 
-var (
-	colorReset  = "\033[0m"
-	colorRed    = "\033[31m"
-	colorYellow = "\033[33m"
-	colorBold   = "\033[1m"
-)
-
-func init() {
-	if !isTerminal() {
-		colorReset, colorRed, colorYellow, colorBold = "", "", "", ""
-	}
-}
-
-func isTerminal() bool {
-	fi, err := os.Stdout.Stat()
-	if err != nil {
-		return false
-	}
-	return fi.Mode()&os.ModeCharDevice != 0
-}
+var compileColors = term.Detect()
 
 func lineType(line string) string {
 	for _, pat := range errorPatterns {
@@ -98,12 +80,21 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	stem := filepath.Base(strings.TrimSuffix(cfg.Main, ".tex"))
 
+	log := newBibLogger()
+
 	// If bibliography.bib changed since the last compile or parsebib run,
 	// auto-allocate new cache entries and record any renames before compiling.
 	if ef := entriesBibFile(cfg.BibFiles); ef != "" && bib.BibFileChanged(ef, auxDir) {
-		_, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir)
+		log.Info("", "bibliography.bib changed, re-parsing...")
+		added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir, log)
 		if err != nil {
 			return err
+		}
+		for old, new := range renames {
+			log.Info("", fmt.Sprintf("key renamed: %s -> %s", old, new))
+		}
+		if added > 0 {
+			log.Info("", fmt.Sprintf("allocated %d new cache entries", added))
 		}
 		bib.SaveRenames(auxDir, renames)
 		bib.UpdateBibHash(ef, auxDir)
@@ -141,6 +132,10 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	// references in all .tex files and re-run pdflatex so the .aux/.bcf reflects
 	// the new keys before the bib tool.
 	if renames := bib.LoadRenames(auxDir); len(renames) > 0 {
+		log.Info("", "rewriting cite keys in .tex files")
+		for old, new := range renames {
+			log.Info("", fmt.Sprintf("  %s -> %s", old, new))
+		}
 		texFiles := texscan.FindTexFiles(cfg.Main, ".")
 		if err := rewriteCiteKeys(texFiles, renames); err != nil {
 			return err
@@ -290,21 +285,21 @@ func printLines(lines []string) {
 	typ := lineType(lines[0])
 
 	if typ == "error" {
-		fmt.Printf("%s%sError:%s\n", colorBold, colorRed, colorReset)
+		fmt.Printf("%s%sError:%s\n", compileColors.Bold, compileColors.Red, compileColors.Reset)
 	} else {
-		fmt.Printf("%s%sWarnings:%s\n", colorBold, colorYellow, colorReset)
+		fmt.Printf("%s%sWarnings:%s\n", compileColors.Bold, compileColors.Yellow, compileColors.Reset)
 	}
 
-	color := colorRed
+	color := compileColors.Red
 	if typ == "warning" {
-		color = colorYellow
+		color = compileColors.Yellow
 	}
 
 	for i, line := range lines {
 		if i > 0 && !isContextLine(line) {
 			fmt.Println()
 		}
-		fmt.Printf("  %s%s%s\n", color, line, colorReset)
+		fmt.Printf("  %s%s%s\n", color, line, compileColors.Reset)
 	}
 }
 

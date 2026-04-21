@@ -19,9 +19,13 @@ func runParsebib(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir)
+	log := newBibLogger()
+	added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir, log)
 	if err != nil {
 		return err
+	}
+	for old, new := range renames {
+		log.Info("", fmt.Sprintf("key renamed: %s -> %s", old, new))
 	}
 	bib.SaveRenames(auxDir, renames)
 	if ef := entriesBibFile(cfg.BibFiles); ef != "" {

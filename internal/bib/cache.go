@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -52,14 +53,15 @@ func loadCache(auxDir string) cache {
 	return c
 }
 
-func saveCache(auxDir string, c cache) {
+func saveCache(auxDir string, c cache, log Logger) {
+	log = logOrNop(log)
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[bib] warning: could not marshal cache: %v\n", err)
+		log.Warn("", fmt.Sprintf("could not marshal cache: %v", err))
 		return
 	}
 	if err := os.WriteFile(filepath.Join(auxDir, "bib.json"), data, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "[bib] warning: could not write %s: %v\n", filepath.Join(auxDir, "bib.json"), err)
+		log.Warn("", fmt.Sprintf("could not write %s: %v", filepath.Join(auxDir, "bib.json"), err))
 	}
 }
 
@@ -139,4 +141,33 @@ func LoadCacheKeys(auxDir string) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// CacheEntryInfo holds summary information about a cached bib entry.
+type CacheEntryInfo struct {
+	Key    string
+	Type   string
+	Source string
+	Title  string
+	Author string
+}
+
+// LoadCacheEntries returns summary information for all entries in the bib cache,
+// sorted by key.
+func LoadCacheEntries(auxDir string) []CacheEntryInfo {
+	c := loadCache(auxDir)
+	entries := make([]CacheEntryInfo, 0, len(c))
+	for key, e := range c {
+		entries = append(entries, CacheEntryInfo{
+			Key:    key,
+			Type:   e.Type,
+			Source: e.Source,
+			Title:  e.Fields["title"],
+			Author: e.Fields["author"],
+		})
+	}
+	slices.SortFunc(entries, func(a, b CacheEntryInfo) int {
+		return strings.Compare(a.Key, b.Key)
+	})
+	return entries
 }

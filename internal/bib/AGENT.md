@@ -6,16 +6,24 @@ Handle `.bib` file processing.
 
 Two-phase design: **cache allocation** (parse + validate) and **bib generation** (cache → file with config transforms).
 
-- `AllocateCacheEntries` (`validate.go`) — seeds `.el/bib.json` from bib files (used by `el init`, `el parsebib`, auto-triggered by `el compile` when `bibliography.bib` hash changes)
+- `AllocateCacheEntries(bibFiles, auxDir, log Logger)` (`validate.go`) — seeds `.el/bib.json` from bib files (used by `el init`, `el parsebib`, auto-triggered by `el compile` when `bibliography.bib` hash changes)
 - `WriteBibFromCache` (`validate.go`) — reconstructs entries from cache for cited keys, applies all config transforms via `WriteOptions` struct, writes `bibliography.bib` (used by `el compile` after pass 1)
 - Cache I/O in `cache.go`; Crossref HTTP in `crossref.go`; arXiv HTTP in `arxiv.go`
 - `Version` constant in `validate.go` (used by Crossref User-Agent and CLI `--version`)
 
+### Logger (`logger.go`)
+
+`Logger` interface: `Info(msg)`, `Warn(msg)`, `Progress(msg)`. Implementations: `nopLogger` (silent), `stderrLogger` (plain stderr). Commands provide colored loggers (see `cmd/biblog.go`). `logOrNop(log)` returns `nopLogger` if nil. All bib-internal functions accept `Logger` parameter for user-facing messages.
+
+### HTTP retry (`retry.go`)
+
+`doWithRetry(req, log) (*http.Response, error)` — exponential backoff (1s/2s/4s), max 3 attempts. Retries on: HTTP 429, 5xx (`retryableStatusCode`), timeouts/connection errors (`isRetryableError`). `friendlyHTTPError(status, url)` converts codes to human-readable messages ("not found in Crossref" instead of "HTTP 404"). Used by `queryCrossref` and `queryArxiv`.
+
 ## Single-entry insertion from ID (`validate.go`)
 
-Entry point: `AddEntryFromID(id, auxDir string) (key string, err error)`.
+Entry point: `AddEntryFromID(id, auxDir string, log Logger) (key string, isNew bool, err error)`.
 
-Adds one entry to cache from a raw DOI or arXiv identifier (no bib file needed).
+Adds one entry to cache from a raw DOI or arXiv identifier (no bib file needed). Returns `isNew=true` when entry was newly created, `false` when already cached (dedup hit).
 
 - `normalizeDOI(s)` — strips `doi.org/` prefixes, returns bare DOI if starts with `10.`, else `""`
 - `normalizeArxivID(s)` — matches `reArxivBare` (bare form) or `reArxivURL` (full URL), returns bare ID or `""`
@@ -26,7 +34,7 @@ Adds one entry to cache from a raw DOI or arXiv identifier (no bib file needed).
 
 ## Cache allocation (`validate.go`)
 
-Entry point: `AllocateCacheEntries(bibFiles, auxDir) (int, map[string]string, error)`.
+Entry point: `AllocateCacheEntries(bibFiles, auxDir, log Logger) (int, map[string]string, error)`.
 
 Returns count of newly cached entries and a renames map (old key → new canonical key). Parses each bib file and seeds `.el/bib.json` with any entries not yet cached. Parse-only: does NOT rewrite files or run full normalization pipeline. Used by `el init` and `el parsebib` to pre-populate cache without compile.
 
@@ -115,7 +123,9 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 | `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand` |
 | `author.go` | `formatAuthorField`, `formatSingleAuthor`, `abbreviateGivenNames`, `normalizeAllCapsName`, `initialOf`, `splitByAnd` |
 | `validate.go` | `Version`, `WriteOptions`, `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation |
-| `cache.go` | `loadCache`, `saveCache`, `LoadRenames`, `SaveRenames`, `ClearRenames`, `BibFileChanged`, `UpdateBibHash`, `LoadCacheKeys` |
+| `logger.go` | `Logger` interface, `nopLogger`, `logOrNop`, `stderrLogger` |
+| `retry.go` | `doWithRetry`, `friendlyHTTPError`, `retryableStatusCode`, `isRetryableError` |
+| `cache.go` | `loadCache`, `saveCache`, `LoadRenames`, `SaveRenames`, `ClearRenames`, `BibFileChanged`, `UpdateBibHash`, `LoadCacheKeys`, `LoadCacheEntries`, `CacheEntryInfo` |
 | `crossref.go` | `httpClient`, `queryCrossref`, `mapCrossrefType`, `containerTitleField`, `formatCrossrefAuthors` |
 | `arxiv.go` | `queryArxiv`, `formatArxivAuthors`, `reverseArxivName` |
 | `xmltitle.go` | `cleanCrossrefTitle`, MathML→LaTeX converter (`encoding/xml` Decoder), Crossref face markup→LaTeX, XML tag stripper |
