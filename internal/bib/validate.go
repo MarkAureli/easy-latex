@@ -521,20 +521,10 @@ func validateEntry(e Entry, abbreviateJournals bool) (corrected *Entry, raw cach
 		return result, raw, "arxiv", ""
 	}
 
-	if doiIsMandatory(e.Type) {
+	if spec, ok := entrySpecs[e.Type]; ok && slices.Contains(spec.mandatory, "doi") {
 		return nil, cacheEntry{}, "no-id", "no DOI or arXiv ID — skipping validation"
 	}
 	return nil, cacheEntry{}, "no-id", ""
-}
-
-// doiIsMandatory reports whether "doi" is listed as a mandatory field for the
-// given entry type.
-func doiIsMandatory(entryType string) bool {
-	spec, ok := entrySpecs[entryType]
-	if !ok {
-		return false
-	}
-	return slices.Contains(spec.mandatory, "doi")
 }
 
 func findDOI(e Entry) string {

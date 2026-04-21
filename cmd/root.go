@@ -105,6 +105,7 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(parsebibCmd)
 	rootCmd.AddCommand(bibentryCmd)
+	rootCmd.AddCommand(lspCmd)
 }
 
 // entriesBibFile returns the path of the entries bib file (bibliography.bib)

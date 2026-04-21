@@ -89,7 +89,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot create %s: %w", auxDir, err)
 	}
 
-	pdflatex, err := findPdflatex()
+	pdflatex, err := findTool("pdflatex")
 	if err != nil {
 		return err
 	}
@@ -388,10 +388,6 @@ func findTool(name string) (string, error) {
 		return fallback, nil
 	}
 	return "", fmt.Errorf("%s not found in PATH or %s. Install TeX Live or MacTeX", name, fallback)
-}
-
-func findPdflatex() (string, error) {
-	return findTool("pdflatex")
 }
 
 var (

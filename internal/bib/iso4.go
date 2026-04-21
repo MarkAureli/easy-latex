@@ -184,11 +184,10 @@ func abbreviateSingle(word string) string {
 	abbrev, found := lookupLTWA(lower)
 	if found {
 		// Mirror the capitalisation of the original word's first letter.
-		firstRune, size := utf8.DecodeRuneInString(word)
+		firstRune, _ := utf8.DecodeRuneInString(word)
 		if unicode.IsUpper(firstRune) {
 			abbrevRune, abbrevSize := utf8.DecodeRuneInString(abbrev)
 			abbrev = string(unicode.ToUpper(abbrevRune)) + abbrev[abbrevSize:]
-			_ = size
 		}
 		return abbrev
 	}

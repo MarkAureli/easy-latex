@@ -238,15 +238,10 @@ func updateGitExclude(dir string) error {
 		}
 	}
 
-	var toAdd []string
-	for _, entry := range []string{".el"} {
-		if !existing[entry] {
-			toAdd = append(toAdd, entry)
-		}
-	}
-	if len(toAdd) == 0 {
+	if existing[".el"] {
 		return nil
 	}
+	toAdd := []string{".el"}
 
 	if err := os.MkdirAll(filepath.Join(gitDir, "info"), 0755); err != nil {
 		return fmt.Errorf("cannot create .git/info: %w", err)

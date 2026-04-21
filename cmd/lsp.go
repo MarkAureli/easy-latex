@@ -15,7 +15,3 @@ var lspCmd = &cobra.Command{
 		return lsp.Serve(items, os.Stdin, os.Stdout)
 	},
 }
-
-func init() {
-	rootCmd.AddCommand(lspCmd)
-}

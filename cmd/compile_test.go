@@ -260,7 +260,7 @@ func TestRunPdflatex_ErrorSuppressesWarnings(t *testing.T) {
 	chdir(t, dir)
 	os.MkdirAll(auxDir, 0755)
 
-	pdflatex, err := findPdflatex()
+	pdflatex, err := findTool("pdflatex")
 	if err != nil {
 		t.Fatal(err)
 	}
