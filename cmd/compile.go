@@ -176,16 +176,19 @@ func runCompile(cmd *cobra.Command, args []string) error {
 			printLines(secondLines)
 			return err
 		}
-		// If labels shifted, a third pass is needed to stabilize cross-references
-		if needsRerun(secondLines) {
-			thirdLines, err := runPdflatex(pdflatex, cfg)
-			printLines(thirdLines)
+		// Additional passes to stabilize cross-references and citations
+		prev := secondLines
+		for range 2 {
+			if !needsRerun(prev) {
+				break
+			}
+			prev, err = runPdflatex(pdflatex, cfg)
 			if err != nil {
+				printLines(prev)
 				return err
 			}
-		} else {
-			printLines(secondLines)
 		}
+		printLines(prev)
 	} else {
 		printLines(firstLines)
 	}
