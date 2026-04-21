@@ -18,10 +18,11 @@ import (
 var openAfter bool
 
 var compileCmd = &cobra.Command{
-	Use:          "compile",
-	Short:        "Compile the LaTeX document",
-	SilenceUsage: true,
-	RunE:         runCompile,
+	Use:               "compile",
+	Short:             "Compile the LaTeX document",
+	SilenceUsage:      true,
+	RunE:              runCompile,
+	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
 func init() {

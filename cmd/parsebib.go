@@ -8,9 +8,10 @@ import (
 )
 
 var parsebibCmd = &cobra.Command{
-	Use:   "parsebib",
-	Short: "Allocate bib cache entries for all registered .bib files",
-	RunE:  runParsebib,
+	Use:               "parsebib",
+	Short:             "Allocate bib cache entries for all registered .bib files",
+	RunE:              runParsebib,
+	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
 func runParsebib(cmd *cobra.Command, args []string) error {

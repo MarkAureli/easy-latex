@@ -7,9 +7,10 @@ import (
 )
 
 var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Modify easy-latex configuration",
-	RunE:  runConfig,
+	Use:               "config",
+	Short:             "Modify easy-latex configuration",
+	RunE:              runConfig,
+	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
 var (

@@ -15,9 +15,10 @@ import (
 )
 
 var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize easy-latex in the current directory",
-	RunE:  runInit,
+	Use:               "init",
+	Short:             "Initialize easy-latex in the current directory",
+	RunE:              runInit,
+	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
 var flagInitIEEE bool
@@ -233,7 +234,7 @@ func updateGitExclude(dir string) error {
 	existing := map[string]bool{}
 	data, readErr := os.ReadFile(excludePath)
 	if readErr == nil {
-		for _, line := range strings.Split(string(data), "\n") {
+		for line := range strings.SplitSeq(string(data), "\n") {
 			existing[strings.TrimSpace(line)] = true
 		}
 	}

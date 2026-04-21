@@ -8,8 +8,9 @@ import (
 )
 
 var lspCmd = &cobra.Command{
-	Use:   "lsp",
-	Short: "Start LSP server (cite-key completions over stdio)",
+	Use:               "lsp",
+	Short:             "Start LSP server (cite-key completions over stdio)",
+	ValidArgsFunction: cobra.NoFileCompletions,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		items := lsp.BuildItems(auxDir)
 		return lsp.Serve(items, os.Stdin, os.Stdout)
