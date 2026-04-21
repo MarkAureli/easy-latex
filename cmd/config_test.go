@@ -333,3 +333,95 @@ func TestRunConfig_IEEEFormatOmittedFromFreshConfig(t *testing.T) {
 		t.Error("fresh config: ieeeFormat() = true, want false")
 	}
 }
+
+// ── abbreviateFirstName() helper ───────────────────────────────────────────────
+
+func TestAbbreviateFirstName_NilDefaultsTrue(t *testing.T) {
+	cfg := &Config{}
+	if !cfg.abbreviateFirstName() {
+		t.Error("expected true when AbbreviateFirstName is nil")
+	}
+}
+
+func TestAbbreviateFirstName_ExplicitTrue(t *testing.T) {
+	v := true
+	cfg := &Config{AbbreviateFirstName: &v}
+	if !cfg.abbreviateFirstName() {
+		t.Error("expected true when AbbreviateFirstName is &true")
+	}
+}
+
+func TestAbbreviateFirstName_ExplicitFalse(t *testing.T) {
+	v := false
+	cfg := &Config{AbbreviateFirstName: &v}
+	if cfg.abbreviateFirstName() {
+		t.Error("expected false when AbbreviateFirstName is &false")
+	}
+}
+
+// ── urlFromDOI() helper ────────────────────────────────────────────────────────
+
+func TestUrlFromDOI_NilDefaultsFalse(t *testing.T) {
+	cfg := &Config{}
+	if cfg.urlFromDOI() {
+		t.Error("expected false when UrlFromDOI is nil")
+	}
+}
+
+func TestUrlFromDOI_ExplicitTrue(t *testing.T) {
+	v := true
+	cfg := &Config{UrlFromDOI: &v}
+	if !cfg.urlFromDOI() {
+		t.Error("expected true when UrlFromDOI is &true")
+	}
+}
+
+func TestUrlFromDOI_ExplicitFalse(t *testing.T) {
+	v := false
+	cfg := &Config{UrlFromDOI: &v}
+	if cfg.urlFromDOI() {
+		t.Error("expected false when UrlFromDOI is &false")
+	}
+}
+
+// ── maxAuthors() helper ────────────────────────────────────────────────────────
+
+func TestMaxAuthors_NilDefaultsUnlimited(t *testing.T) {
+	cfg := &Config{}
+	if cfg.maxAuthors() != 0 {
+		t.Errorf("expected 0 (unlimited) when MaxAuthors is nil, got %d", cfg.maxAuthors())
+	}
+}
+
+func TestMaxAuthors_ExplicitValue(t *testing.T) {
+	v := 10
+	cfg := &Config{MaxAuthors: &v}
+	if cfg.maxAuthors() != 10 {
+		t.Errorf("expected 10, got %d", cfg.maxAuthors())
+	}
+}
+
+func TestMaxAuthors_ZeroValue(t *testing.T) {
+	v := 0
+	cfg := &Config{MaxAuthors: &v}
+	if cfg.maxAuthors() != 0 {
+		t.Errorf("expected 0 (unlimited), got %d", cfg.maxAuthors())
+	}
+}
+
+func TestMaxAuthors_IEEEImpliesFive(t *testing.T) {
+	trueVal := true
+	cfg := &Config{IEEEFormat: &trueVal, MaxAuthors: nil}
+	if cfg.maxAuthors() != 5 {
+		t.Errorf("expected 5 when IEEEFormat is true and MaxAuthors is nil, got %d", cfg.maxAuthors())
+	}
+}
+
+func TestMaxAuthors_ExplicitValueOverridesIEEE(t *testing.T) {
+	trueVal := true
+	v := 3
+	cfg := &Config{IEEEFormat: &trueVal, MaxAuthors: &v}
+	if cfg.maxAuthors() != 3 {
+		t.Errorf("expected 3 (explicit value overrides IEEE), got %d", cfg.maxAuthors())
+	}
+}

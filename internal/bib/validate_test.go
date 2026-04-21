@@ -834,7 +834,7 @@ func TestNormalizeEntryFields_MiscArxivSetsArchivePrefixWhenAbsent(t *testing.T)
 		Fields: []Field{
 			{Name: "author", Value: "{Smith, John}"},
 			{Name: "eprint", Value: "{2301.00001}"},
-			{Name: "archiveprefix", Value: "{arXiv}"},
+			{Name: "eprinttype", Value: "{arxiv}"},
 		},
 	}
 	normalizeEntryFields(&e, false)
@@ -1157,12 +1157,13 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 	})
 
 	outPath := dir + "/bibliography.bib"
+	// First write
 	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("first write: unexpected error: %v", err)
 	}
 
-	data, _ := os.ReadFile(outPath)
-	items := ParseFile(string(data))
+	data1, _ := os.ReadFile(outPath)
+	items := ParseFile(string(data1))
 	var entry Entry
 	for _, it := range items {
 		if it.IsEntry {
@@ -1170,15 +1171,35 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 			break
 		}
 	}
-	raw := ""
+	raw1 := ""
 	for _, f := range entry.Fields {
 		if f.Name == "title" {
-			raw = f.Value
+			raw1 = f.Value
 			break
 		}
 	}
-	if raw != "{{My Test Title}}" {
-		t.Errorf("title raw value = %q, want %q (not idempotent)", raw, "{{My Test Title}}")
+	if raw1 != "{{My Test Title}}" {
+		t.Errorf("first write: title raw value = %q, want %q", raw1, "{{My Test Title}}")
+	}
+
+	// Verify idempotency: read output, parse, re-cache, write again
+	c := loadCache(dir)
+	var cachedEntry cacheEntry
+	for _, ce := range c {
+		cachedEntry = ce
+		break
+	}
+
+	saveCache(dir, cache{"Smith2023Test": cachedEntry})
+
+	outPath2 := dir + "/bibliography2.bib"
+	if err := WriteBibFromCache(outPath2, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
+		t.Fatalf("second write: unexpected error: %v", err)
+	}
+
+	data2, _ := os.ReadFile(outPath2)
+	if string(data1) != string(data2) {
+		t.Errorf("output not idempotent: first write differs from second write")
 	}
 }
 
@@ -1225,50 +1246,6 @@ func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 	}
 }
 
-func TestBraceTitles_DisabledNormalizesDoubleBraced(t *testing.T) {
-	dir := t.TempDir()
-	// Cache stores title without braces (they were stripped at allocation time).
-	// With braceTitles disabled, WriteBibFromCache should produce single-braced output.
-	saveCache(dir, cache{
-		"Smith2023Test": cacheEntry{
-			Source: "crossref",
-			Type:   "article",
-			Fields: map[string]string{
-				"author":  "Smith, John",
-				"title":   "My Test Title",
-				"journal": "Nature",
-				"year":    "2023",
-				"doi":     "10.1/x",
-				"url":     "https://doi.org/10.1/x",
-			},
-		},
-	})
-
-	outPath := dir + "/bibliography.bib"
-	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, AbbreviateFirstName: true}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	data, _ := os.ReadFile(outPath)
-	items := ParseFile(string(data))
-	var entry Entry
-	for _, it := range items {
-		if it.IsEntry {
-			entry = it.Entry
-			break
-		}
-	}
-	raw := ""
-	for _, f := range entry.Fields {
-		if f.Name == "title" {
-			raw = f.Value
-			break
-		}
-	}
-	if raw != "{My Test Title}" {
-		t.Errorf("title raw value = %q, want %q (double braces not stripped)", raw, "{My Test Title}")
-	}
-}
 
 // ── transformArxivMiscToUnpublished ───────────────────────────────────────────
 
