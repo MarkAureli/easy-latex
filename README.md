@@ -202,6 +202,30 @@ export PATH="$HOME/go/bin:$PATH"
 
 On macOS, TeX Live installs its binaries to `/Library/TeX/texbin/`; on Linux, to `/usr/local/texlive/<year>/bin/<arch>/`. `el` checks these locations automatically as a fallback for `pdflatex`, `bibtex`, and `biber`, so it works even if you haven't added them to your `$PATH`.
 
+## Shell completion
+
+`el` supports tab-completion for all commands and flags. Add one of the following to your shell config:
+
+**Zsh** (`~/.zshrc`):
+
+```zsh
+source <(el completion zsh)
+```
+
+**Bash** (`~/.bashrc`):
+
+```bash
+source <(el completion bash)
+```
+
+**Fish** (`~/.config/fish/config.fish`):
+
+```fish
+el completion fish | source
+```
+
+Restart your shell or source the config file, then `el <TAB>` will complete commands and flags.
+
 ## What `el` adds to your project
 
 Running `el init` and `el compile` in a LaTeX project creates the following:
