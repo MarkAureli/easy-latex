@@ -2,12 +2,14 @@
 
 Handle `.bib` file processing.
 
-## Architecture (`validate.go`)
+## Architecture
 
 Two-phase design: **cache allocation** (parse + validate) and **bib generation** (cache → file with config transforms).
 
-- `AllocateCacheEntries` — seeds `.el/bib.json` from bib files (used by `el init`, `el parsebib`, auto-triggered by `el compile` when `bibliography.bib` hash changes)
-- `WriteBibFromCache` — reconstructs entries from cache for cited keys, applies all config transforms, writes `bibliography.bib` (used by `el compile` after pass 1)
+- `AllocateCacheEntries` (`validate.go`) — seeds `.el/bib.json` from bib files (used by `el init`, `el parsebib`, auto-triggered by `el compile` when `bibliography.bib` hash changes)
+- `WriteBibFromCache` (`validate.go`) — reconstructs entries from cache for cited keys, applies all config transforms via `WriteOptions` struct, writes `bibliography.bib` (used by `el compile` after pass 1)
+- Cache I/O in `cache.go`; Crossref HTTP in `crossref.go`; arXiv HTTP in `arxiv.go`
+- `Version` constant in `validate.go` (used by Crossref User-Agent and CLI `--version`)
 
 ## Single-entry insertion from ID (`validate.go`)
 
@@ -112,7 +114,10 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 | `key.go` | `GenerateKey`, `assignCanonicalKeys`, `latexToASCII`, accent maps |
 | `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand` |
 | `author.go` | `formatAuthorField`, `formatSingleAuthor`, `abbreviateGivenNames`, `normalizeAllCapsName`, `initialOf`, `splitByAnd` |
-| `validate.go` | `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation, Crossref/arXiv queries |
+| `validate.go` | `Version`, `WriteOptions`, `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation |
+| `cache.go` | `loadCache`, `saveCache`, `LoadRenames`, `SaveRenames`, `ClearRenames`, `BibFileChanged`, `UpdateBibHash`, `LoadCacheKeys` |
+| `crossref.go` | `httpClient`, `queryCrossref`, `mapCrossrefType`, `containerTitleField`, `formatCrossrefAuthors` |
+| `arxiv.go` | `queryArxiv`, `formatArxivAuthors`, `reverseArxivName` |
 | `xmltitle.go` | `cleanCrossrefTitle`, MathML→LaTeX converter (`encoding/xml` Decoder), Crossref face markup→LaTeX, XML tag stripper |
 | `iso4.go` | `AbbreviateISO4`, LTWA loader, prefix matcher, stop word list |
 | `ltwa.tsv` | Embedded LTWA data (tab-separated: WORD, ABBREVIATION, LANGUAGES) |

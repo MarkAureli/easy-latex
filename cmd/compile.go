@@ -153,7 +153,14 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	if ef := entriesBibFile(cfg.BibFiles); ef != "" {
 		citeKeys := citedKeysFromArtifacts(stem, auxDir)
 		if len(citeKeys) > 0 {
-			if err := bib.WriteBibFromCache(ef, citeKeys, auxDir, cfg.abbreviateJournals(), cfg.braceTitles(), cfg.ieeeFormat(), cfg.maxAuthors(), cfg.abbreviateFirstName(), cfg.urlFromDOI()); err != nil {
+			if err := bib.WriteBibFromCache(ef, citeKeys, auxDir, bib.WriteOptions{
+				AbbreviateJournals:  cfg.abbreviateJournals(),
+				BraceTitles:         cfg.braceTitles(),
+				IEEEFormat:          cfg.ieeeFormat(),
+				MaxAuthors:          cfg.maxAuthors(),
+				AbbreviateFirstName: cfg.abbreviateFirstName(),
+				UrlFromDOI:          cfg.urlFromDOI(),
+			}); err != nil {
 				return err
 			}
 			bib.UpdateBibHash(ef, auxDir)

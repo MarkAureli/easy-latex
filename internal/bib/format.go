@@ -22,9 +22,6 @@ var canonicalOrder = map[string][]string{
 	"inproceedings": {
 		"author", "year", "title", "booktitle", "pages", "doi", "url",
 	},
-	"conference": {
-		"author", "year", "title", "booktitle", "pages", "doi", "url",
-	},
 	"phdthesis": {
 		"author", "year", "title", "school", "doi", "url",
 	},
@@ -40,6 +37,10 @@ var canonicalOrder = map[string][]string{
 	"unpublished": {
 		"author", "year", "title", "doi", "url", "note",
 	},
+}
+
+func init() {
+	canonicalOrder["conference"] = canonicalOrder["inproceedings"]
 }
 
 // RenderEntries formats a slice of entries into .bib file content,

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/MarkAureli/easy-latex/internal/bib"
 	"github.com/spf13/cobra"
 )
 
@@ -89,7 +90,7 @@ func saveConfig(cfg *Config) error {
 var rootCmd = &cobra.Command{
 	Use:     "el",
 	Short:   "easy-latex: simple LaTeX compilation",
-	Version: "0.1.0",
+	Version: bib.Version,
 }
 
 func Execute() {
