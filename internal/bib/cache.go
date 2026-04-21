@@ -53,8 +53,14 @@ func loadCache(auxDir string) cache {
 }
 
 func saveCache(auxDir string, c cache) {
-	data, _ := json.MarshalIndent(c, "", "  ")
-	_ = os.WriteFile(filepath.Join(auxDir, "bib.json"), data, 0644)
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[bib] warning: could not marshal cache: %v\n", err)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(auxDir, "bib.json"), data, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "[bib] warning: could not write %s: %v\n", filepath.Join(auxDir, "bib.json"), err)
+	}
 }
 
 // LoadRenames reads .el/renames.json and returns the old→new key map.
@@ -78,8 +84,14 @@ func SaveRenames(auxDir string, renames map[string]string) {
 	}
 	existing := LoadRenames(auxDir)
 	maps.Copy(existing, renames)
-	data, _ := json.MarshalIndent(existing, "", "  ")
-	_ = os.WriteFile(filepath.Join(auxDir, "renames.json"), data, 0644)
+	data, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[bib] warning: could not marshal renames: %v\n", err)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(auxDir, "renames.json"), data, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "[bib] warning: could not write %s: %v\n", filepath.Join(auxDir, "renames.json"), err)
+	}
 }
 
 // ClearRenames removes .el/renames.json.
@@ -106,7 +118,9 @@ func UpdateBibHash(bibPath, auxDir string) {
 		return
 	}
 	sum := sha256.Sum256(data)
-	_ = os.WriteFile(filepath.Join(auxDir, "bib_hash"), fmt.Appendf(nil, "%x", sum), 0644)
+	if err := os.WriteFile(filepath.Join(auxDir, "bib_hash"), fmt.Appendf(nil, "%x", sum), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "[bib] warning: could not write %s: %v\n", filepath.Join(auxDir, "bib_hash"), err)
+	}
 }
 
 func loadBibHash(auxDir string) string {
