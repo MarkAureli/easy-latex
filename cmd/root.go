@@ -106,10 +106,6 @@ func init() {
 	rootCmd.AddCommand(parsebibCmd)
 	rootCmd.AddCommand(bibCmd)
 	rootCmd.AddCommand(lspCmd)
-
-	// Keep el bibentry as hidden alias for backward compat.
-	bibentryCmd.Hidden = true
-	rootCmd.AddCommand(bibentryCmd)
 }
 
 // entriesBibFile returns the path of the entries bib file (bibliography.bib)

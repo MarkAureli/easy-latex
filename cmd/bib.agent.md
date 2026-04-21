@@ -20,5 +20,4 @@ Uses `bibLogger` (`cmd/biblog.go`) for colored output. No config load required.
 
 ## Related
 
-- `cmd/bibentry.go` — hidden alias, delegates to `runBibAdd`
 - `cmd/biblog.go` — `bibLogger` implements `bib.Logger` with colored output via `internal/term`

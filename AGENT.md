@@ -9,7 +9,7 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 | `.el/` | Working directory: config, all pdflatex/bibtex/biber intermediates, bib cache |
 | `.el/config.json` | Config: main tex file, aux dir, bib paths, processing options |
 | `.el/bib.json` | Per-entry validation source cache |
-| `cmd/` | Cobra commands (`bib`, `bibentry`, `compile`, `config`, `init`, `lsp`, `parsebib`) |
+| `cmd/` | Cobra commands (`bib`, `compile`, `config`, `init`, `lsp`, `parsebib`) |
 | `internal/bib/` | Bib parsing, key gen, formatting, validation, Logger interface, retry logic |
 | `internal/term/` | Shared terminal detection (`IsTerminal`) + ANSI color codes (`Colors` struct, `Detect()`) |
 | `internal/texscan/` | Tex file scanner for bib declarations |
@@ -42,7 +42,6 @@ See `internal/bib/AGENT.md` for entry-type specs.
 | `cmd/compile.agent.md` | `el compile` pass sequence |
 | `cmd/config.agent.md` | `el config` flags |
 | `cmd/init.agent.md` | `el init` steps |
-| `cmd/bibentry.agent.md` | `el bibentry` ID handling |
 | `cmd/parsebib.agent.md` | `el parsebib` cache allocation |
 | `cmd/lsp.agent.md` | `el lsp` (thin, see below) |
 | `internal/bib/AGENT.md` | Bib pipeline, entry types, validation, ISO 4 |

@@ -189,8 +189,6 @@ Network requests retry automatically on transient failures (rate limits, server 
 
 The entry will appear in `bibliography.bib` on the next `el compile` when cited.
 
-`el bibentry` is kept as a hidden alias for backward compatibility.
-
 #### `el bib list`
 
 Show all entries in the bib cache as a table.
