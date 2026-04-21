@@ -200,7 +200,7 @@ export PATH="$HOME/go/bin:$PATH"
 
 ### TeX tools not in PATH?
 
-On macOS, TeX Live installs its binaries to `/Library/TeX/texbin/`. `el` checks this location automatically as a fallback for `pdflatex`, `bibtex`, and `biber`, so it works even if you haven't added it to your `$PATH`.
+On macOS, TeX Live installs its binaries to `/Library/TeX/texbin/`; on Linux, to `/usr/local/texlive/<year>/bin/<arch>/`. `el` checks these locations automatically as a fallback for `pdflatex`, `bibtex`, and `biber`, so it works even if you haven't added them to your `$PATH`.
 
 ## What `el` adds to your project
 
