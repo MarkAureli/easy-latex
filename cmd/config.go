@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -46,7 +49,12 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	urlFromDOIChanged := cmd.Flags().Changed("url-from-doi")
 
 	if !abbrevChanged && !braceChanged && !ieeeChanged && !maxAuthorsChanged && !abbrevFirstChanged && !urlFromDOIChanged {
-		return fmt.Errorf("no options specified. Use --abbreviate-journals=<true|false>, --brace-titles=<true|false>, --ieee-format=<true|false>, --max-authors=<N>, --abbreviate-first-name=<true|false>, or --url-from-doi=<true|false>")
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
+		displayConfig(cfg)
+		return nil
 	}
 
 	cfg, err := loadConfig()
@@ -119,4 +127,43 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	}
 
 	return saveConfig(cfg)
+}
+
+func displayConfig(cfg *Config) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "SETTING\tVALUE\tSOURCE")
+
+	row := func(name, value, source string) {
+		fmt.Fprintf(w, "%s\t%s\t%s\n", name, value, source)
+	}
+
+	source := func(isNil bool) string {
+		if isNil {
+			return "(default)"
+		}
+		return "(set)"
+	}
+
+	row("abbreviate-journals", strconv.FormatBool(cfg.abbreviateJournals()), source(cfg.AbbreviateJournals == nil))
+	row("abbreviate-first-name", strconv.FormatBool(cfg.abbreviateFirstName()), source(cfg.AbbreviateFirstName == nil))
+	row("brace-titles", strconv.FormatBool(cfg.braceTitles()), source(cfg.BraceTitles == nil))
+	row("ieee-format", strconv.FormatBool(cfg.ieeeFormat()), source(cfg.IEEEFormat == nil))
+
+	// max-authors: special display for 0 (unlimited) and ieee default
+	maxVal := cfg.maxAuthors()
+	var maxStr string
+	if maxVal == 0 {
+		maxStr = "0 (unlimited)"
+	} else {
+		maxStr = strconv.Itoa(maxVal)
+	}
+	maxSource := source(cfg.MaxAuthors == nil)
+	if cfg.MaxAuthors == nil && cfg.ieeeFormat() {
+		maxSource = "(ieee default)"
+	}
+	row("max-authors", maxStr, maxSource)
+
+	row("url-from-doi", strconv.FormatBool(cfg.urlFromDOI()), source(cfg.UrlFromDOI == nil))
+
+	w.Flush()
 }

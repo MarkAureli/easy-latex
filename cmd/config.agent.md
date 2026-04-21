@@ -1,6 +1,12 @@
 # el config (`config.go`)
 
-Flags (all optional; error if none given):
+## Display mode (no flags)
+
+`el config` with no flags displays all settings in a table: name, effective value, source (`(default)`, `(set)`, or `(ieee default)`). Uses `text/tabwriter`. `displayConfig(cfg *Config)` handles rendering.
+
+## Setter mode (flags)
+
+Flags (all optional):
 
 | Flag | Type | Default |
 |---|---|---|

@@ -134,7 +134,7 @@ Corrections are reported on the terminal:
 
 ### `el config`
 
-View or update processing options stored in `.el/config.json`. All flags are optional; at least one must be given.
+View or update processing options stored in `.el/config.json`. Run without flags to display current settings.
 
 | Flag | Type | Default | Effect |
 |---|---|---|---|
@@ -146,6 +146,15 @@ View or update processing options stored in `.el/config.json`. All flags are opt
 | `--url-from-doi` | bool | false | Replace `url` field with `https://doi.org/<doi>` when DOI is present |
 
 ```
+$ el config
+SETTING                VALUE          SOURCE
+abbreviate-journals    true           (default)
+abbreviate-first-name  true           (default)
+brace-titles           false          (default)
+ieee-format            false          (default)
+max-authors            0 (unlimited)  (default)
+url-from-doi           false          (default)
+
 $ el config --ieee-format=true
 $ el config --max-authors=3
 ```

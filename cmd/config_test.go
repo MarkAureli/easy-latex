@@ -72,8 +72,8 @@ func TestRunConfig_NoFlags(t *testing.T) {
 	writeConfig(t, dir, "main.tex")
 	chdir(t, dir)
 
-	if err := invokeConfig(t, nil); err == nil {
-		t.Fatal("expected error when no flags passed, got nil")
+	if err := invokeConfig(t, nil); err != nil {
+		t.Fatalf("expected no error when displaying config, got: %v", err)
 	}
 }
 
