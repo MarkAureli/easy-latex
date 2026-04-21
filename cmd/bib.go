@@ -46,8 +46,9 @@ func runBibList(cmd *cobra.Command, args []string) error {
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
 	fmt.Fprintf(w, "%sKEY\tTYPE\tSOURCE\tTITLE%s\n", colors.Bold, colors.Reset)
 	for _, e := range entries {
+		key := truncate(e.Key, 30)
 		title := truncate(e.Title, 50)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", e.Key, e.Type, e.Source, title)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", key, e.Type, e.Source, title)
 	}
 	w.Flush()
 	fmt.Printf("\n%d entries in bib cache.\n", len(entries))
