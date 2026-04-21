@@ -244,18 +244,22 @@ func filterLines(output []byte) []string {
 			}
 			continue
 		}
+		matched := false
 		for _, pat := range errorPatterns {
 			if pat.MatchString(line) {
 				errors = append(errors, line)
 				lastKind = "error"
+				matched = true
 				break
 			}
 		}
-		for _, pat := range warningPatterns {
-			if pat.MatchString(line) {
-				warnings = append(warnings, line)
-				lastKind = "warning"
-				break
+		if !matched {
+			for _, pat := range warningPatterns {
+				if pat.MatchString(line) {
+					warnings = append(warnings, line)
+					lastKind = "warning"
+					break
+				}
 			}
 		}
 	}
