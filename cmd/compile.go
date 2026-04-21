@@ -169,6 +169,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		if err := runBibTool(bibTool, stem, auxDir); err != nil {
 			return err
 		}
+		fixBblBurl(filepath.Join(auxDir, stem+".bbl"))
 		// Second pdflatex pass to incorporate bibliography
 		secondLines, err := runPdflatex(pdflatex, cfg)
 		if err != nil {
@@ -344,6 +345,24 @@ func runBibTool(tool, stem, auxDir string) error {
 		return fmt.Errorf("%s failed", tool)
 	}
 	return nil
+}
+
+// fixBblBurl patches a .bbl file so the fallback \burl definition uses \url
+// instead of \textsf.  \textsf does not handle special URL characters (_#%…),
+// causing "Missing $ inserted" errors.
+func fixBblBurl(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	const old = `\def \burl#1{\textsf{#1}}`
+	const new_ = `\def \burl#1{\url{#1}}`
+	s := string(data)
+	if !strings.Contains(s, old) {
+		return
+	}
+	s = strings.Replace(s, old, new_, 1)
+	os.WriteFile(path, []byte(s), 0644) //nolint:errcheck
 }
 
 func findTool(name string) (string, error) {
