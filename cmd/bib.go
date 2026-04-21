@@ -6,7 +6,6 @@ import (
 	"text/tabwriter"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
-	"github.com/MarkAureli/easy-latex/internal/term"
 	"github.com/spf13/cobra"
 )
 
@@ -42,13 +41,11 @@ func runBibList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	colors := term.Detect()
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
-	fmt.Fprintf(w, "%sKEY\tTYPE\tSOURCE\tTITLE%s\n", colors.Bold, colors.Reset)
+	fmt.Fprintf(w, "KEY\tTYPE\tSOURCE\n")
 	for _, e := range entries {
 		key := truncate(e.Key, 30)
-		title := truncate(e.Title, 50)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", key, e.Type, e.Source, title)
+		fmt.Fprintf(w, "%s\t%s\t%s\n", key, e.Type, e.Source)
 	}
 	w.Flush()
 	fmt.Printf("\n%d entries in bib cache.\n", len(entries))
