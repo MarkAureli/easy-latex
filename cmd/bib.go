@@ -6,6 +6,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
+	"github.com/MarkAureli/easy-latex/internal/term"
 	"github.com/spf13/cobra"
 )
 
@@ -41,10 +42,16 @@ func runBibList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	typeW, srcW := len("TYPE"), len("SOURCE")
+	for _, e := range entries {
+		typeW = max(typeW, len(e.Type))
+		srcW = max(srcW, len(e.Source))
+	}
+	keyMax := max(15, term.Width()-typeW-srcW-4) // 4 = 2 padding per column gap
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
 	fmt.Fprintf(w, "KEY\tTYPE\tSOURCE\n")
 	for _, e := range entries {
-		key := truncate(e.Key, 30)
+		key := truncate(e.Key, keyMax)
 		fmt.Fprintf(w, "%s\t%s\t%s\n", key, e.Type, e.Source)
 	}
 	w.Flush()

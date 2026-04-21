@@ -1,6 +1,10 @@
 package term
 
-import "os"
+import (
+	"os"
+
+	xterm "golang.org/x/term"
+)
 
 // Colors holds ANSI escape sequences, empty when not a terminal.
 type Colors struct {
@@ -26,6 +30,15 @@ func Detect() Colors {
 		Bold:   "\033[1m",
 		Dim:    "\033[2m",
 	}
+}
+
+// Width returns the terminal column count, or 80 if detection fails.
+func Width() int {
+	w, _, err := xterm.GetSize(int(os.Stdout.Fd()))
+	if err != nil || w <= 0 {
+		return 80
+	}
+	return w
 }
 
 // IsTerminal reports whether stdout is a terminal.
