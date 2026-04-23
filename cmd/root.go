@@ -95,9 +95,10 @@ func saveConfig(cfg *Config) error {
 }
 
 var rootCmd = &cobra.Command{
-	Use:     "el",
-	Short:   "easy-latex: simple LaTeX compilation",
-	Version: bib.Version,
+	Use:          "el",
+	Short:        "easy-latex: simple LaTeX compilation",
+	Version:      bib.Version,
+	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip project check for init (and help/version, handled by cobra).
 		if cmd.Name() == "init" {
