@@ -222,13 +222,42 @@ func filterPreambleText(raw string) string {
 
 // updateGitExclude appends .el to .git/info/exclude if a
 // .git directory is present and the entry is not already listed.
+// findGitRoot walks from dir up to the filesystem root looking for a .git
+// directory. Returns the git root path or "" if none found.
+func findGitRoot(dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return ""
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(abs, ".git")); err == nil {
+			return abs
+		}
+		parent := filepath.Dir(abs)
+		if parent == abs {
+			return ""
+		}
+		abs = parent
+	}
+}
+
 func updateGitExclude(dir string) error {
-	gitDir := filepath.Join(dir, ".git")
-	if _, err := os.Stat(gitDir); err != nil {
-		return nil // not a git repo, nothing to do
+	gitRoot := findGitRoot(dir)
+	if gitRoot == "" {
+		return nil // not inside a git repo, nothing to do
 	}
 
-	excludePath := filepath.Join(gitDir, "info", "exclude")
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+
+	entry := ".el"
+	if rel, err := filepath.Rel(gitRoot, absDir); err == nil && rel != "." {
+		entry = filepath.Join(rel, ".el")
+	}
+
+	excludePath := filepath.Join(gitRoot, ".git", "info", "exclude")
 
 	// Read existing entries to avoid duplicates
 	existing := map[string]bool{}
@@ -239,12 +268,12 @@ func updateGitExclude(dir string) error {
 		}
 	}
 
-	if existing[".el"] {
+	if existing[entry] {
 		return nil
 	}
-	toAdd := []string{".el"}
+	toAdd := []string{entry}
 
-	if err := os.MkdirAll(filepath.Join(gitDir, "info"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(gitRoot, ".git", "info"), 0755); err != nil {
 		return fmt.Errorf("cannot create .git/info: %w", err)
 	}
 

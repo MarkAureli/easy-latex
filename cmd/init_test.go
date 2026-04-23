@@ -242,6 +242,26 @@ func TestUpdateGitExclude_NoTrailingNewlineHandled(t *testing.T) {
 	}
 }
 
+func TestUpdateGitExclude_GitInParentDir(t *testing.T) {
+	root := t.TempDir()
+	gitDir := makeGitRepo(t, root)
+
+	sub := filepath.Join(root, "sub", "proj")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	if err := updateGitExclude(sub); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	content := readExclude(t, gitDir)
+	want := filepath.Join("sub", "proj", ".el")
+	if !strings.Contains(content, want) {
+		t.Errorf("exclude missing %q, got:\n%s", want, content)
+	}
+}
+
 func TestDoInit_UpdatesGitExclude(t *testing.T) {
 	dir := t.TempDir()
 	gitDir := makeGitRepo(t, dir)
