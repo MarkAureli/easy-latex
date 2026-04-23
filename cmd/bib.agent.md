@@ -6,7 +6,13 @@ Command group for bibliography management.
 
 ### `el bib list`
 
-Lists all cached bib entries from `.el/bib.json`. Uses `bib.LoadCacheEntries(auxDir)` returning `[]CacheEntryInfo`. Displays truncated table: key, type, author, title. Helper funcs `truncate`, `truncateAuthor` for column width.
+Lists cached bib entries from `.el/bib.json`. Uses `bib.LoadCacheEntries(auxDir)` returning `[]CacheEntryInfo`. Displays truncated table: key, type, source. Helper funcs `truncate`, `truncateAuthor` for column width.
+
+When config exists with `main` tex file, scans for `\cite{}` keys via `texscan.FindCiteKeys` and groups output into "Referenced" and "Unreferenced" sections. Falls back to flat list when config unavailable.
+
+Flags:
+- `--cited` — show only entries referenced in `.tex` files
+- `--uncited` — show only entries not referenced in `.tex` files
 
 ### `el bib parse`
 
