@@ -223,13 +223,6 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		texFiles := texscan.FindTexFiles(cfg.Main, ".")
 		diags := pedantic.RunSourceChecks(cfg.Pedantic, texFiles)
 
-		synctexPath := filepath.Join(auxDir, stem+".synctex.gz")
-		postDiags, err := pedantic.RunPostCompileChecks(cfg.Pedantic, synctexPath, texFiles)
-		if err != nil {
-			return err
-		}
-		diags = append(diags, postDiags...)
-
 		if len(diags) > 0 {
 			fmt.Fprintf(os.Stderr, "%s%sPedantic:%s\n", compileColors.Bold, compileColors.Red, compileColors.Reset)
 			for _, d := range diags {

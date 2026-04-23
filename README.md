@@ -178,7 +178,6 @@ Enable pedantic checks to enforce style rules during compilation. Violations are
 
 ```
 $ el config set pedantic no-block-citations    # append a check
-$ el config set pedantic no-math-linebreak     # append another
 $ el config unset pedantic no-block-citations  # remove a specific check
 $ el config unset pedantic                     # clear all checks
 ```
@@ -186,7 +185,6 @@ $ el config unset pedantic                     # clear all checks
 | Check | What it flags |
 |---|---|
 | `no-block-citations` | Multi-key citations (`\cite{a,b}`) or adjacent cite commands (`\cite{a}\cite{b}`, `\cite{a}~\cite{b}`) |
-| `no-math-linebreak` | Inline math (`$...$` or `\(...\)`) that spans multiple lines in the compiled PDF |
 
 ### `el bib`
 

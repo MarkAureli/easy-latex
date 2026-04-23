@@ -17,7 +17,7 @@ Config struct + load/save/merge. Shared by all commands that load config.
 | `abbreviate_first_name` | *bool | true | Abbreviate first/middle names to initials |
 | `url_from_doi` | *bool | false | Replace url field with `https://doi.org/<doi>` when doi non-empty |
 | `retry_timeout` | *bool | true | Re-validate entries that previously timed out during validation |
-| `pedantic` | []string | nil | Enabled pedantic check names (e.g. `no-block-citations`, `no-math-linebreak`) |
+| `pedantic` | []string | nil | Enabled pedantic check names (e.g. `no-block-citations`) |
 
 Nil pointer = use default. Accessor methods on `*Config` encode defaults.
 

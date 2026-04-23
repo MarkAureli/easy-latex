@@ -25,22 +25,17 @@ func (d Diagnostic) String() string {
 type Phase int
 
 const (
-	PhaseSource      Phase = iota // runs on tex source
-	PhasePostCompile              // runs after compile, needs synctex
+	PhaseSource Phase = iota // runs on tex source
 )
 
 // SourceCheckFunc checks source lines (comment-stripped) for a single file.
 type SourceCheckFunc func(path string, lines []string) []Diagnostic
-
-// PostCompileCheckFunc checks compiled output using synctex data.
-type PostCompileCheckFunc func(stx *SynctexData, sources map[string][]string) []Diagnostic
 
 // Check describes a registered pedantic check.
 type Check struct {
 	Name   string
 	Phase  Phase
 	Source SourceCheckFunc
-	Post   PostCompileCheckFunc
 }
 
 var registry = map[string]Check{}
