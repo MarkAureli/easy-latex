@@ -17,9 +17,10 @@ type configField struct {
 	isBool   bool
 	setVal   func(*Config, string) error // parse value string and set field
 	unset    func(*Config)               // bool: set to false; int/slice: clear to nil
-	unsetVal func(*Config, string) error // optional: remove specific value (slice fields)
-	isSet    func(*Config) bool          // true when pointer is non-nil
-	display  func(*Config) string        // effective value for display
+	unsetVal   func(*Config, string) error // optional: remove specific value (slice fields)
+	allowEmpty bool                        // allow set with no value
+	isSet      func(*Config) bool          // true when pointer is non-nil
+	display    func(*Config) string        // effective value for display
 }
 
 var configFields = []configField{
@@ -89,11 +90,16 @@ var configFields = []configField{
 		display: func(c *Config) string { return strconv.FormatBool(c.retryTimeout()) },
 	},
 	{
-		key: "pedantic", isBool: false,
+		key: "pedantic", isBool: false, allowEmpty: true,
 		setVal: func(c *Config, val string) error {
-			names := splitCheckNames(val)
-			if err := pedantic.ValidateCheckNames(names); err != nil {
-				return err
+			var names []string
+			if val == "" {
+				names = pedantic.AllNames()
+			} else {
+				names = splitCheckNames(val)
+				if err := pedantic.ValidateCheckNames(names); err != nil {
+					return err
+				}
 			}
 			// Append, dedup
 			seen := map[string]bool{}
@@ -321,7 +327,7 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 	if len(args) > 1 {
 		val = args[1]
 	}
-	if !f.isBool && val == "" {
+	if !f.isBool && !f.allowEmpty && val == "" {
 		return fmt.Errorf("key %q requires a value", key)
 	}
 
