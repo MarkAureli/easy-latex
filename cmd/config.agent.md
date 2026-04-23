@@ -35,6 +35,7 @@ Unset a configuration value.
 | `max-authors` | int | 0 (unlimited; 5 when ieee-format enabled) |
 | `url-from-doi` | bool | false |
 | `retry-timeout` | bool | true |
+| `pedantic` | string (csv) | (none) |
 
 ## Config resolution order
 

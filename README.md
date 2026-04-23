@@ -148,6 +148,7 @@ ieee-format            false          (default)
 max-authors            0 (unlimited)  (default)
 url-from-doi           false          (default)
 retry-timeout          true           (default)
+pedantic               (none)         (default)
 ```
 
 Set and unset values:
@@ -169,6 +170,20 @@ $ el config set --global ieee-format     # writes to ~/.elconfig.json
 | `max-authors` | int | 0 | Truncate author list (0 = unlimited); IEEE implies 5 if unset |
 | `url-from-doi` | bool | false | Replace `url` field with `https://doi.org/<doi>` when DOI is present |
 | `retry-timeout` | bool | true | Re-validate entries that previously timed out during validation |
+| `pedantic` | csv | (none) | Comma-separated pedantic checks to enforce during compile (see below) |
+
+#### Pedantic checks
+
+Enable pedantic checks to enforce style rules during compilation. Violations are errors — the PDF is still produced, but the command exits non-zero.
+
+```
+$ el config set pedantic no-block-citations,no-math-linebreak
+```
+
+| Check | What it flags |
+|---|---|
+| `no-block-citations` | Multi-key citations (`\cite{a,b}`) or adjacent cite commands (`\cite{a}\cite{b}`, `\cite{a}~\cite{b}`) |
+| `no-math-linebreak` | Inline math (`$...$` or `\(...\)`) that spans multiple lines in the compiled PDF |
 
 ### `el bib`
 

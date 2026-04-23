@@ -23,6 +23,7 @@ type Config struct {
 	AbbreviateFirstName *bool    `json:"abbreviate_first_name,omitempty"`
 	UrlFromDOI          *bool    `json:"url_from_doi,omitempty"`
 	RetryTimeout        *bool    `json:"retry_timeout,omitempty"`
+	Pedantic            []string `json:"pedantic,omitempty"`
 }
 
 // abbreviateJournals returns true when journal abbreviation is enabled.
@@ -163,6 +164,11 @@ func mergeConfig(local, global *Config) *Config {
 	merged.AbbreviateFirstName = mergeBool(local.AbbreviateFirstName, global.AbbreviateFirstName)
 	merged.UrlFromDOI = mergeBool(local.UrlFromDOI, global.UrlFromDOI)
 	merged.RetryTimeout = mergeBool(local.RetryTimeout, global.RetryTimeout)
+	if len(local.Pedantic) > 0 {
+		merged.Pedantic = local.Pedantic
+	} else {
+		merged.Pedantic = global.Pedantic
+	}
 	return &merged
 }
 

@@ -11,7 +11,7 @@ Pass sequence:
 8. **Pass 2** — `runPdflatex`; print filtered output
 9. **Pass 3–4** — up to 2 additional passes if output contains "rerun" (`for range 2` loop), stabilizing cross-references and citations
 
-Post-compile: copy `<stem>.pdf` from `.el/` to project root.
+Post-compile: copy `<stem>.pdf` from `.el/` to project root. If `cfg.Pedantic` non-empty: run source + post-compile checks via `pedantic.RunSourceChecks` / `RunPostCompileChecks`; violations → error (PDF still produced). `-synctex=1` added to pdflatex when pedantic enabled.
 
 Uses `internal/term` for ANSI colors (replaces inline color vars). Uses `bibLogger` (`cmd/biblog.go`) for bib operation messages.
 

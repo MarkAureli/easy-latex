@@ -8,11 +8,12 @@ import (
 	"strings"
 )
 
-// reCiteCall matches a LaTeX citation command including optional args and the key group.
+// ReCiteCall matches a LaTeX citation command including optional args and the key group.
 // Covers: \cite, \citep, \citet, \citeauthor, \parencite, \textcite,
 // \autocite, \fullcite, \citealt, \citealp, \Cite, \Citep, \Citet,
 // and starred variants. Optional arguments ([...]) are skipped.
-var reCiteCall = regexp.MustCompile(
+// ReCiteCall matches a LaTeX citation command including optional args and the key group.
+var ReCiteCall = regexp.MustCompile(
 	`(?:\\[Cc]ite(?:p|t|author|alt|alp)?|\\(?:parencite|textcite|autocite|fullcite))\*?` +
 		`(?:\[[^\]]*\])*` + // optional arguments
 		`\{([^}]+)\}`)
@@ -30,7 +31,7 @@ func FindCiteKeys(mainTex, dir string) []string {
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
 			line := StripComment(scanner.Text())
-			for _, m := range reCiteCall.FindAllStringSubmatch(line, -1) {
+			for _, m := range ReCiteCall.FindAllStringSubmatch(line, -1) {
 				for _, key := range strings.Split(m[1], ",") {
 					key = strings.TrimSpace(key)
 					if key != "" {

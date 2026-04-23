@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
+	"github.com/MarkAureli/easy-latex/internal/pedantic"
 	"github.com/MarkAureli/easy-latex/internal/term"
 	"github.com/MarkAureli/easy-latex/internal/texscan"
 	"github.com/spf13/cobra"
@@ -63,6 +64,11 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
+	}
+	if len(cfg.Pedantic) > 0 {
+		if err := pedantic.ValidateCheckNames(cfg.Pedantic); err != nil {
+			return err
+		}
 	}
 
 	if _, err := os.Stat(cfg.Main); err != nil {
@@ -212,6 +218,27 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot write %s: %w", pdfName, err)
 	}
 
+	// Pedantic checks
+	if len(cfg.Pedantic) > 0 {
+		texFiles := texscan.FindTexFiles(cfg.Main, ".")
+		diags := pedantic.RunSourceChecks(cfg.Pedantic, texFiles)
+
+		synctexPath := filepath.Join(auxDir, stem+".synctex.gz")
+		postDiags, err := pedantic.RunPostCompileChecks(cfg.Pedantic, synctexPath, texFiles)
+		if err != nil {
+			return err
+		}
+		diags = append(diags, postDiags...)
+
+		if len(diags) > 0 {
+			fmt.Fprintf(os.Stderr, "%s%sPedantic:%s\n", compileColors.Bold, compileColors.Red, compileColors.Reset)
+			for _, d := range diags {
+				fmt.Fprintf(os.Stderr, "  %s%s%s\n", compileColors.Red, d.String(), compileColors.Reset)
+			}
+			return fmt.Errorf("pedantic checks failed (%d violations)", len(diags))
+		}
+	}
+
 	fmt.Printf("Compiled successfully -> %s\n", pdfName)
 
 	if openAfter {
@@ -306,13 +333,17 @@ func printLines(lines []string) {
 }
 
 func runPdflatex(pdflatex string, cfg *Config) ([]string, error) {
-	c := exec.Command(pdflatex,
+	args := []string{
 		"-interaction=nonstopmode",
 		"-halt-on-error",
 		"-file-line-error",
-		"-output-directory="+auxDir,
-		cfg.Main,
-	)
+		"-output-directory=" + auxDir,
+	}
+	if len(cfg.Pedantic) > 0 {
+		args = append(args, "-synctex=1")
+	}
+	args = append(args, cfg.Main)
+	c := exec.Command(pdflatex, args...)
 	output, runErr := c.CombinedOutput()
 	lines := filterLines(output)
 	if runErr != nil {

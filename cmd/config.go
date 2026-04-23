@@ -7,6 +7,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/MarkAureli/easy-latex/internal/pedantic"
 	"github.com/spf13/cobra"
 )
 
@@ -86,6 +87,25 @@ var configFields = []configField{
 		isSet:   func(c *Config) bool { return c.RetryTimeout != nil },
 		display: func(c *Config) string { return strconv.FormatBool(c.retryTimeout()) },
 	},
+	{
+		key: "pedantic", isBool: false,
+		setVal: func(c *Config, val string) error {
+			names := splitCheckNames(val)
+			if err := pedantic.ValidateCheckNames(names); err != nil {
+				return err
+			}
+			c.Pedantic = names
+			return nil
+		},
+		unset:   func(c *Config) { c.Pedantic = nil },
+		isSet:   func(c *Config) bool { return len(c.Pedantic) > 0 },
+		display: func(c *Config) string {
+			if len(c.Pedantic) == 0 {
+				return "(none)"
+			}
+			return strings.Join(c.Pedantic, ", ")
+		},
+	},
 }
 
 // boolSetter returns a setVal function for a boolean config field.
@@ -101,6 +121,17 @@ func boolSetter(set func(*Config, bool)) func(*Config, string) error {
 		}
 		return nil
 	}
+}
+
+func splitCheckNames(val string) []string {
+	var names []string
+	for _, s := range strings.Split(val, ",") {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			names = append(names, s)
+		}
+	}
+	return names
 }
 
 func findField(key string) *configField {
