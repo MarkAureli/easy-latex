@@ -177,31 +177,26 @@ func runConfigCmd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("usage: el config --list [--global] | el config set <key> [value] | el config unset <key>")
 	}
 
+	global, err := loadGlobalConfig()
+	if err != nil {
+		return err
+	}
+
 	globalOnly, _ := cmd.Flags().GetBool("global")
 	if globalOnly {
-		global, err := loadGlobalConfig()
-		if err != nil {
-			return err
-		}
 		displayConfig(global, &Config{}, global)
 		return nil
 	}
 
-	root, err := findProjectRoot()
-	if err != nil {
-		return err
-	}
-	if err := os.Chdir(root); err != nil {
-		return err
-	}
-
-	local, err := loadLocalConfig()
-	if err != nil {
-		return err
-	}
-	global, err := loadGlobalConfig()
-	if err != nil {
-		return err
+	// Outside a project, show global config only.
+	local := &Config{}
+	if root, err := findProjectRoot(); err == nil {
+		if err := os.Chdir(root); err != nil {
+			return err
+		}
+		if l, err := loadLocalConfig(); err == nil {
+			local = l
+		}
 	}
 	merged := mergeConfig(local, global)
 	displayConfig(merged, local, global)

@@ -535,11 +535,11 @@ func TestConfigBare_Fails(t *testing.T) {
 	}
 }
 
-func TestConfigList_RequiresProject(t *testing.T) {
+func TestConfigList_OutsideProject(t *testing.T) {
 	chdir(t, t.TempDir())
 	setGlobalConfigDir(t, t.TempDir())
-	if err := invokeConfigCmd(t, []string{"--list"}); err == nil {
-		t.Fatal("expected error outside project")
+	if err := invokeConfigCmd(t, []string{"--list"}); err != nil {
+		t.Fatalf("expected --list to work outside project, got: %v", err)
 	}
 }
 
