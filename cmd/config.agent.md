@@ -18,10 +18,11 @@ Set a configuration value.
 - Non-bool keys (e.g. max-authors): value is required.
 - `--global`: writes to `~/.elconfig.json` instead of `.el/config.json`. Works outside a project.
 
-### `el config unset <key> [--global]`
+### `el config unset <key> [value] [--global]`
 Unset a configuration value.
 - Bool keys: sets the value to false.
 - Non-bool keys: removes the value from config (restores default).
+- Slice keys (pedantic): bare `unset` clears all; `unset pedantic <name>` removes specific entry.
 - `--global`: modifies `~/.elconfig.json`.
 
 ## Config keys

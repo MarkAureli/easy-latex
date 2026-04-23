@@ -16,7 +16,8 @@ type configField struct {
 	key      string
 	isBool   bool
 	setVal   func(*Config, string) error // parse value string and set field
-	unset    func(*Config)               // bool: set to false; int: clear to nil
+	unset    func(*Config)               // bool: set to false; int/slice: clear to nil
+	unsetVal func(*Config, string) error // optional: remove specific value (slice fields)
 	isSet    func(*Config) bool          // true when pointer is non-nil
 	display  func(*Config) string        // effective value for display
 }
@@ -94,11 +95,35 @@ var configFields = []configField{
 			if err := pedantic.ValidateCheckNames(names); err != nil {
 				return err
 			}
-			c.Pedantic = names
+			// Append, dedup
+			seen := map[string]bool{}
+			for _, n := range c.Pedantic {
+				seen[n] = true
+			}
+			for _, n := range names {
+				if !seen[n] {
+					c.Pedantic = append(c.Pedantic, n)
+					seen[n] = true
+				}
+			}
 			return nil
 		},
-		unset:   func(c *Config) { c.Pedantic = nil },
-		isSet:   func(c *Config) bool { return len(c.Pedantic) > 0 },
+		unset: func(c *Config) { c.Pedantic = nil },
+		unsetVal: func(c *Config, val string) error {
+			remove := map[string]bool{}
+			for _, n := range splitCheckNames(val) {
+				remove[n] = true
+			}
+			var kept []string
+			for _, n := range c.Pedantic {
+				if !remove[n] {
+					kept = append(kept, n)
+				}
+			}
+			c.Pedantic = kept
+			return nil
+		},
+		isSet: func(c *Config) bool { return len(c.Pedantic) > 0 },
 		display: func(c *Config) string {
 			if len(c.Pedantic) == 0 {
 				return "(none)"
@@ -169,9 +194,9 @@ var configSetCmd = &cobra.Command{
 }
 
 var configUnsetCmd = &cobra.Command{
-	Use:               "unset <key>",
+	Use:               "unset <key> [value]",
 	Short:             "Unset a configuration value",
-	Args:              cobra.ExactArgs(1),
+	Args:              cobra.RangeArgs(1, 2),
 	RunE:              runConfigUnset,
 	ValidArgsFunction: configKeyCompletion,
 }
@@ -321,6 +346,12 @@ func runConfigUnset(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	f.unset(cfg)
+	if len(args) > 1 && f.unsetVal != nil {
+		if err := f.unsetVal(cfg, args[1]); err != nil {
+			return err
+		}
+	} else {
+		f.unset(cfg)
+	}
 	return save(cfg)
 }

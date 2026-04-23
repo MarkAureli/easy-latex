@@ -177,7 +177,10 @@ $ el config set --global ieee-format     # writes to ~/.elconfig.json
 Enable pedantic checks to enforce style rules during compilation. Violations are errors — the PDF is still produced, but the command exits non-zero.
 
 ```
-$ el config set pedantic no-block-citations,no-math-linebreak
+$ el config set pedantic no-block-citations    # append a check
+$ el config set pedantic no-math-linebreak     # append another
+$ el config unset pedantic no-block-citations  # remove a specific check
+$ el config unset pedantic                     # clear all checks
 ```
 
 | Check | What it flags |
