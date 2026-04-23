@@ -305,6 +305,17 @@ func TestFilterLines_ErrorsOnly(t *testing.T) {
 	}
 }
 
+func TestFilterLines_IgnoresErrorInFilePath(t *testing.T) {
+	input := []byte("(/usr/local/texlive/2026/texmf-dist/tex/generic/pgfplots/pgfplots.errorbars.code\nLaTeX Warning: Citation 'foo' undefined.\n")
+	lines := filterLines(input)
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 warning line, got %d: %v", len(lines), lines)
+	}
+	if lines[0] != "LaTeX Warning: Citation 'foo' undefined." {
+		t.Errorf("unexpected line: %q", lines[0])
+	}
+}
+
 func TestFilterLines_WarningsWhenNoErrors(t *testing.T) {
 	input := []byte("LaTeX Warning: Citation 'foo' undefined.\nOverfull \\hbox in paragraph\n")
 	lines := filterLines(input)
@@ -319,10 +330,13 @@ func TestLineType(t *testing.T) {
 		want string
 	}{
 		{"! Undefined control sequence.", "error"},
+		{"pdfTeX error (ext4): cannot open font", "error"},
+		{"(There were 3 errors)", "error"},
 		{"l.4 \\badcommand", "warning"},
 		{"./main.tex:12: Undefined control sequence", "warning"},
 		{"LaTeX Warning: Citation undefined", "warning"},
 		{"Overfull \\hbox (12.3pt too wide)", "warning"},
+		{"(/usr/local/texlive/2026/texmf-dist/tex/generic/pgfplots/pgfplots.errorbars.code", "warning"},
 	}
 	for _, tc := range tests {
 		if got := lineType(tc.line); got != tc.want {

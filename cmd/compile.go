@@ -32,7 +32,7 @@ func init() {
 
 var errorPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^!`),
-	regexp.MustCompile(`(?i)error`),
+	regexp.MustCompile(`(?i)\berrors?\b`),
 }
 
 var warningPatterns = []*regexp.Regexp{
