@@ -93,7 +93,7 @@ func formatEntry(e Entry) string {
 
 	for _, f := range fields {
 		pad := strings.Repeat(" ", maxLen-len(f.Name))
-		fmt.Fprintf(&buf, "  %s%s = %s,\n", f.Name, pad, escapeAmpersand(f.Value))
+		fmt.Fprintf(&buf, "  %s%s = %s,\n", f.Name, pad, escapeAmpersand(escapeUnicode(f.Value)))
 	}
 
 	buf.WriteString("}\n")
@@ -110,6 +110,131 @@ func stripNonEscapedBraces(s string) string {
 			continue
 		}
 		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// unicodeToLaTeX maps Unicode accented characters to their LaTeX equivalents.
+// This is conceptually the inverse of the latexToASCII path in key.go, but
+// produces proper LaTeX commands rather than stripped ASCII.
+var unicodeToLaTeX = map[rune]string{
+	// Acute \'
+	'á': `{\'a}`, 'Á': `{\'A}`,
+	'é': `{\'e}`, 'É': `{\'E}`,
+	'í': `{\'i}`, 'Í': `{\'I}`,
+	'ó': `{\'o}`, 'Ó': `{\'O}`,
+	'ú': `{\'u}`, 'Ú': `{\'U}`,
+	'ý': `{\'y}`, 'Ý': `{\'Y}`,
+	'ć': `{\'c}`, 'Ć': `{\'C}`,
+	'ś': `{\'s}`, 'Ś': `{\'S}`,
+	'ź': `{\'z}`, 'Ź': `{\'Z}`,
+	'ĺ': `{\'l}`, 'Ĺ': `{\'L}`,
+
+	// Grave \`
+	'à': "{\\`a}", 'À': "{\\`A}",
+	'è': "{\\`e}", 'È': "{\\`E}",
+	'ì': "{\\`i}", 'Ì': "{\\`I}",
+	'ò': "{\\`o}", 'Ò': "{\\`O}",
+	'ù': "{\\`u}", 'Ù': "{\\`U}",
+
+	// Circumflex \^
+	'â': `{\^a}`, 'Â': `{\^A}`,
+	'ê': `{\^e}`, 'Ê': `{\^E}`,
+	'î': `{\^i}`, 'Î': `{\^I}`,
+	'ô': `{\^o}`, 'Ô': `{\^O}`,
+	'û': `{\^u}`, 'Û': `{\^U}`,
+
+	// Tilde \~
+	'ã': `{\~a}`, 'Ã': `{\~A}`,
+	'õ': `{\~o}`, 'Õ': `{\~O}`,
+	'ñ': `{\~n}`, 'Ñ': `{\~N}`,
+
+	// Umlaut \"
+	'ä': `{\"a}`, 'Ä': `{\"A}`,
+	'ë': `{\"e}`, 'Ë': `{\"E}`,
+	'ï': `{\"i}`, 'Ï': `{\"I}`,
+	'ö': `{\"o}`, 'Ö': `{\"O}`,
+	'ü': `{\"u}`, 'Ü': `{\"U}`,
+	'ÿ': `{\"y}`,
+
+	// Macron \=
+	'ā': `{\=a}`, 'Ā': `{\=A}`,
+	'ē': `{\=e}`, 'Ē': `{\=E}`,
+	'ī': `{\=i}`, 'Ī': `{\=I}`,
+	'ō': `{\=o}`, 'Ō': `{\=O}`,
+	'ū': `{\=u}`, 'Ū': `{\=U}`,
+
+	// Dot above \.
+	'ż': `{\.z}`, 'Ż': `{\.Z}`,
+
+	// Caron \v{}
+	'č': `{\v{c}}`, 'Č': `{\v{C}}`,
+	'ě': `{\v{e}}`, 'Ě': `{\v{E}}`,
+	'š': `{\v{s}}`, 'Š': `{\v{S}}`,
+	'ž': `{\v{z}}`, 'Ž': `{\v{Z}}`,
+	'ř': `{\v{r}}`, 'Ř': `{\v{R}}`,
+	'ď': `{\v{d}}`, 'Ď': `{\v{D}}`,
+	'ť': `{\v{t}}`, 'Ť': `{\v{T}}`,
+	'ň': `{\v{n}}`, 'Ň': `{\v{N}}`,
+	'ľ': `{\v{l}}`, 'Ľ': `{\v{L}}`,
+
+	// Breve \u{}
+	'ă': `{\u{a}}`, 'Ă': `{\u{A}}`,
+	'ĕ': `{\u{e}}`, 'Ĕ': `{\u{E}}`,
+	'ĭ': `{\u{i}}`, 'Ĭ': `{\u{I}}`,
+	'ŏ': `{\u{o}}`, 'Ŏ': `{\u{O}}`,
+	'ŭ': `{\u{u}}`, 'Ŭ': `{\u{U}}`,
+
+	// Ring above \r{}
+	'ů': `{\r{u}}`, 'Ů': `{\r{U}}`,
+
+	// Double acute \H{}
+	'ő': `{\H{o}}`, 'Ő': `{\H{O}}`,
+	'ű': `{\H{u}}`, 'Ű': `{\H{U}}`,
+
+	// Cedilla \c{}
+	'ç': `{\c{c}}`, 'Ç': `{\c{C}}`,
+	'ļ': `{\c{l}}`, 'Ļ': `{\c{L}}`,
+
+	// Ogonek \k{}
+	'ą': `{\k{a}}`, 'Ą': `{\k{A}}`,
+	'ę': `{\k{e}}`, 'Ę': `{\k{E}}`,
+	'į': `{\k{i}}`, 'Į': `{\k{I}}`,
+	'ų': `{\k{u}}`, 'Ų': `{\k{U}}`,
+
+	// Standalone commands
+	'ß': `{\ss}`,
+	'æ': `{\ae}`, 'Æ': `{\AE}`,
+	'œ': `{\oe}`, 'Œ': `{\OE}`,
+	'å': `{\aa}`, 'Å': `{\AA}`,
+	'ø': `{\o}`, 'Ø': `{\O}`,
+	'ł': `{\l}`, 'Ł': `{\L}`,
+	'ð': `{\dh}`, 'Ð': `{\DH}`,
+	'þ': `{\th}`, 'Þ': `{\TH}`,
+	'ŋ': `{\ng}`,
+}
+
+// escapeUnicode replaces Unicode accented characters in a bib field value
+// with their LaTeX escape sequences (e.g. ü → {\"u}, Č → {\v{C}}).
+func escapeUnicode(s string) string {
+	needsEscape := false
+	for _, r := range s {
+		if _, ok := unicodeToLaTeX[r]; ok {
+			needsEscape = true
+			break
+		}
+	}
+	if !needsEscape {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 16)
+	for _, r := range s {
+		if repl, ok := unicodeToLaTeX[r]; ok {
+			b.WriteString(repl)
+		} else {
+			b.WriteRune(r)
+		}
 	}
 	return b.String()
 }

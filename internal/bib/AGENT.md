@@ -64,6 +64,10 @@ Produced by `AllocateCacheEntries` when canonical key differs from bib file key.
 - `BibFileChanged(bibPath, auxDir) bool` — true if `bibliography.bib` SHA256 differs from stored hash in `.el/bib_hash`
 - `UpdateBibHash(bibPath, auxDir)` — update stored hash after write
 
+## Unicode→LaTeX escaping (`format.go`)
+
+`escapeUnicode(s)` replaces Unicode accented characters with LaTeX escape sequences at render time (inside `formatEntry`). Applied to all field values alongside `escapeAmpersand`. Map covers: acute, grave, circumflex, tilde, umlaut, macron, dot, caron, breve, ring, double acute, cedilla, ogonek, and standalone commands (ß, æ, œ, å, ø, ł, ð, þ, ŋ). Cache stores Unicode; escaping happens only on output.
+
 ## Key generation (`key.go`)
 
 Canonical key: `{LastName}{Year}{Title}` — CamelCase, LaTeX accents→ASCII, math stripped.
@@ -120,7 +124,7 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 |---|---|
 | `parse.go` | `ParseFile`, `Entry`, `Field`, `Item`, `FieldValue`, `SetField` |
 | `key.go` | `GenerateKey`, `assignCanonicalKeys`, `latexToASCII`, accent maps |
-| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand` |
+| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand`, `escapeUnicode`, `unicodeToLaTeX` |
 | `author.go` | `formatAuthorField`, `formatSingleAuthor`, `abbreviateGivenNames`, `normalizeAllCapsName`, `initialOf`, `splitByAnd` |
 | `validate.go` | `Version`, `WriteOptions`, `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation |
 | `logger.go` | `Logger` interface, `nopLogger`, `logOrNop`, `stderrLogger` |

@@ -151,6 +151,60 @@ func TestRenderItems_NonWhitespaceRawPreserved(t *testing.T) {
 	}
 }
 
+// ── escapeUnicode ────────────────────────────────────────────────────────────
+
+func TestEscapeUnicode(t *testing.T) {
+	cases := []struct{ in, want string }{
+		// No-op for plain ASCII
+		{"{Smith, John}", "{Smith, John}"},
+		// Caron
+		{"{Čech}", `{{\v{C}}ech}`},
+		// Umlaut
+		{"{Müller}", `{M{\"u}ller}`},
+		// Acute
+		{"{García}", `{Garc{\'i}a}`},
+		// Grave
+		{"{càfe}", "{c{\\`a}fe}"},
+		// Tilde
+		{"{Muñoz}", `{Mu{\~n}oz}`},
+		// Circumflex
+		{"{Hôtel}", `{H{\^o}tel}`},
+		// Standalone: ß, ø, æ, ł
+		{"{Straße}", `{Stra{\ss}e}`},
+		{"{Sørensen}", `{S{\o}rensen}`},
+		{"{Ælfred}", `{{\AE}lfred}`},
+		{"{Łódź}", `{{\L}{\'o}d{\'z}}`},
+		// Multiple in one string
+		{"{Ärgerlich über Öl}", `{{\"A}rgerlich {\"u}ber {\"O}l}`},
+		// Already-ASCII LaTeX commands left alone
+		{`{Sm{\v{c}}ith}`, `{Sm{\v{c}}ith}`},
+	}
+	for _, c := range cases {
+		if got := escapeUnicode(c.in); got != c.want {
+			t.Errorf("escapeUnicode(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestFormatEntry_EscapesUnicode(t *testing.T) {
+	e := Entry{
+		Type: "article",
+		Key:  "Cech2023",
+		Fields: []Field{
+			{Name: "author", Value: "{Čech, Tomáš}"},
+			{Name: "title", Value: "{A Title}"},
+			{Name: "year", Value: "{2023}"},
+		},
+	}
+	out := formatEntry(e)
+	if !strings.Contains(out, `{\v{C}}ech`) {
+		t.Errorf("Č not escaped in output:\n%s", out)
+	}
+	if !strings.Contains(out, `Tom{\'a}{\v{s}}`) {
+		t.Errorf("áš not escaped in output:\n%s", out)
+	}
+}
+
 // ── stripNonEscapedBraces ─────────────────────────────────────────────────────
 
 func TestStripNonEscapedBraces(t *testing.T) {
