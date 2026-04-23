@@ -105,6 +105,25 @@ func TestFormatCrossrefAuthors_GivenOnly(t *testing.T) {
 	}
 }
 
+func TestFormatCrossrefAuthors_GroupAuthor(t *testing.T) {
+	authors := []crossrefAuthor{
+		{Name: "Google Quantum AI"},
+		{Family: "Acharya", Given: "Rajeev"},
+	}
+	want := "{Google Quantum AI} and Acharya, Rajeev"
+	if got := formatCrossrefAuthors(authors); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestFormatCrossrefAuthors_GroupAuthorOnly(t *testing.T) {
+	authors := []crossrefAuthor{{Name: "PsiQuantum team"}}
+	want := "{PsiQuantum team}"
+	if got := formatCrossrefAuthors(authors); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 // ── reverseArxivName ──────────────────────────────────────────────────────────
 
 func TestReverseArxivName_ReversesFirstLast(t *testing.T) {

@@ -15,6 +15,7 @@ var httpClient = &http.Client{Timeout: 10 * time.Second}
 type crossrefAuthor struct {
 	Family string `json:"family"`
 	Given  string `json:"given"`
+	Name   string `json:"name"`
 }
 
 type crossrefResponse struct {
@@ -176,6 +177,8 @@ func formatCrossrefAuthors(authors []crossrefAuthor) string {
 		family := normalizeAllCapsName(a.Family)
 		given := normalizeAllCapsName(a.Given)
 		switch {
+		case a.Name != "":
+			parts = append(parts, "{"+a.Name+"}")
 		case family != "" && given != "":
 			parts = append(parts, family+", "+given)
 		case family != "":
