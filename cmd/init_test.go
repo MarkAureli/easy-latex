@@ -276,6 +276,38 @@ const bibBook = `@book{knuth1984,
 }
 `
 
+func TestDoInit_MainBibTransferredBeforeCache(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{main}\n\\end{document}\n")
+	if err := os.WriteFile(filepath.Join(dir, "main.bib"), []byte(bibBook), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := doInit(dir, nil, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// bibliography.bib must exist with the entry
+	ref := readTestFile(t, filepath.Join(dir, "bibliography.bib"))
+	if !strings.Contains(ref, "@book") {
+		t.Errorf("bibliography.bib missing @book entry:\n%s", ref)
+	}
+	// original main.bib deleted
+	if _, err := os.Stat(filepath.Join(dir, "main.bib")); err == nil {
+		t.Error("main.bib should be deleted after condensation")
+	}
+	// config registers bibliography.bib
+	cfg := readConfig(t, dir)
+	if len(cfg.BibFiles) != 1 || cfg.BibFiles[0] != "bibliography.bib" {
+		t.Errorf("BibFiles = %v, want [bibliography.bib]", cfg.BibFiles)
+	}
+	// bib.json cache seeded — proves content was transferred before AllocateCacheEntries
+	if _, err := os.Stat(filepath.Join(dir, ".el", "bib.json")); err != nil {
+		t.Errorf("bib.json not created — AllocateCacheEntries may not have run: %v", err)
+	}
+}
+
 func TestDoInit_BibFilesCondensed(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
