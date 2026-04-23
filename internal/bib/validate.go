@@ -27,7 +27,10 @@ func AllocateCacheEntries(bibFiles []string, auxDir string, log Logger) (int, ma
 	if len(bibFiles) == 0 {
 		return 0, map[string]string{}, nil
 	}
-	c := loadCache(auxDir)
+	c, err := loadCacheStrict(auxDir)
+	if err != nil {
+		return 0, nil, err
+	}
 
 	// Build reverse-index of IDs already in cache for fast dedup.
 	cachedDOIs := make(map[string]bool)
@@ -612,7 +615,10 @@ func normalizeArxivID(s string) string {
 // If the entry is already cached, its existing key is returned with isNew=false.
 func AddEntryFromID(id, auxDir string, log Logger) (key string, isNew bool, err error) {
 	log = logOrNop(log)
-	c := loadCache(auxDir)
+	c, err := loadCacheStrict(auxDir)
+	if err != nil {
+		return "", false, err
+	}
 
 	if doi := normalizeDOI(id); doi != "" {
 		for key, entry := range c {

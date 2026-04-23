@@ -33,15 +33,23 @@ type cacheEntry struct {
 // cache maps canonical citation keys to their cacheEntry.
 type cache map[string]cacheEntry
 
+// errCorruptCache is returned by loadCacheStrict when bib.json exists but
+// cannot be parsed as valid JSON.
+var errCorruptCache = fmt.Errorf("bib.json exists but contains invalid JSON; please fix or delete it")
+
 func loadCache(auxDir string) cache {
+	c, _ := loadCacheStrict(auxDir)
+	return c
+}
+
+func loadCacheStrict(auxDir string) (cache, error) {
 	data, err := os.ReadFile(filepath.Join(auxDir, "bib.json"))
 	if err != nil {
-		return make(cache)
+		return make(cache), nil // file absent — empty cache is fine
 	}
 	var c cache
 	if err := json.Unmarshal(data, &c); err != nil {
-		// Unreadable or old-format cache: start fresh; entries will be re-validated.
-		return make(cache)
+		return nil, errCorruptCache
 	}
 	// Remove entries that lack a Type: these are old-format entries that predate
 	// the Type field. They will be re-allocated on the next parsebib run.
@@ -50,7 +58,7 @@ func loadCache(auxDir string) cache {
 			delete(c, k)
 		}
 	}
-	return c
+	return c, nil
 }
 
 func saveCache(auxDir string, c cache, log Logger) {

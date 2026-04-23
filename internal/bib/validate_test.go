@@ -2069,6 +2069,23 @@ func TestAddEntryFromID_ArxivWithDOI_DedupByDOI(t *testing.T) {
 	}
 }
 
+func TestAddEntryFromID_CorruptCache(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(dir+"/bib.json", []byte("CORRUPT"), 0644)
+	_, _, err := AddEntryFromID("10.1234/test", dir, nil)
+	if err == nil {
+		t.Fatal("expected error for corrupt cache, got nil")
+	}
+	if err != errCorruptCache {
+		t.Errorf("expected errCorruptCache, got %v", err)
+	}
+	// Verify file was NOT overwritten.
+	data, _ := os.ReadFile(dir + "/bib.json")
+	if string(data) != "CORRUPT" {
+		t.Error("corrupt bib.json was overwritten")
+	}
+}
+
 func TestAddEntryFromID_DOI_APIFailure(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
