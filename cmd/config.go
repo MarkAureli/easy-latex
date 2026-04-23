@@ -4,181 +4,278 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
 
+// configField describes a single configurable setting.
+type configField struct {
+	key      string
+	isBool   bool
+	setVal   func(*Config, string) error // parse value string and set field
+	unset    func(*Config)               // bool: set to false; int: clear to nil
+	isSet    func(*Config) bool          // true when pointer is non-nil
+	display  func(*Config) string        // effective value for display
+}
+
+var configFields = []configField{
+	{
+		key: "abbreviate-journals", isBool: true,
+		setVal:  boolSetter(func(c *Config, v bool) { c.AbbreviateJournals = &v }),
+		unset:   func(c *Config) { v := false; c.AbbreviateJournals = &v },
+		isSet:   func(c *Config) bool { return c.AbbreviateJournals != nil },
+		display: func(c *Config) string { return strconv.FormatBool(c.abbreviateJournals()) },
+	},
+	{
+		key: "abbreviate-first-name", isBool: true,
+		setVal:  boolSetter(func(c *Config, v bool) { c.AbbreviateFirstName = &v }),
+		unset:   func(c *Config) { v := false; c.AbbreviateFirstName = &v },
+		isSet:   func(c *Config) bool { return c.AbbreviateFirstName != nil },
+		display: func(c *Config) string { return strconv.FormatBool(c.abbreviateFirstName()) },
+	},
+	{
+		key: "brace-titles", isBool: true,
+		setVal:  boolSetter(func(c *Config, v bool) { c.BraceTitles = &v }),
+		unset:   func(c *Config) { v := false; c.BraceTitles = &v },
+		isSet:   func(c *Config) bool { return c.BraceTitles != nil },
+		display: func(c *Config) string { return strconv.FormatBool(c.braceTitles()) },
+	},
+	{
+		key: "ieee-format", isBool: true,
+		setVal:  boolSetter(func(c *Config, v bool) { c.IEEEFormat = &v }),
+		unset:   func(c *Config) { v := false; c.IEEEFormat = &v },
+		isSet:   func(c *Config) bool { return c.IEEEFormat != nil },
+		display: func(c *Config) string { return strconv.FormatBool(c.ieeeFormat()) },
+	},
+	{
+		key: "max-authors", isBool: false,
+		setVal: func(c *Config, val string) error {
+			n, err := strconv.Atoi(val)
+			if err != nil {
+				return fmt.Errorf("invalid value %q for max-authors: must be an integer", val)
+			}
+			if n < 0 {
+				return fmt.Errorf("max-authors must be 0 (unlimited) or a positive integer")
+			}
+			c.MaxAuthors = &n
+			return nil
+		},
+		unset: func(c *Config) { c.MaxAuthors = nil },
+		isSet: func(c *Config) bool { return c.MaxAuthors != nil },
+		display: func(c *Config) string {
+			v := c.maxAuthors()
+			if v == 0 {
+				return "0 (unlimited)"
+			}
+			return strconv.Itoa(v)
+		},
+	},
+	{
+		key: "url-from-doi", isBool: true,
+		setVal:  boolSetter(func(c *Config, v bool) { c.UrlFromDOI = &v }),
+		unset:   func(c *Config) { v := false; c.UrlFromDOI = &v },
+		isSet:   func(c *Config) bool { return c.UrlFromDOI != nil },
+		display: func(c *Config) string { return strconv.FormatBool(c.urlFromDOI()) },
+	},
+	{
+		key: "retry-timeout", isBool: true,
+		setVal:  boolSetter(func(c *Config, v bool) { c.RetryTimeout = &v }),
+		unset:   func(c *Config) { v := false; c.RetryTimeout = &v },
+		isSet:   func(c *Config) bool { return c.RetryTimeout != nil },
+		display: func(c *Config) string { return strconv.FormatBool(c.retryTimeout()) },
+	},
+}
+
+// boolSetter returns a setVal function for a boolean config field.
+func boolSetter(set func(*Config, bool)) func(*Config, string) error {
+	return func(c *Config, val string) error {
+		switch val {
+		case "", "true":
+			set(c, true)
+		case "false":
+			set(c, false)
+		default:
+			return fmt.Errorf("invalid boolean value: %q (use true or false)", val)
+		}
+		return nil
+	}
+}
+
+func findField(key string) *configField {
+	for i := range configFields {
+		if configFields[i].key == key {
+			return &configFields[i]
+		}
+	}
+	return nil
+}
+
+func validKeys() string {
+	keys := make([]string, len(configFields))
+	for i, f := range configFields {
+		keys[i] = f.key
+	}
+	return strings.Join(keys, ", ")
+}
+
+// ── Commands ─────────────────────────────────────────────────────────────────
+
 var configCmd = &cobra.Command{
 	Use:               "config",
-	Short:             "Modify easy-latex configuration",
-	RunE:              runConfig,
+	Short:             "Display or modify easy-latex configuration",
+	RunE:              runConfigDisplay,
 	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
-var (
-	flagAbbreviateJournals  bool
-	flagBraceTitles         bool
-	flagIEEEFormat          bool
-	flagMaxAuthors          int
-	flagAbbreviateFirstName bool
-	flagUrlFromDOI          bool
-	flagRetryTimeout        bool
-)
-
-func init() {
-	configCmd.Flags().BoolVar(&flagAbbreviateJournals, "abbreviate-journals", true,
-		"Abbreviate journal names according to ISO 4 (default true)")
-	configCmd.Flags().BoolVar(&flagBraceTitles, "brace-titles", false,
-		"Enclose title values in an extra pair of curly braces (default false)")
-	configCmd.Flags().BoolVar(&flagIEEEFormat, "ieee-format", false,
-		"Enable IEEE bib formatting: forces brace-titles and converts arXiv @misc to @unpublished (default false)")
-	configCmd.Flags().IntVar(&flagMaxAuthors, "max-authors", 0,
-		"Maximum number of authors to store (0 = unlimited; >=1 truncates to N and appends 'and others')")
-	configCmd.Flags().BoolVar(&flagAbbreviateFirstName, "abbreviate-first-name", true,
-		"Abbreviate first (and middle) names to initials (default true; false keeps first name in full)")
-	configCmd.Flags().BoolVar(&flagUrlFromDOI, "url-from-doi", false,
-		"Replace url field with https://doi.org/<doi> for entries with a non-empty doi (default false)")
-	configCmd.Flags().BoolVar(&flagRetryTimeout, "retry-timeout", true,
-		"Automatically retry validation for entries that previously timed out (default true)")
+var configSetCmd = &cobra.Command{
+	Use:               "set <key> [value]",
+	Short:             "Set a configuration value",
+	Args:              cobra.RangeArgs(1, 2),
+	RunE:              runConfigSet,
+	ValidArgsFunction: configKeyCompletion,
 }
 
-func runConfig(cmd *cobra.Command, args []string) error {
-	abbrevChanged := cmd.Flags().Changed("abbreviate-journals")
-	braceChanged := cmd.Flags().Changed("brace-titles")
-	ieeeChanged := cmd.Flags().Changed("ieee-format")
-	maxAuthorsChanged := cmd.Flags().Changed("max-authors")
-	abbrevFirstChanged := cmd.Flags().Changed("abbreviate-first-name")
-	urlFromDOIChanged := cmd.Flags().Changed("url-from-doi")
-	retryTimeoutChanged := cmd.Flags().Changed("retry-timeout")
+var configUnsetCmd = &cobra.Command{
+	Use:               "unset <key>",
+	Short:             "Unset a configuration value",
+	Args:              cobra.ExactArgs(1),
+	RunE:              runConfigUnset,
+	ValidArgsFunction: configKeyCompletion,
+}
 
-	if !abbrevChanged && !braceChanged && !ieeeChanged && !maxAuthorsChanged && !abbrevFirstChanged && !urlFromDOIChanged && !retryTimeoutChanged {
-		cfg, err := loadConfig()
-		if err != nil {
-			return err
-		}
-		displayConfig(cfg)
-		return nil
+func init() {
+	configSetCmd.Flags().Bool("global", false,
+		"Modify the global config (~/.elconfig.json) instead of the local project config")
+	configUnsetCmd.Flags().Bool("global", false,
+		"Modify the global config (~/.elconfig.json) instead of the local project config")
+	configCmd.AddCommand(configSetCmd)
+	configCmd.AddCommand(configUnsetCmd)
+}
+
+func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) >= 1 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
+	keys := make([]string, len(configFields))
+	for i, f := range configFields {
+		keys[i] = f.key
+	}
+	return keys, cobra.ShellCompDirectiveNoFileComp
+}
 
-	cfg, err := loadConfig()
+// ── Display ──────────────────────────────────────────────────────────────────
+
+func runConfigDisplay(cmd *cobra.Command, args []string) error {
+	root, err := findProjectRoot()
 	if err != nil {
 		return err
 	}
-
-	if abbrevChanged {
-		v := flagAbbreviateJournals
-		cfg.AbbreviateJournals = &v
-		if flagAbbreviateJournals {
-			fmt.Println("Journal abbreviation enabled (ISO 4)")
-		} else {
-			fmt.Println("Journal abbreviation disabled")
-		}
+	if err := os.Chdir(root); err != nil {
+		return err
 	}
 
-	if braceChanged {
-		v := flagBraceTitles
-		cfg.BraceTitles = &v
-		if flagBraceTitles {
-			fmt.Println("Title double-bracing enabled")
-		} else {
-			fmt.Println("Title double-bracing disabled")
-		}
+	local, err := loadLocalConfig()
+	if err != nil {
+		return err
 	}
-
-	if ieeeChanged {
-		v := flagIEEEFormat
-		cfg.IEEEFormat = &v
-		if flagIEEEFormat {
-			fmt.Println("IEEE bib formatting enabled")
-			fmt.Println("Max authors set to 5 (IEEE default; override with --max-authors)")
-		} else {
-			fmt.Println("IEEE bib formatting disabled")
-		}
+	global, err := loadGlobalConfig()
+	if err != nil {
+		return err
 	}
-
-	if maxAuthorsChanged {
-		if flagMaxAuthors < 0 {
-			return fmt.Errorf("--max-authors must be 0 (unlimited) or a positive integer")
-		}
-		v := flagMaxAuthors
-		cfg.MaxAuthors = &v
-		if flagMaxAuthors == 0 {
-			fmt.Println("Max authors set to unlimited")
-		} else {
-			fmt.Printf("Max authors set to %d\n", flagMaxAuthors)
-		}
-	}
-
-	if abbrevFirstChanged {
-		v := flagAbbreviateFirstName
-		cfg.AbbreviateFirstName = &v
-		if flagAbbreviateFirstName {
-			fmt.Println("First name abbreviation enabled")
-		} else {
-			fmt.Println("First name abbreviation disabled (first name kept in full)")
-		}
-	}
-
-	if urlFromDOIChanged {
-		v := flagUrlFromDOI
-		cfg.UrlFromDOI = &v
-		if flagUrlFromDOI {
-			fmt.Println("URL-from-DOI enabled (url field replaced with https://doi.org/<doi> when doi is present)")
-		} else {
-			fmt.Println("URL-from-DOI disabled (url field only set from doi when absent)")
-		}
-	}
-
-	if retryTimeoutChanged {
-		v := flagRetryTimeout
-		cfg.RetryTimeout = &v
-		if flagRetryTimeout {
-			fmt.Println("Retry-timeout enabled (timed-out entries re-validated on next parse)")
-		} else {
-			fmt.Println("Retry-timeout disabled (timed-out entries kept as-is)")
-		}
-	}
-
-	return saveConfig(cfg)
+	merged := mergeConfig(local, global)
+	displayConfig(merged, local, global)
+	return nil
 }
 
-func displayConfig(cfg *Config) {
+func displayConfig(merged, local, global *Config) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "SETTING\tVALUE\tSOURCE")
 
-	row := func(name, value, source string) {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", name, value, source)
+	for _, f := range configFields {
+		value := f.display(merged)
+		source := configSource(f, local, global, merged)
+		fmt.Fprintf(w, "%s\t%s\t%s\n", f.key, value, source)
 	}
-
-	source := func(isNil bool) string {
-		if isNil {
-			return "(default)"
-		}
-		return "(set)"
-	}
-
-	row("abbreviate-journals", strconv.FormatBool(cfg.abbreviateJournals()), source(cfg.AbbreviateJournals == nil))
-	row("abbreviate-first-name", strconv.FormatBool(cfg.abbreviateFirstName()), source(cfg.AbbreviateFirstName == nil))
-	row("brace-titles", strconv.FormatBool(cfg.braceTitles()), source(cfg.BraceTitles == nil))
-	row("ieee-format", strconv.FormatBool(cfg.ieeeFormat()), source(cfg.IEEEFormat == nil))
-
-	// max-authors: special display for 0 (unlimited) and ieee default
-	maxVal := cfg.maxAuthors()
-	var maxStr string
-	if maxVal == 0 {
-		maxStr = "0 (unlimited)"
-	} else {
-		maxStr = strconv.Itoa(maxVal)
-	}
-	maxSource := source(cfg.MaxAuthors == nil)
-	if cfg.MaxAuthors == nil && cfg.ieeeFormat() {
-		maxSource = "(ieee default)"
-	}
-	row("max-authors", maxStr, maxSource)
-
-	row("url-from-doi", strconv.FormatBool(cfg.urlFromDOI()), source(cfg.UrlFromDOI == nil))
-	row("retry-timeout", strconv.FormatBool(cfg.retryTimeout()), source(cfg.RetryTimeout == nil))
-
 	w.Flush()
+}
+
+func configSource(f configField, local, global, merged *Config) string {
+	if f.isSet(local) {
+		return "(local)"
+	}
+	if f.isSet(global) {
+		return "(global)"
+	}
+	if f.key == "max-authors" && merged.ieeeFormat() {
+		return "(ieee default)"
+	}
+	return "(default)"
+}
+
+// ── Set / Unset ──────────────────────────────────────────────────────────────
+
+// loadTargetConfig loads the appropriate config and returns a save function.
+func loadTargetConfig(cmd *cobra.Command) (*Config, func(*Config) error, error) {
+	global, _ := cmd.Flags().GetBool("global")
+	if global {
+		cfg, err := loadGlobalConfig()
+		if err != nil {
+			return nil, nil, err
+		}
+		return cfg, saveGlobalConfig, nil
+	}
+	root, err := findProjectRoot()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := os.Chdir(root); err != nil {
+		return nil, nil, err
+	}
+	cfg, err := loadLocalConfig()
+	if err != nil {
+		return nil, nil, err
+	}
+	return cfg, saveLocalConfig, nil
+}
+
+func runConfigSet(cmd *cobra.Command, args []string) error {
+	key := args[0]
+	f := findField(key)
+	if f == nil {
+		return fmt.Errorf("unknown config key: %q\nValid keys: %s", key, validKeys())
+	}
+
+	val := ""
+	if len(args) > 1 {
+		val = args[1]
+	}
+	if !f.isBool && val == "" {
+		return fmt.Errorf("key %q requires a value", key)
+	}
+
+	cfg, save, err := loadTargetConfig(cmd)
+	if err != nil {
+		return err
+	}
+	if err := f.setVal(cfg, val); err != nil {
+		return err
+	}
+	return save(cfg)
+}
+
+func runConfigUnset(cmd *cobra.Command, args []string) error {
+	key := args[0]
+	f := findField(key)
+	if f == nil {
+		return fmt.Errorf("unknown config key: %q\nValid keys: %s", key, validKeys())
+	}
+
+	cfg, save, err := loadTargetConfig(cmd)
+	if err != nil {
+		return err
+	}
+	f.unset(cfg)
+	return save(cfg)
 }

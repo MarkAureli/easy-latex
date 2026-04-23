@@ -124,7 +124,9 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	if len(cfg.BibFiles) == 0 {
 		if found := bibFilesFromArtifacts(stem, auxDir); len(found) > 0 {
 			cfg.BibFiles = found
-			_ = saveConfig(cfg)
+			localCfg, _ := loadLocalConfig()
+			localCfg.BibFiles = found
+			_ = saveLocalConfig(localCfg)
 		}
 	}
 

@@ -4,36 +4,57 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 )
 
-// invokeConfig builds a fresh cobra.Command with all config flags,
-// parses args, and calls runConfig. This avoids shared flag state between tests.
-func invokeConfig(t *testing.T, args []string) error {
+// ── Test helpers ─────────────────────────────────────────────────────────────
+
+// invokeConfigSet builds a fresh cobra.Command, parses args, and calls runConfigSet.
+func invokeConfigSet(t *testing.T, args []string) error {
 	t.Helper()
 	cmd := &cobra.Command{}
-	cmd.Flags().BoolVar(&flagAbbreviateJournals, "abbreviate-journals", true, "")
-	cmd.Flags().BoolVar(&flagBraceTitles, "brace-titles", false, "")
-	cmd.Flags().BoolVar(&flagIEEEFormat, "ieee-format", false, "")
+	cmd.Flags().Bool("global", false, "")
 	if err := cmd.ParseFlags(args); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
-	return runConfig(cmd, nil)
+	return runConfigSet(cmd, cmd.Flags().Args())
 }
 
-func readAbbreviateJournals(t *testing.T, dir string) *bool {
+// invokeConfigUnset builds a fresh cobra.Command, parses args, and calls runConfigUnset.
+func invokeConfigUnset(t *testing.T, args []string) error {
 	t.Helper()
-	return readConfig(t, dir).AbbreviateJournals
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("global", false, "")
+	if err := cmd.ParseFlags(args); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+	return runConfigUnset(cmd, cmd.Flags().Args())
 }
 
-func readBraceTitles(t *testing.T, dir string) *bool {
+func setGlobalConfigDir(t *testing.T, dir string) {
 	t.Helper()
-	return readConfig(t, dir).BraceTitles
+	orig := globalConfigDir
+	globalConfigDir = dir
+	t.Cleanup(func() { globalConfigDir = orig })
 }
 
-// ── abbreviateJournals() helper ────────────────────────────────────────────────
+func readGlobalConfig(t *testing.T, dir string) Config {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, ".elconfig.json"))
+	if err != nil {
+		t.Fatalf("readGlobalConfig: %v", err)
+	}
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("readGlobalConfig unmarshal: %v", err)
+	}
+	return cfg
+}
+
+// ── Config accessor tests (unchanged from before) ───────────────────────────
 
 func TestAbbreviateJournals_NilDefaultsTrue(t *testing.T) {
 	cfg := &Config{}
@@ -58,103 +79,6 @@ func TestAbbreviateJournals_ExplicitFalse(t *testing.T) {
 	}
 }
 
-// ── el config command ─────────────────────────────────────────────────────────
-
-func TestRunConfig_NotInitialized(t *testing.T) {
-	chdir(t, t.TempDir())
-	if err := invokeConfig(t, []string{"--abbreviate-journals=false"}); err == nil {
-		t.Fatal("expected error when .el.json missing, got nil")
-	}
-}
-
-func TestRunConfig_NoFlags(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	if err := invokeConfig(t, nil); err != nil {
-		t.Fatalf("expected no error when displaying config, got: %v", err)
-	}
-}
-
-func TestRunConfig_SetFalse(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	if err := invokeConfig(t, []string{"--abbreviate-journals=false"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	got := readAbbreviateJournals(t, dir)
-	if got == nil || *got != false {
-		t.Errorf("AbbreviateJournals = %v, want &false", got)
-	}
-}
-
-func TestRunConfig_SetTrue(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	if err := invokeConfig(t, []string{"--abbreviate-journals=true"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	got := readAbbreviateJournals(t, dir)
-	if got == nil || *got != true {
-		t.Errorf("AbbreviateJournals = %v, want &true", got)
-	}
-}
-
-func TestRunConfig_PreservesOtherFields(t *testing.T) {
-	dir := t.TempDir()
-	// Write a config with bib files set
-	cfg := Config{Main: "thesis.tex", BibFiles: []string{"refs.bib", "extra.bib"}}
-	data, _ := json.MarshalIndent(cfg, "", "  ")
-	os.MkdirAll(filepath.Join(dir, ".el"), 0755)
-	os.WriteFile(filepath.Join(dir, ".el", "config.json"), data, 0644)
-	chdir(t, dir)
-
-	if err := invokeConfig(t, []string{"--abbreviate-journals=false"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	updated := readConfig(t, dir)
-	if updated.Main != "thesis.tex" {
-		t.Errorf("Main = %q, want %q", updated.Main, "thesis.tex")
-	}
-	if len(updated.BibFiles) != 2 {
-		t.Errorf("BibFiles = %v, want 2 entries", updated.BibFiles)
-	}
-}
-
-func TestRunConfig_ToggleValue(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	// Disable abbreviation
-	if err := invokeConfig(t, []string{"--abbreviate-journals=false"}); err != nil {
-		t.Fatalf("disable: unexpected error: %v", err)
-	}
-	got := readAbbreviateJournals(t, dir)
-	if got == nil || *got != false {
-		t.Errorf("after disable: AbbreviateJournals = %v, want &false", got)
-	}
-
-	// Re-enable abbreviation
-	if err := invokeConfig(t, []string{"--abbreviate-journals=true"}); err != nil {
-		t.Fatalf("enable: unexpected error: %v", err)
-	}
-	got = readAbbreviateJournals(t, dir)
-	if got == nil || *got != true {
-		t.Errorf("after enable: AbbreviateJournals = %v, want &true", got)
-	}
-}
-
-// ── braceTitles() helper ──────────────────────────────────────────────────────
-
 func TestBraceTitles_NilDefaultsFalse(t *testing.T) {
 	cfg := &Config{}
 	if cfg.braceTitles() {
@@ -177,93 +101,6 @@ func TestBraceTitles_ExplicitFalse(t *testing.T) {
 		t.Error("expected false when BraceTitles is &false")
 	}
 }
-
-// ── --brace-titles flag ───────────────────────────────────────────────────────
-
-func TestRunConfig_SetBraceTitlesTrue(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	if err := invokeConfig(t, []string{"--brace-titles=true"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	got := readBraceTitles(t, dir)
-	if got == nil || *got != true {
-		t.Errorf("BraceTitles = %v, want &true", got)
-	}
-}
-
-func TestRunConfig_SetBraceTitlesFalse(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	if err := invokeConfig(t, []string{"--brace-titles=false"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	got := readBraceTitles(t, dir)
-	if got == nil || *got != false {
-		t.Errorf("BraceTitles = %v, want &false", got)
-	}
-}
-
-func TestRunConfig_BothFlagsAtOnce(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	if err := invokeConfig(t, []string{"--abbreviate-journals=false", "--brace-titles=true"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	cfg := readConfig(t, dir)
-	if cfg.AbbreviateJournals == nil || *cfg.AbbreviateJournals != false {
-		t.Errorf("AbbreviateJournals = %v, want &false", cfg.AbbreviateJournals)
-	}
-	if cfg.BraceTitles == nil || *cfg.BraceTitles != true {
-		t.Errorf("BraceTitles = %v, want &true", cfg.BraceTitles)
-	}
-}
-
-func TestRunConfig_BraceTitlesOmittedFromFreshConfig(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	cfg := readConfig(t, dir)
-	if cfg.BraceTitles != nil {
-		t.Errorf("fresh config: BraceTitles = %v, want nil", cfg.BraceTitles)
-	}
-	if cfg.braceTitles() {
-		t.Error("fresh config: braceTitles() = true, want false")
-	}
-}
-
-func TestRunConfig_OmittedFromFreshConfig(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	// A fresh config written by writeConfig should have nil AbbreviateJournals
-	// (omitted from JSON), which defaults to true.
-	cfg := readConfig(t, dir)
-	if cfg.AbbreviateJournals != nil {
-		t.Errorf("fresh config: AbbreviateJournals = %v, want nil", cfg.AbbreviateJournals)
-	}
-	if !cfg.abbreviateJournals() {
-		t.Error("fresh config: abbreviateJournals() = false, want true")
-	}
-}
-
-func readIEEEFormat(t *testing.T, dir string) *bool {
-	t.Helper()
-	return readConfig(t, dir).IEEEFormat
-}
-
-// ── ieeeFormat() helper ───────────────────────────────────────────────────────
 
 func TestIEEEFormat_NilDefaultsFalse(t *testing.T) {
 	cfg := &Config{}
@@ -288,54 +125,6 @@ func TestIEEEFormat_ExplicitFalse(t *testing.T) {
 	}
 }
 
-// ── --ieee-format flag ────────────────────────────────────────────────────────
-
-func TestRunConfig_SetIEEEFormatTrue(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	if err := invokeConfig(t, []string{"--ieee-format=true"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	got := readIEEEFormat(t, dir)
-	if got == nil || *got != true {
-		t.Errorf("IEEEFormat = %v, want &true", got)
-	}
-}
-
-func TestRunConfig_SetIEEEFormatFalse(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	if err := invokeConfig(t, []string{"--ieee-format=false"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	got := readIEEEFormat(t, dir)
-	if got == nil || *got != false {
-		t.Errorf("IEEEFormat = %v, want &false", got)
-	}
-}
-
-func TestRunConfig_IEEEFormatOmittedFromFreshConfig(t *testing.T) {
-	dir := t.TempDir()
-	writeConfig(t, dir, "main.tex")
-	chdir(t, dir)
-
-	cfg := readConfig(t, dir)
-	if cfg.IEEEFormat != nil {
-		t.Errorf("fresh config: IEEEFormat = %v, want nil", cfg.IEEEFormat)
-	}
-	if cfg.ieeeFormat() {
-		t.Error("fresh config: ieeeFormat() = true, want false")
-	}
-}
-
-// ── abbreviateFirstName() helper ───────────────────────────────────────────────
-
 func TestAbbreviateFirstName_NilDefaultsTrue(t *testing.T) {
 	cfg := &Config{}
 	if !cfg.abbreviateFirstName() {
@@ -359,8 +148,6 @@ func TestAbbreviateFirstName_ExplicitFalse(t *testing.T) {
 	}
 }
 
-// ── urlFromDOI() helper ────────────────────────────────────────────────────────
-
 func TestUrlFromDOI_NilDefaultsFalse(t *testing.T) {
 	cfg := &Config{}
 	if cfg.urlFromDOI() {
@@ -383,8 +170,6 @@ func TestUrlFromDOI_ExplicitFalse(t *testing.T) {
 		t.Error("expected false when UrlFromDOI is &false")
 	}
 }
-
-// ── maxAuthors() helper ────────────────────────────────────────────────────────
 
 func TestMaxAuthors_NilDefaultsUnlimited(t *testing.T) {
 	cfg := &Config{}
@@ -423,5 +208,402 @@ func TestMaxAuthors_ExplicitValueOverridesIEEE(t *testing.T) {
 	cfg := &Config{IEEEFormat: &trueVal, MaxAuthors: &v}
 	if cfg.maxAuthors() != 3 {
 		t.Errorf("expected 3 (explicit value overrides IEEE), got %d", cfg.maxAuthors())
+	}
+}
+
+// ── mergeConfig tests ────────────────────────────────────────────────────────
+
+func TestMergeConfig_LocalOverridesGlobal(t *testing.T) {
+	lv, gv := false, true
+	local := &Config{AbbreviateJournals: &lv}
+	global := &Config{AbbreviateJournals: &gv}
+	merged := mergeConfig(local, global)
+	if merged.AbbreviateJournals == nil || *merged.AbbreviateJournals != false {
+		t.Errorf("expected local false to win, got %v", merged.AbbreviateJournals)
+	}
+}
+
+func TestMergeConfig_GlobalFallback(t *testing.T) {
+	gv := true
+	local := &Config{}
+	global := &Config{BraceTitles: &gv}
+	merged := mergeConfig(local, global)
+	if merged.BraceTitles == nil || *merged.BraceTitles != true {
+		t.Errorf("expected global true, got %v", merged.BraceTitles)
+	}
+}
+
+func TestMergeConfig_BothNil(t *testing.T) {
+	merged := mergeConfig(&Config{}, &Config{})
+	if merged.AbbreviateJournals != nil {
+		t.Errorf("expected nil, got %v", merged.AbbreviateJournals)
+	}
+}
+
+func TestMergeConfig_MainFromLocal(t *testing.T) {
+	local := &Config{Main: "thesis.tex"}
+	global := &Config{Main: "other.tex"}
+	merged := mergeConfig(local, global)
+	if merged.Main != "thesis.tex" {
+		t.Errorf("Main = %q, want %q", merged.Main, "thesis.tex")
+	}
+}
+
+func TestMergeConfig_IntField(t *testing.T) {
+	gv := 5
+	local := &Config{}
+	global := &Config{MaxAuthors: &gv}
+	merged := mergeConfig(local, global)
+	if merged.MaxAuthors == nil || *merged.MaxAuthors != 5 {
+		t.Errorf("expected global max-authors 5, got %v", merged.MaxAuthors)
+	}
+}
+
+// ── el config set (local) ────────────────────────────────────────────────────
+
+func TestConfigSet_BoolNoValue(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"abbreviate-journals"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readConfig(t, dir)
+	if cfg.AbbreviateJournals == nil || *cfg.AbbreviateJournals != true {
+		t.Errorf("AbbreviateJournals = %v, want &true", cfg.AbbreviateJournals)
+	}
+}
+
+func TestConfigSet_BoolTrue(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"brace-titles", "true"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readConfig(t, dir)
+	if cfg.BraceTitles == nil || *cfg.BraceTitles != true {
+		t.Errorf("BraceTitles = %v, want &true", cfg.BraceTitles)
+	}
+}
+
+func TestConfigSet_BoolFalse(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"abbreviate-journals", "false"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readConfig(t, dir)
+	if cfg.AbbreviateJournals == nil || *cfg.AbbreviateJournals != false {
+		t.Errorf("AbbreviateJournals = %v, want &false", cfg.AbbreviateJournals)
+	}
+}
+
+func TestConfigSet_IntValue(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"max-authors", "10"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readConfig(t, dir)
+	if cfg.MaxAuthors == nil || *cfg.MaxAuthors != 10 {
+		t.Errorf("MaxAuthors = %v, want &10", cfg.MaxAuthors)
+	}
+}
+
+func TestConfigSet_IntZero(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"max-authors", "0"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readConfig(t, dir)
+	if cfg.MaxAuthors == nil || *cfg.MaxAuthors != 0 {
+		t.Errorf("MaxAuthors = %v, want &0", cfg.MaxAuthors)
+	}
+}
+
+func TestConfigSet_IntNegative(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	// Call runConfigSet directly to avoid cobra parsing "-1" as a flag.
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("global", false, "")
+	if err := runConfigSet(cmd, []string{"max-authors", "-1"}); err == nil {
+		t.Fatal("expected error for negative max-authors")
+	}
+}
+
+func TestConfigSet_IntMissingValue(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"max-authors"}); err == nil {
+		t.Fatal("expected error for max-authors without value")
+	}
+}
+
+func TestConfigSet_InvalidBoolValue(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"brace-titles", "yes"}); err == nil {
+		t.Fatal("expected error for invalid bool value")
+	}
+}
+
+func TestConfigSet_UnknownKey(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"no-such-key"}); err == nil {
+		t.Fatal("expected error for unknown key")
+	}
+}
+
+func TestConfigSet_PreservesOtherFields(t *testing.T) {
+	dir := t.TempDir()
+	cfg := Config{Main: "thesis.tex", BibFiles: []string{"refs.bib"}}
+	data, _ := json.MarshalIndent(cfg, "", "  ")
+	os.MkdirAll(filepath.Join(dir, ".el"), 0755)
+	os.WriteFile(filepath.Join(dir, ".el", "config.json"), data, 0644)
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"brace-titles", "true"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	updated := readConfig(t, dir)
+	if updated.Main != "thesis.tex" {
+		t.Errorf("Main = %q, want %q", updated.Main, "thesis.tex")
+	}
+	if len(updated.BibFiles) != 1 || updated.BibFiles[0] != "refs.bib" {
+		t.Errorf("BibFiles = %v, want [refs.bib]", updated.BibFiles)
+	}
+}
+
+func TestConfigSet_NotInitialized(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := invokeConfigSet(t, []string{"brace-titles", "true"}); err == nil {
+		t.Fatal("expected error when .el missing, got nil")
+	}
+}
+
+// ── el config unset (local) ──────────────────────────────────────────────────
+
+func TestConfigUnset_Bool(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	// First set it to true
+	invokeConfigSet(t, []string{"brace-titles", "true"})
+
+	// Unset should set to false
+	if err := invokeConfigUnset(t, []string{"brace-titles"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readConfig(t, dir)
+	if cfg.BraceTitles == nil || *cfg.BraceTitles != false {
+		t.Errorf("BraceTitles after unset = %v, want &false", cfg.BraceTitles)
+	}
+}
+
+func TestConfigUnset_Int(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	// First set it
+	invokeConfigSet(t, []string{"max-authors", "10"})
+
+	// Unset should clear to nil
+	if err := invokeConfigUnset(t, []string{"max-authors"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readConfig(t, dir)
+	if cfg.MaxAuthors != nil {
+		t.Errorf("MaxAuthors after unset = %v, want nil", cfg.MaxAuthors)
+	}
+}
+
+func TestConfigUnset_UnknownKey(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigUnset(t, []string{"no-such-key"}); err == nil {
+		t.Fatal("expected error for unknown key")
+	}
+}
+
+// ── el config set/unset --global ─────────────────────────────────────────────
+
+func TestConfigSet_Global(t *testing.T) {
+	home := t.TempDir()
+	setGlobalConfigDir(t, home)
+
+	if err := invokeConfigSet(t, []string{"--global", "ieee-format", "true"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readGlobalConfig(t, home)
+	if cfg.IEEEFormat == nil || *cfg.IEEEFormat != true {
+		t.Errorf("global IEEEFormat = %v, want &true", cfg.IEEEFormat)
+	}
+}
+
+func TestConfigSet_GlobalBoolNoValue(t *testing.T) {
+	home := t.TempDir()
+	setGlobalConfigDir(t, home)
+
+	if err := invokeConfigSet(t, []string{"--global", "ieee-format"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readGlobalConfig(t, home)
+	if cfg.IEEEFormat == nil || *cfg.IEEEFormat != true {
+		t.Errorf("global IEEEFormat = %v, want &true", cfg.IEEEFormat)
+	}
+}
+
+func TestConfigUnset_Global(t *testing.T) {
+	home := t.TempDir()
+	setGlobalConfigDir(t, home)
+
+	// Set then unset
+	invokeConfigSet(t, []string{"--global", "ieee-format", "true"})
+	if err := invokeConfigUnset(t, []string{"--global", "ieee-format"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readGlobalConfig(t, home)
+	if cfg.IEEEFormat == nil || *cfg.IEEEFormat != false {
+		t.Errorf("global IEEEFormat after unset = %v, want &false", cfg.IEEEFormat)
+	}
+}
+
+func TestConfigSet_GlobalOutsideProject(t *testing.T) {
+	home := t.TempDir()
+	setGlobalConfigDir(t, home)
+	chdir(t, t.TempDir()) // not a project
+
+	if err := invokeConfigSet(t, []string{"--global", "brace-titles"}); err != nil {
+		t.Fatalf("expected global set to work outside project, got: %v", err)
+	}
+}
+
+func TestConfigSet_GlobalNoFile(t *testing.T) {
+	home := t.TempDir()
+	setGlobalConfigDir(t, home)
+
+	// First global set when no file exists yet
+	if err := invokeConfigSet(t, []string{"--global", "retry-timeout", "false"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readGlobalConfig(t, home)
+	if cfg.RetryTimeout == nil || *cfg.RetryTimeout != false {
+		t.Errorf("RetryTimeout = %v, want &false", cfg.RetryTimeout)
+	}
+}
+
+// ── el config display ────────────────────────────────────────────────────────
+
+func TestConfigDisplay_RequiresProject(t *testing.T) {
+	chdir(t, t.TempDir())
+	cmd := &cobra.Command{}
+	if err := runConfigDisplay(cmd, nil); err == nil {
+		t.Fatal("expected error outside project")
+	}
+}
+
+func TestConfigDisplay_NoError(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+	setGlobalConfigDir(t, t.TempDir())
+
+	cmd := &cobra.Command{}
+	if err := runConfigDisplay(cmd, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// ── configSource ─────────────────────────────────────────────────────────────
+
+func TestConfigSource_Local(t *testing.T) {
+	v := true
+	local := &Config{BraceTitles: &v}
+	global := &Config{}
+	merged := mergeConfig(local, global)
+	f := *findField("brace-titles")
+	if s := configSource(f, local, global, merged); s != "(local)" {
+		t.Errorf("source = %q, want %q", s, "(local)")
+	}
+}
+
+func TestConfigSource_Global(t *testing.T) {
+	v := true
+	local := &Config{}
+	global := &Config{BraceTitles: &v}
+	merged := mergeConfig(local, global)
+	f := *findField("brace-titles")
+	if s := configSource(f, local, global, merged); s != "(global)" {
+		t.Errorf("source = %q, want %q", s, "(global)")
+	}
+}
+
+func TestConfigSource_Default(t *testing.T) {
+	local := &Config{}
+	global := &Config{}
+	merged := mergeConfig(local, global)
+	f := *findField("brace-titles")
+	if s := configSource(f, local, global, merged); s != "(default)" {
+		t.Errorf("source = %q, want %q", s, "(default)")
+	}
+}
+
+func TestConfigSource_IEEEDefault(t *testing.T) {
+	v := true
+	local := &Config{IEEEFormat: &v}
+	global := &Config{}
+	merged := mergeConfig(local, global)
+	f := *findField("max-authors")
+	if s := configSource(f, local, global, merged); s != "(ieee default)" {
+		t.Errorf("source = %q, want %q", s, "(ieee default)")
+	}
+}
+
+// ── findField / validKeys ────────────────────────────────────────────────────
+
+func TestFindField_Known(t *testing.T) {
+	for _, name := range []string{"abbreviate-journals", "max-authors", "ieee-format"} {
+		if findField(name) == nil {
+			t.Errorf("findField(%q) = nil", name)
+		}
+	}
+}
+
+func TestFindField_Unknown(t *testing.T) {
+	if findField("bogus") != nil {
+		t.Error("findField(bogus) should be nil")
+	}
+}
+
+func TestValidKeys_ContainsAll(t *testing.T) {
+	keys := validKeys()
+	for _, f := range configFields {
+		if !strings.Contains(keys, f.key) {
+			t.Errorf("validKeys() missing %q", f.key)
+		}
 	}
 }

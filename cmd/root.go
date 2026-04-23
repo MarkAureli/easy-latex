@@ -74,7 +74,7 @@ func (cfg *Config) maxAuthors() int {
 	return *cfg.MaxAuthors
 }
 
-func loadConfig() (*Config, error) {
+func loadLocalConfig() (*Config, error) {
 	data, err := os.ReadFile(".el/config.json")
 	if err != nil {
 		return nil, fmt.Errorf("cannot read .el/config.json: %w", err)
@@ -86,12 +86,98 @@ func loadConfig() (*Config, error) {
 	return &cfg, nil
 }
 
-func saveConfig(cfg *Config) error {
+func saveLocalConfig(cfg *Config) error {
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(".el/config.json", data, 0644)
+}
+
+// globalConfigDir overrides the home directory for the global config file.
+// Empty means use os.UserHomeDir(). Set in tests for isolation.
+var globalConfigDir string
+
+func globalConfigPath() (string, error) {
+	if globalConfigDir != "" {
+		return filepath.Join(globalConfigDir, ".elconfig.json"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	return filepath.Join(home, ".elconfig.json"), nil
+}
+
+func loadGlobalConfig() (*Config, error) {
+	path, err := globalConfigPath()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &Config{}, nil
+		}
+		return nil, fmt.Errorf("cannot read %s: %w", path, err)
+	}
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("corrupt %s: %w", path, err)
+	}
+	return &cfg, nil
+}
+
+func saveGlobalConfig(cfg *Config) error {
+	path, err := globalConfigPath()
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// mergeConfig returns a new Config where local pointer fields win over global.
+// Main and BibFiles always come from local (project-specific).
+func mergeConfig(local, global *Config) *Config {
+	merged := *local
+	mergeBool := func(l, g *bool) *bool {
+		if l != nil {
+			return l
+		}
+		return g
+	}
+	mergeInt := func(l, g *int) *int {
+		if l != nil {
+			return l
+		}
+		return g
+	}
+	merged.AbbreviateJournals = mergeBool(local.AbbreviateJournals, global.AbbreviateJournals)
+	merged.BraceTitles = mergeBool(local.BraceTitles, global.BraceTitles)
+	merged.IEEEFormat = mergeBool(local.IEEEFormat, global.IEEEFormat)
+	merged.MaxAuthors = mergeInt(local.MaxAuthors, global.MaxAuthors)
+	merged.AbbreviateFirstName = mergeBool(local.AbbreviateFirstName, global.AbbreviateFirstName)
+	merged.UrlFromDOI = mergeBool(local.UrlFromDOI, global.UrlFromDOI)
+	merged.RetryTimeout = mergeBool(local.RetryTimeout, global.RetryTimeout)
+	return &merged
+}
+
+// loadConfig loads the local project config merged with the global config.
+// Local settings take precedence over global settings.
+func loadConfig() (*Config, error) {
+	local, err := loadLocalConfig()
+	if err != nil {
+		return nil, err
+	}
+	global, err := loadGlobalConfig()
+	if err != nil {
+		return nil, err
+	}
+	return mergeConfig(local, global), nil
 }
 
 var rootCmd = &cobra.Command{
@@ -101,8 +187,9 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip project check for init (and help/version, handled by cobra).
-		if cmd.Name() == "init" {
+		// Skip project check for init and config subcommands
+		// (config handles project check internally based on --global).
+		if cmd.Name() == "init" || isConfigCommand(cmd) {
 			return nil
 		}
 		root, err := findProjectRoot()
@@ -130,6 +217,16 @@ func findProjectRoot() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+// isConfigCommand returns true if cmd is configCmd or a child of configCmd.
+func isConfigCommand(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c == configCmd {
+			return true
+		}
+	}
+	return false
 }
 
 func Execute() {

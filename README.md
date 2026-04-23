@@ -104,7 +104,7 @@ Additional rules:
 
 The file is only rewritten if the content actually changes.
 
-**Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in `.el/bib.json`). Entries that fail due to a transient error (timeout, rate limit, server error) are marked `source: "timeout"` and automatically retried on the next parse (disable with `el config --retry-timeout=false`). Entries whose identifier is not found are marked `source: "invalid-id"` and not retried.
+**Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in `.el/bib.json`). Entries that fail due to a transient error (timeout, rate limit, server error) are marked `source: "timeout"` and automatically retried on the next parse (disable with `el config set retry-timeout false`). Entries whose identifier is not found are marked `source: "invalid-id"` and not retried.
 
 - Entry has a `doi` field (or a `url` containing `doi.org`) → queried against the [Crossref API](https://api.crossref.org); mismatched fields are auto-corrected in place and the entry type is set from Crossref's `type` field (e.g. `journal-article` → `@article`, `proceedings-article` → `@inproceedings`). For `@article` entries, the journal name is mechanically abbreviated to its ISO 4 form using the [LTWA](https://www.issn.org/services/online-services/access-to-the-ltwa/) (e.g. `Nature Communications` → `Nat. Commun.`). For proceedings and collection types, Crossref's `container-title` maps to `booktitle` instead of `journal`.
 - Entry has an `eprint` field with `archiveprefix`/`eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org` → queried against the arXiv API. If the arXiv response contains a DOI (i.e. the paper has been published), the entry is automatically redirected to Crossref validation with the correct entry type and full metadata. If Crossref is unavailable, it falls back to arXiv-only correction of title, author, and year.
@@ -134,17 +134,9 @@ Corrections are reported on the terminal:
 
 ### `el config`
 
-View or update processing options stored in `.el/config.json`. Run without flags to display current settings.
+View or update processing options. Settings are stored in `.el/config.json` (local, per-project) and `~/.elconfig.json` (global). Local settings override global settings.
 
-| Flag | Type | Default | Effect |
-|---|---|---|---|
-| `--abbreviate-journals` | bool | true | Abbreviate journal names to ISO 4 form |
-| `--abbreviate-first-name` | bool | true | Abbreviate first/middle names to initials |
-| `--brace-titles` | bool | false | Wrap title field in double braces `{{…}}` |
-| `--ieee-format` | bool | false | IEEE mode: forces brace titles, max 5 authors, converts arXiv `@misc` to `@unpublished` |
-| `--max-authors` | int | 0 | Truncate author list (0 = unlimited); IEEE implies 5 if unset |
-| `--url-from-doi` | bool | false | Replace `url` field with `https://doi.org/<doi>` when DOI is present |
-| `--retry-timeout` | bool | true | Re-validate entries that previously timed out during validation |
+Run without arguments to display the merged configuration:
 
 ```
 $ el config
@@ -156,10 +148,27 @@ ieee-format            false          (default)
 max-authors            0 (unlimited)  (default)
 url-from-doi           false          (default)
 retry-timeout          true           (default)
-
-$ el config --ieee-format=true
-$ el config --max-authors=3
 ```
+
+Set and unset values:
+
+```
+$ el config set ieee-format              # bool without value → true
+$ el config set max-authors 3
+$ el config unset max-authors            # non-bool: removes from config
+$ el config unset brace-titles           # bool: sets to false
+$ el config set --global ieee-format     # writes to ~/.elconfig.json
+```
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `abbreviate-journals` | bool | true | Abbreviate journal names to ISO 4 form |
+| `abbreviate-first-name` | bool | true | Abbreviate first/middle names to initials |
+| `brace-titles` | bool | false | Wrap title field in double braces `{{…}}` |
+| `ieee-format` | bool | false | IEEE mode: forces brace titles, max 5 authors, converts arXiv `@misc` to `@unpublished` |
+| `max-authors` | int | 0 | Truncate author list (0 = unlimited); IEEE implies 5 if unset |
+| `url-from-doi` | bool | false | Replace `url` field with `https://doi.org/<doi>` when DOI is present |
+| `retry-timeout` | bool | true | Re-validate entries that previously timed out during validation |
 
 ### `el bib`
 
