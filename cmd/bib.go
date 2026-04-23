@@ -160,7 +160,7 @@ func runBibParse(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	log := newBibLogger()
-	added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir, log)
+	added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir, cfg.retryTimeout(), log)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package bib
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -123,7 +124,7 @@ func TestFriendlyHTTPError(t *testing.T) {
 		service string
 		want    string
 	}{
-		{404, "Crossref", "not found in Crossref"},
+		{404, "Crossref", "not found in Crossref: identifier not found"},
 		{429, "arXiv", "arXiv rate limited, try again later"},
 		{500, "Crossref", "Crossref server error, try again later"},
 		{503, "arXiv", "arXiv server error, try again later"},
@@ -133,6 +134,22 @@ func TestFriendlyHTTPError(t *testing.T) {
 		err := friendlyHTTPError(tt.code, tt.service)
 		if err.Error() != tt.want {
 			t.Errorf("friendlyHTTPError(%d, %q) = %q, want %q", tt.code, tt.service, err.Error(), tt.want)
+		}
+	}
+}
+
+func TestFriendlyHTTPError_404WrapsErrNotFound(t *testing.T) {
+	err := friendlyHTTPError(404, "Crossref")
+	if !errors.Is(err, errNotFound) {
+		t.Errorf("404 error should wrap errNotFound, got: %v", err)
+	}
+}
+
+func TestFriendlyHTTPError_NonNotFoundDoesNotWrapErrNotFound(t *testing.T) {
+	for _, code := range []int{429, 500, 503, 403} {
+		err := friendlyHTTPError(code, "test")
+		if errors.Is(err, errNotFound) {
+			t.Errorf("HTTP %d should not wrap errNotFound", code)
 		}
 	}
 }

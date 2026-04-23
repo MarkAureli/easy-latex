@@ -86,7 +86,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	// auto-allocate new cache entries and record any renames before compiling.
 	if ef := entriesBibFile(cfg.BibFiles); ef != "" && bib.BibFileChanged(ef, auxDir) {
 		log.Info("", "bibliography.bib changed, re-parsing...")
-		added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir, log)
+		added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir, cfg.retryTimeout(), log)
 		if err != nil {
 			return err
 		}

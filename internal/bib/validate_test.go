@@ -1369,7 +1369,7 @@ func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := AllocateCacheEntries([]string{path}, dir, nil); err != nil {
+	if _, _, err := AllocateCacheEntries([]string{path}, dir, true, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1508,7 +1508,7 @@ func TestAllocateCacheEntries_NoIDEntryAdded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1538,7 +1538,7 @@ func TestAllocateCacheEntries_NoIDDedup_ByCanonicalKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1565,7 +1565,7 @@ func TestAllocateCacheEntries_DOIDedup_ByDOI(t *testing.T) {
 	}
 
 	// No HTTP calls expected; if Crossref is reached the test will hang/fail.
-	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1590,7 +1590,7 @@ func TestAllocateCacheEntries_ArxivDedup_ByEprint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1615,7 +1615,7 @@ func TestAllocateCacheEntries_DOIDedup_CaseInsensitive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1642,7 +1642,7 @@ func TestAllocateCacheEntries_NewDOIEntry_ValidatedAndCached(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1687,11 +1687,93 @@ func TestValidateEntry_CrossrefHTTP429_Warning(t *testing.T) {
 	if corrected != nil {
 		t.Error("expected no correction on HTTP 429")
 	}
-	if source != "" {
-		t.Errorf("source = %q, want empty", source)
+	if source != "timeout" {
+		t.Errorf("source = %q, want %q", source, "timeout")
 	}
 	if !strings.Contains(warn, "429") {
 		t.Errorf("warning should mention 429, got %q", warn)
+	}
+}
+
+func TestValidateEntry_Crossref404_InvalidID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{
+		Type: "article",
+		Key:  "Smith2024Bad",
+		Fields: []Field{
+			{Name: "author", Value: "{Smith, Jane}"},
+			{Name: "year", Value: "{2024}"},
+			{Name: "title", Value: "{Some Title}"},
+			{Name: "doi", Value: "{10.1000/nonexistent}"},
+		},
+	}
+	corrected, _, source, warn := validateEntry(e, false, nil)
+	if corrected != nil {
+		t.Error("expected no correction on HTTP 404")
+	}
+	if source != "invalid-id" {
+		t.Errorf("source = %q, want %q", source, "invalid-id")
+	}
+	if warn == "" {
+		t.Error("expected a warning for invalid DOI")
+	}
+}
+
+func TestAllocateCacheEntries_TimeoutRetry(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	dir := t.TempDir()
+	bibContent := `@article{Smith2024Test,
+  author = {Smith, Jane},
+  year   = {2024},
+  title  = {Some Title},
+  doi    = {10.1000/test},
+}
+`
+	path := dir + "/refs.bib"
+	os.WriteFile(path, []byte(bibContent), 0644)
+
+	// Pre-seed cache with a "timeout" entry for this DOI.
+	saveCache(dir, cache{"Smith2024SomeTitle": cacheEntry{
+		Source: "timeout",
+		Type:   "article",
+		Fields: map[string]string{
+			"author": "Smith, Jane",
+			"year":   "2024",
+			"title":  "Some Title",
+			"doi":    "10.1000/test",
+		},
+	}}, nil)
+
+	// With retryTimeout=true, should re-validate (calls Crossref).
+	calls = 0
+	AllocateCacheEntries([]string{path}, dir, true, nil)
+	if calls == 0 {
+		t.Error("expected timeout entry to be re-validated when retryTimeout=true")
+	}
+
+	// With retryTimeout=false, should skip (no Crossref call).
+	calls = 0
+	AllocateCacheEntries([]string{path}, dir, false, nil)
+	if calls != 0 {
+		t.Errorf("expected no re-validation when retryTimeout=false, got %d calls", calls)
 	}
 }
 

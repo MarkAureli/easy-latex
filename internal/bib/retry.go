@@ -1,12 +1,17 @@
 package bib
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"strconv"
 	"time"
 )
+
+// errNotFound is a sentinel error indicating the identifier does not exist
+// in the remote service (e.g. Crossref 404, empty arXiv feed).
+var errNotFound = errors.New("identifier not found")
 
 const (
 	maxRetries   = 3
@@ -34,7 +39,7 @@ func isRetryableError(err error) bool {
 func friendlyHTTPError(code int, service string) error {
 	switch {
 	case code == http.StatusNotFound:
-		return fmt.Errorf("not found in %s", service)
+		return fmt.Errorf("not found in %s: %w", service, errNotFound)
 	case code == http.StatusTooManyRequests:
 		return fmt.Errorf("%s rate limited, try again later", service)
 	case code >= 500:

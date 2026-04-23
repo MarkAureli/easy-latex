@@ -16,6 +16,7 @@ Flags (all optional):
 | `--max-authors` | int | 0 |
 | `--abbreviate-first-name` | bool | true |
 | `--url-from-doi` | bool | false |
+| `--retry-timeout` | bool | true |
 
 Loads `.el/config.json`, sets only changed flags (via `cmd.Flags().Changed`), saves back.
 

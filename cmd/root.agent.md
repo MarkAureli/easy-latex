@@ -16,5 +16,6 @@ Config struct + load/save. Shared by all commands that load config.
 | `max_authors` | *int | 0 (unlimited) | Truncate authors list; IEEE implies 5 if unset |
 | `abbreviate_first_name` | *bool | true | Abbreviate first/middle names to initials |
 | `url_from_doi` | *bool | false | Replace url field with `https://doi.org/<doi>` when doi non-empty |
+| `retry_timeout` | *bool | true | Re-validate entries that previously timed out during validation |
 
 Nil pointer = use default. Accessor methods on `*Config` encode defaults.

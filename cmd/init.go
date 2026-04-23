@@ -103,7 +103,7 @@ func doInit(dir string, stdin io.Reader, ieee bool) error {
 		return err
 	}
 
-	if _, renames, err := bib.AllocateCacheEntries(entryBibFiles, elDir, newBibLogger()); err != nil {
+	if _, renames, err := bib.AllocateCacheEntries(entryBibFiles, elDir, true, newBibLogger()); err != nil {
 		return err
 	} else if len(renames) > 0 {
 		bib.SaveRenames(elDir, renames)

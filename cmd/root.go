@@ -22,6 +22,7 @@ type Config struct {
 	MaxAuthors          *int     `json:"max_authors,omitempty"`
 	AbbreviateFirstName *bool    `json:"abbreviate_first_name,omitempty"`
 	UrlFromDOI          *bool    `json:"url_from_doi,omitempty"`
+	RetryTimeout        *bool    `json:"retry_timeout,omitempty"`
 }
 
 // abbreviateJournals returns true when journal abbreviation is enabled.
@@ -52,6 +53,12 @@ func (cfg *Config) abbreviateFirstName() bool {
 // for entries with a non-empty doi field. Defaults to false when the field is absent (nil).
 func (cfg *Config) urlFromDOI() bool {
 	return cfg.UrlFromDOI != nil && *cfg.UrlFromDOI
+}
+
+// retryTimeout returns true when entries that previously failed validation due
+// to a timeout should be automatically re-validated. Defaults to true.
+func (cfg *Config) retryTimeout() bool {
+	return cfg.RetryTimeout == nil || *cfg.RetryTimeout
 }
 
 // maxAuthors returns the maximum number of authors to store, or 0 for unlimited.

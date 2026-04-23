@@ -1,6 +1,7 @@
 package bib
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -22,7 +23,7 @@ const Version = "0.1.0"
 //
 // Returns the number of newly added cache entries and a map of old→new key
 // renames for any entries whose canonical key differs from their original key.
-func AllocateCacheEntries(bibFiles []string, auxDir string, log Logger) (int, map[string]string, error) {
+func AllocateCacheEntries(bibFiles []string, auxDir string, retryTimeout bool, log Logger) (int, map[string]string, error) {
 	log = logOrNop(log)
 	if len(bibFiles) == 0 {
 		return 0, map[string]string{}, nil
@@ -33,9 +34,13 @@ func AllocateCacheEntries(bibFiles []string, auxDir string, log Logger) (int, ma
 	}
 
 	// Build reverse-index of IDs already in cache for fast dedup.
+	// When retryTimeout is true, exclude "timeout" entries so they get re-validated.
 	cachedDOIs := make(map[string]bool)
 	cachedArxivIDs := make(map[string]bool)
 	for _, entry := range c {
+		if retryTimeout && entry.Source == "timeout" {
+			continue
+		}
 		if doi := entry.Fields["doi"]; doi != "" {
 			cachedDOIs[strings.ToLower(doi)] = true
 		}
@@ -174,26 +179,26 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 // response, mirroring the snapshot logic in processBibFile.
 func buildCacheEntry(e Entry, raw cacheEntry, source, rawURL string) cacheEntry {
 	entry := cacheEntry{Source: source, Type: e.Type}
-	if source == "crossref" || source == "arxiv" {
-		eCopy := e
-		normalizeEntryFields(&eCopy, false)
-		fields := make(map[string]string, len(eCopy.Fields))
-		for _, f := range eCopy.Fields {
-			if v := FieldValue(eCopy, f.Name); v != "" {
-				fields[f.Name] = v
-			}
+	eCopy := e
+	normalizeEntryFields(&eCopy, false)
+	fields := make(map[string]string, len(eCopy.Fields))
+	for _, f := range eCopy.Fields {
+		if v := FieldValue(eCopy, f.Name); v != "" {
+			fields[f.Name] = v
 		}
+	}
+	if source == "crossref" || source == "arxiv" {
 		for k, v := range raw.Fields {
 			if v != "" {
 				fields[k] = v
 			}
 		}
-		delete(fields, "url")
-		if rawURL != "" {
-			fields["url"] = rawURL
-		}
-		entry.Fields = fields
 	}
+	delete(fields, "url")
+	if rawURL != "" {
+		fields["url"] = rawURL
+	}
+	entry.Fields = fields
 	return entry
 }
 
@@ -475,7 +480,11 @@ func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Ent
 	if doi := findDOI(e); doi != "" {
 		result, raw, crType, err := queryCrossref(e, doi, log)
 		if err != nil {
-			return nil, cacheEntry{}, "", fmt.Sprintf("Crossref query failed: %v", err)
+			source := "timeout"
+			if errors.Is(err, errNotFound) {
+				source = "invalid-id"
+			}
+			return nil, cacheEntry{}, source, fmt.Sprintf("Crossref query failed: %v", err)
 		}
 		if crType != "" {
 			if result != nil {
@@ -496,7 +505,11 @@ func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Ent
 	if id := findArxivID(e); id != "" {
 		result, raw, doi, err := queryArxiv(e, id, log)
 		if err != nil {
-			return nil, cacheEntry{}, "", fmt.Sprintf("arXiv query failed: %v", err)
+			source := "timeout"
+			if errors.Is(err, errNotFound) {
+				source = "invalid-id"
+			}
+			return nil, cacheEntry{}, source, fmt.Sprintf("arXiv query failed: %v", err)
 		}
 		if doi != "" {
 			// arXiv entry has a DOI — use Crossref validation instead.

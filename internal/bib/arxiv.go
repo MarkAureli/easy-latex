@@ -56,7 +56,7 @@ func queryArxiv(e Entry, id string, log Logger) (*Entry, cacheEntry, string, err
 		return nil, cacheEntry{}, "", err
 	}
 	if len(feed.Entries) == 0 {
-		return nil, cacheEntry{}, "", fmt.Errorf("no entry found for %s", id)
+		return nil, cacheEntry{}, "", fmt.Errorf("no entry found for %s: %w", id, errNotFound)
 	}
 
 	ax := feed.Entries[0]

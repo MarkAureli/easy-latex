@@ -34,7 +34,7 @@ Adds one entry to cache from a raw DOI or arXiv identifier (no bib file needed).
 
 ## Cache allocation (`validate.go`)
 
-Entry point: `AllocateCacheEntries(bibFiles, auxDir, log Logger) (int, map[string]string, error)`.
+Entry point: `AllocateCacheEntries(bibFiles, auxDir string, retryTimeout bool, log Logger) (int, map[string]string, error)`.
 
 Returns count of newly cached entries and a renames map (old key → new canonical key). Parses each bib file and seeds `.el/bib.json` with any entries not yet cached. Parse-only: does NOT rewrite files or run full normalization pipeline. Used by `el init` and `el bib parse` to pre-populate cache without compile.
 
@@ -42,6 +42,21 @@ Deduplication:
 - **Entries with DOI**: matched by DOI (case-insensitive). Crossref-validated if new.
 - **Entries with arXiv ID**: matched by eprint field (case-insensitive). arXiv-validated if new.
 - **No-ID entries**: matched by canonical cite key. Added as `source: "no-id"` placeholder if new.
+- **Timeout entries**: when `retryTimeout=true`, excluded from dedup → re-validated on next run.
+
+### Validation source tracking
+
+Cache entries store a `Source` field indicating validation status:
+
+| Source | Meaning | Re-validated? |
+|---|---|---|
+| `"crossref"` | Validated via Crossref | No |
+| `"arxiv"` | Validated via arXiv | No |
+| `"no-id"` | No DOI or arXiv ID present | No |
+| `"invalid-id"` | DOI/arXiv ID not found (404, empty feed) | No |
+| `"timeout"` | Transient failure (timeout, rate limit, server error) | When `retryTimeout=true` |
+
+`errNotFound` sentinel (`retry.go`) distinguishes "not found" from transient errors. `validateEntry` uses `errors.Is(err, errNotFound)` to classify.
 
 For new DOI/arXiv entries, runs `validateEntry` and stores full field snapshot. Does not apply config transforms (abbreviateJournals, braceTitles, etc.) — those are applied at compile time.
 

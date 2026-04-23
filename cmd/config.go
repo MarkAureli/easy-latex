@@ -23,6 +23,7 @@ var (
 	flagMaxAuthors          int
 	flagAbbreviateFirstName bool
 	flagUrlFromDOI          bool
+	flagRetryTimeout        bool
 )
 
 func init() {
@@ -38,6 +39,8 @@ func init() {
 		"Abbreviate first (and middle) names to initials (default true; false keeps first name in full)")
 	configCmd.Flags().BoolVar(&flagUrlFromDOI, "url-from-doi", false,
 		"Replace url field with https://doi.org/<doi> for entries with a non-empty doi (default false)")
+	configCmd.Flags().BoolVar(&flagRetryTimeout, "retry-timeout", true,
+		"Automatically retry validation for entries that previously timed out (default true)")
 }
 
 func runConfig(cmd *cobra.Command, args []string) error {
@@ -47,8 +50,9 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	maxAuthorsChanged := cmd.Flags().Changed("max-authors")
 	abbrevFirstChanged := cmd.Flags().Changed("abbreviate-first-name")
 	urlFromDOIChanged := cmd.Flags().Changed("url-from-doi")
+	retryTimeoutChanged := cmd.Flags().Changed("retry-timeout")
 
-	if !abbrevChanged && !braceChanged && !ieeeChanged && !maxAuthorsChanged && !abbrevFirstChanged && !urlFromDOIChanged {
+	if !abbrevChanged && !braceChanged && !ieeeChanged && !maxAuthorsChanged && !abbrevFirstChanged && !urlFromDOIChanged && !retryTimeoutChanged {
 		cfg, err := loadConfig()
 		if err != nil {
 			return err
@@ -126,6 +130,16 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if retryTimeoutChanged {
+		v := flagRetryTimeout
+		cfg.RetryTimeout = &v
+		if flagRetryTimeout {
+			fmt.Println("Retry-timeout enabled (timed-out entries re-validated on next parse)")
+		} else {
+			fmt.Println("Retry-timeout disabled (timed-out entries kept as-is)")
+		}
+	}
+
 	return saveConfig(cfg)
 }
 
@@ -164,6 +178,7 @@ func displayConfig(cfg *Config) {
 	row("max-authors", maxStr, maxSource)
 
 	row("url-from-doi", strconv.FormatBool(cfg.urlFromDOI()), source(cfg.UrlFromDOI == nil))
+	row("retry-timeout", strconv.FormatBool(cfg.retryTimeout()), source(cfg.RetryTimeout == nil))
 
 	w.Flush()
 }
