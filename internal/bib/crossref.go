@@ -172,13 +172,27 @@ func queryCrossref(e Entry, doi string, log Logger) (*Entry, cacheEntry, string,
 }
 
 func formatCrossrefAuthors(authors []crossrefAuthor) string {
+	// If any group/consortium author exists, use only group authors
+	// and omit individual authors (BibTeX corporate entity rule).
+	hasGroup := false
+	for _, a := range authors {
+		if a.Name != "" {
+			hasGroup = true
+			break
+		}
+	}
+
 	parts := make([]string, 0, len(authors))
 	for _, a := range authors {
+		if hasGroup {
+			if a.Name != "" {
+				parts = append(parts, "{"+a.Name+"}")
+			}
+			continue
+		}
 		family := normalizeAllCapsName(a.Family)
 		given := normalizeAllCapsName(a.Given)
 		switch {
-		case a.Name != "":
-			parts = append(parts, "{"+a.Name+"}")
 		case family != "" && given != "":
 			parts = append(parts, family+", "+given)
 		case family != "":

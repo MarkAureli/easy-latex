@@ -110,7 +110,7 @@ func TestFormatCrossrefAuthors_GroupAuthor(t *testing.T) {
 		{Name: "Google Quantum AI"},
 		{Family: "Acharya", Given: "Rajeev"},
 	}
-	want := "{Google Quantum AI} and Acharya, Rajeev"
+	want := "{Google Quantum AI}"
 	if got := formatCrossrefAuthors(authors); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
