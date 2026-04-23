@@ -98,7 +98,8 @@ var rootCmd = &cobra.Command{
 	Use:          "el",
 	Short:        "easy-latex: simple LaTeX compilation",
 	Version:      bib.Version,
-	SilenceUsage: true,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip project check for init (and help/version, handled by cobra).
 		if cmd.Name() == "init" {
@@ -133,6 +134,7 @@ func findProjectRoot() (string, error) {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
