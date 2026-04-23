@@ -9,7 +9,7 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 | `.el/` | Working directory: config, all pdflatex/bibtex/biber intermediates, bib cache |
 | `.el/config.json` | Config: main tex file, aux dir, bib paths, processing options |
 | `.el/bib.json` | Per-entry validation source cache |
-| `cmd/` | Cobra commands (`bib`, `compile`, `config`, `init`, `lsp`, `parsebib`) |
+| `cmd/` | Cobra commands (`bib`, `compile`, `config`, `init`, `lsp`) |
 | `internal/bib/` | Bib parsing, key gen, formatting, validation, Logger interface, retry logic |
 | `internal/term/` | Shared terminal detection (`IsTerminal`) + ANSI color codes (`Colors` struct, `Detect()`) |
 | `internal/texscan/` | Tex file scanner for bib declarations |
@@ -19,7 +19,7 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 
 Two-phase design: **cache allocation** and **bib generation from cache**.
 
-- `AllocateCacheEntries(bibFiles, auxDir, log Logger)` — parses bib files, assigns canonical keys (`{LastName}{Year}{Title}`), validates unseen entries via Crossref (DOI) or arXiv (eprint), seeds `.el/bib.json`. Used by `el init`, `el parsebib`, and auto-triggered by `el compile` when `bibliography.bib` changes.
+- `AllocateCacheEntries(bibFiles, auxDir, log Logger)` — parses bib files, assigns canonical keys (`{LastName}{Year}{Title}`), validates unseen entries via Crossref (DOI) or arXiv (eprint), seeds `.el/bib.json`. Used by `el init`, `el bib parse`, and auto-triggered by `el compile` when `bibliography.bib` changes.
 - `WriteBibFromCache` — reconstructs entries from cache for cited keys only, applies config transforms (journal abbreviation, author formatting, brace titles, etc.), writes `bibliography.bib`. Called by `el compile` after pass 1.
 - `AddEntryFromID(id, auxDir, log Logger) (key, isNew, err)` — single-entry insertion from bare DOI/arXiv ID. Used by `el bib add`.
 
@@ -38,11 +38,10 @@ See `internal/bib/AGENT.md` for entry-type specs.
 | File | Scope |
 |---|---|
 | `cmd/root.agent.md` | Config struct (shared by commands) |
-| `cmd/bib.agent.md` | `el bib` command group (`list`, `add`) |
+| `cmd/bib.agent.md` | `el bib` command group (`list`, `add`, `parse`) |
 | `cmd/compile.agent.md` | `el compile` pass sequence |
 | `cmd/config.agent.md` | `el config` flags |
 | `cmd/init.agent.md` | `el init` steps |
-| `cmd/parsebib.agent.md` | `el parsebib` cache allocation |
 | `cmd/lsp.agent.md` | `el lsp` (thin, see below) |
 | `internal/bib/AGENT.md` | Bib pipeline, entry types, validation, ISO 4 |
 | `internal/lsp/AGENT.md` | LSP protocol, completion trigger, JSON-RPC |

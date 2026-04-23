@@ -82,7 +82,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	log := newBibLogger()
 
-	// If bibliography.bib changed since the last compile or parsebib run,
+	// If bibliography.bib changed since the last compile or bib parse run,
 	// auto-allocate new cache entries and record any renames before compiling.
 	if ef := entriesBibFile(cfg.BibFiles); ef != "" && bib.BibFileChanged(ef, auxDir) {
 		log.Info("", "bibliography.bib changed, re-parsing...")
@@ -128,7 +128,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Apply pending cite-key renames produced by el parsebib: update \cite{}
+	// Apply pending cite-key renames produced by el bib parse: update \cite{}
 	// references in all .tex files and re-run pdflatex so the .aux/.bcf reflects
 	// the new keys before the bib tool.
 	if renames := bib.LoadRenames(auxDir); len(renames) > 0 {

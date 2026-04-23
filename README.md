@@ -202,12 +202,12 @@ Doe2023SomePreprint         misc      arxiv     Some Preprint
 2 entries in bib cache.
 ```
 
-### `el parsebib`
+### `el bib parse`
 
 Pre-populate the bib cache from registered `.bib` files without compiling. Useful for validating entries against Crossref/arXiv ahead of time, or for re-populating the cache after deleting `.el/bib.json`. Shows progress during API calls and announces key renames.
 
 ```
-$ el parsebib
+$ el bib parse
 [bib] key renamed: smith23 -> Smith2023AGreatPaper
 Allocated 5 new bib cache entries.
 ```

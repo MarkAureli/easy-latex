@@ -30,9 +30,17 @@ var bibAddCmd = &cobra.Command{
 	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
+var bibParseCmd = &cobra.Command{
+	Use:               "parse",
+	Short:             "Allocate bib cache entries for all registered .bib files",
+	RunE:              runBibParse,
+	ValidArgsFunction: cobra.NoFileCompletions,
+}
+
 func init() {
 	bibCmd.AddCommand(bibListCmd)
 	bibCmd.AddCommand(bibAddCmd)
+	bibCmd.AddCommand(bibParseCmd)
 }
 
 func runBibList(cmd *cobra.Command, args []string) error {
@@ -89,6 +97,27 @@ func runBibAdd(cmd *cobra.Command, args []string) error {
 		}
 	}
 	fmt.Printf("Added %q to bib cache.\n", key)
+	return nil
+}
+
+func runBibParse(cmd *cobra.Command, args []string) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	log := newBibLogger()
+	added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir, log)
+	if err != nil {
+		return err
+	}
+	for old, new := range renames {
+		log.Info("", fmt.Sprintf("key renamed: %s -> %s", old, new))
+	}
+	bib.SaveRenames(auxDir, renames)
+	if ef := entriesBibFile(cfg.BibFiles); ef != "" {
+		bib.UpdateBibHash(ef, auxDir)
+	}
+	fmt.Printf("Allocated %d new bib cache entries.\n", added)
 	return nil
 }
 

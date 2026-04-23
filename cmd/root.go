@@ -103,7 +103,6 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(compileCmd)
 	rootCmd.AddCommand(configCmd)
-	rootCmd.AddCommand(parsebibCmd)
 	rootCmd.AddCommand(bibCmd)
 	rootCmd.AddCommand(lspCmd)
 }

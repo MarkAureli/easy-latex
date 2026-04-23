@@ -52,7 +52,7 @@ func loadCacheStrict(auxDir string) (cache, error) {
 		return nil, errCorruptCache
 	}
 	// Remove entries that lack a Type: these are old-format entries that predate
-	// the Type field. They will be re-allocated on the next parsebib run.
+	// the Type field. They will be re-allocated on the next bib parse run.
 	for k, v := range c {
 		if v.Type == "" {
 			delete(c, k)

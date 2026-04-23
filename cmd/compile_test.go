@@ -181,7 +181,7 @@ func setupCompileDir(t *testing.T, texContent, bibContent string) string {
 			t.Fatal(err)
 		}
 		writeConfig(t, dir, "main.tex", "bibliography.bib")
-		// Simulate 'el parsebib': seed bib.json, write renames.json, record hash.
+		// Simulate 'el bib parse': seed bib.json, write renames.json, record hash.
 		_, renames, err := bib.AllocateCacheEntries([]string{bibPath}, elDir, nil)
 		if err != nil {
 			t.Fatalf("AllocateCacheEntries: %v", err)

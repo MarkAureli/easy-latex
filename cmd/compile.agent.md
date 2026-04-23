@@ -1,7 +1,7 @@
 # el compile (`compile.go`)
 
 Pass sequence:
-1. **Hash check** — if `bibliography.bib` changed since last compile/parsebib (`bib.BibFileChanged`), announces "bibliography.bib changed, re-parsing…", auto-runs `bib.AllocateCacheEntries`, save renames to `.el/renames.json`, update hash
+1. **Hash check** — if `bibliography.bib` changed since last compile/bib parse (`bib.BibFileChanged`), announces "bibliography.bib changed, re-parsing…", auto-runs `bib.AllocateCacheEntries`, save renames to `.el/renames.json`, update hash
 2. **Pass 1** — `runPdflatex`; buffer output (bib warnings expected here)
 3. **Bib file discovery fallback** — if `cfg.BibFiles` empty after pass 1, parse `.aux`/`.bcf` to find them, save to config
 4. **Cite-key rewrite** — if `.el/renames.json` non-empty (`bib.LoadRenames`), announces key renames and `.tex` file rewrites, rewrite `\cite{}` in all `.tex` files via `rewriteCiteKeys`, clear renames, re-run pdflatex

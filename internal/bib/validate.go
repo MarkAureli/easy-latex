@@ -209,7 +209,7 @@ type WriteOptions struct {
 
 // WriteBibFromCache generates path from the bib cache for the given cited keys,
 // applying all config transforms. Returns an error if any key is absent from
-// the cache (caller should run 'el parsebib' first).
+// the cache (caller should run 'el bib parse' first).
 func WriteBibFromCache(path string, citeKeys []string, auxDir string, opts WriteOptions) error {
 	if len(citeKeys) == 0 {
 		return nil
@@ -220,7 +220,7 @@ func WriteBibFromCache(path string, citeKeys []string, auxDir string, opts Write
 	for _, key := range citeKeys {
 		cached, ok := c[key]
 		if !ok {
-			return fmt.Errorf("cite key %q not found in bib cache; run 'el parsebib'", key)
+			return fmt.Errorf("cite key %q not found in bib cache; run 'el bib parse'", key)
 		}
 
 		e := Entry{Key: key, Type: cached.Type}

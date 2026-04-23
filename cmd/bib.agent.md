@@ -8,6 +8,20 @@ Command group for bibliography management.
 
 Lists all cached bib entries from `.el/bib.json`. Uses `bib.LoadCacheEntries(auxDir)` returning `[]CacheEntryInfo`. Displays truncated table: key, type, author, title. Helper funcs `truncate`, `truncateAuthor` for column width.
 
+### `el bib parse`
+
+Manually allocate/update bib cache entries from registered `.bib` files. Calls `bib.AllocateCacheEntries(bibFiles, auxDir, log)`:
+- Parses all `.bib` files in config
+- Deduplicates by DOI (Crossref validated), arXiv ID (arXiv validated), or canonical key (no-ID)
+- Skips entries already in cache
+- Does NOT rewrite bib files
+- Prints count of newly cached entries
+- Announces key renames via `bib.Logger` (old key -> new canonical key)
+
+Uses `bibLogger` (`cmd/biblog.go`) for colored output.
+
+Useful for pre-validating bib entries without compiling, or re-populating cache after `.el/bib.json` deletion.
+
 ### `el bib add <ID>`
 
 Add a single entry to bib cache from a bare DOI or arXiv ID. Implemented by `runBibAdd`. Calls `bib.AddEntryFromID(id, auxDir, log)` which returns `(key, isNew, err)`.
