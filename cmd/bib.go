@@ -85,12 +85,26 @@ func runBibList(cmd *cobra.Command, args []string) error {
 	}
 	keyMax := max(15, term.Width()-typeW-srcW-4)
 	out := cmd.OutOrStdout()
+	c := term.Detect()
+
+	colorSource := func(source string) string {
+		switch source {
+		case "crossref", "arxiv":
+			return c.Green + source + c.Reset
+		case "invalid-id":
+			return c.Red + source + c.Reset
+		case "timeout":
+			return c.Yellow + source + c.Reset
+		default: // "no-id" and others
+			return c.Dim + source + c.Reset
+		}
+	}
 
 	printSection := func(rows []bib.CacheEntryInfo) {
 		w := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 		fmt.Fprintf(w, "KEY\tTYPE\tSOURCE\n")
 		for _, e := range rows {
-			fmt.Fprintf(w, "%s\t%s\t%s\n", truncate(e.Key, keyMax), e.Type, e.Source)
+			fmt.Fprintf(w, "%s\t%s\t%s\n", truncate(e.Key, keyMax), e.Type, colorSource(e.Source))
 		}
 		w.Flush()
 	}
