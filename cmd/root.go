@@ -187,9 +187,12 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip project check for init and config subcommands
-		// (config handles project check internally based on --global).
-		if cmd.Name() == "init" || isConfigCommand(cmd) {
+		// Skip project check for commands that work outside a project.
+		switch cmd.Name() {
+		case "init", "help", "completion":
+			return nil
+		}
+		if isConfigCommand(cmd) {
 			return nil
 		}
 		root, err := findProjectRoot()
