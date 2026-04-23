@@ -125,7 +125,7 @@ func validKeys() string {
 var configCmd = &cobra.Command{
 	Use:               "config",
 	Short:             "Display or modify easy-latex configuration",
-	RunE:              runConfigDisplay,
+	RunE:              runConfigCmd,
 	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
@@ -146,6 +146,10 @@ var configUnsetCmd = &cobra.Command{
 }
 
 func init() {
+	configCmd.Flags().Bool("list", false,
+		"Display the effective configuration")
+	configCmd.Flags().Bool("global", false,
+		"With --list: show only global config (~/.elconfig.json)")
 	configSetCmd.Flags().Bool("global", false,
 		"Modify the global config (~/.elconfig.json) instead of the local project config")
 	configUnsetCmd.Flags().Bool("global", false,
@@ -167,7 +171,22 @@ func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, c
 
 // ── Display ──────────────────────────────────────────────────────────────────
 
-func runConfigDisplay(cmd *cobra.Command, args []string) error {
+func runConfigCmd(cmd *cobra.Command, args []string) error {
+	list, _ := cmd.Flags().GetBool("list")
+	if !list {
+		return fmt.Errorf("usage: el config --list [--global] | el config set <key> [value] | el config unset <key>")
+	}
+
+	globalOnly, _ := cmd.Flags().GetBool("global")
+	if globalOnly {
+		global, err := loadGlobalConfig()
+		if err != nil {
+			return err
+		}
+		displayConfig(global, &Config{}, global)
+		return nil
+	}
+
 	root, err := findProjectRoot()
 	if err != nil {
 		return err

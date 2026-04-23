@@ -516,25 +516,65 @@ func TestConfigSet_GlobalNoFile(t *testing.T) {
 	}
 }
 
-// ── el config display ────────────────────────────────────────────────────────
+// ── el config (bare) ─────────────────────────────────────────────────────────
 
-func TestConfigDisplay_RequiresProject(t *testing.T) {
-	chdir(t, t.TempDir())
+func invokeConfigCmd(t *testing.T, args []string) error {
+	t.Helper()
 	cmd := &cobra.Command{}
-	if err := runConfigDisplay(cmd, nil); err == nil {
+	cmd.Flags().Bool("list", false, "")
+	cmd.Flags().Bool("global", false, "")
+	if err := cmd.ParseFlags(args); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+	return runConfigCmd(cmd, cmd.Flags().Args())
+}
+
+func TestConfigBare_Fails(t *testing.T) {
+	if err := invokeConfigCmd(t, nil); err == nil {
+		t.Fatal("expected error for bare el config")
+	}
+}
+
+func TestConfigList_RequiresProject(t *testing.T) {
+	chdir(t, t.TempDir())
+	setGlobalConfigDir(t, t.TempDir())
+	if err := invokeConfigCmd(t, []string{"--list"}); err == nil {
 		t.Fatal("expected error outside project")
 	}
 }
 
-func TestConfigDisplay_NoError(t *testing.T) {
+func TestConfigList_NoError(t *testing.T) {
 	dir := t.TempDir()
 	writeConfig(t, dir, "main.tex")
 	chdir(t, dir)
 	setGlobalConfigDir(t, t.TempDir())
 
-	cmd := &cobra.Command{}
-	if err := runConfigDisplay(cmd, nil); err != nil {
+	if err := invokeConfigCmd(t, []string{"--list"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConfigList_GlobalOnly(t *testing.T) {
+	home := t.TempDir()
+	setGlobalConfigDir(t, home)
+	chdir(t, t.TempDir()) // not a project
+
+	// Set a global value first
+	invokeConfigSet(t, []string{"--global", "ieee-format", "true"})
+
+	if err := invokeConfigCmd(t, []string{"--list", "--global"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConfigList_GlobalOutsideProject(t *testing.T) {
+	home := t.TempDir()
+	setGlobalConfigDir(t, home)
+	chdir(t, t.TempDir()) // not a project
+
+	// --list --global should work outside a project
+	if err := invokeConfigCmd(t, []string{"--list", "--global"}); err != nil {
+		t.Fatalf("expected to work outside project, got: %v", err)
 	}
 }
 
