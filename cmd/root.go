@@ -77,7 +77,7 @@ func (cfg *Config) maxAuthors() int {
 func loadConfig() (*Config, error) {
 	data, err := os.ReadFile(".el/config.json")
 	if err != nil {
-		return nil, fmt.Errorf("not initialized. Run 'el init' first")
+		return nil, fmt.Errorf("cannot read .el/config.json: %w", err)
 	}
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
@@ -98,6 +98,36 @@ var rootCmd = &cobra.Command{
 	Use:     "el",
 	Short:   "easy-latex: simple LaTeX compilation",
 	Version: bib.Version,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Skip project check for init (and help/version, handled by cobra).
+		if cmd.Name() == "init" {
+			return nil
+		}
+		root, err := findProjectRoot()
+		if err != nil {
+			return err
+		}
+		return os.Chdir(root)
+	},
+}
+
+// findProjectRoot walks from the current directory upward looking for a .el
+// directory. Returns the directory containing .el, or an error if none found.
+func findProjectRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		if info, err := os.Stat(filepath.Join(dir, auxDir)); err == nil && info.IsDir() {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("fatal: not an el project (or any of the parent directories): .el")
+		}
+		dir = parent
+	}
 }
 
 func Execute() {
