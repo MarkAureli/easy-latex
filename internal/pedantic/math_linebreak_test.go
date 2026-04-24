@@ -202,6 +202,47 @@ Real violation $a + b + c$ here plus clean $d$ math.
 	}
 }
 
+func TestCheckMathLinebreak_LastInlineMathViolation(t *testing.T) {
+	dir := t.TempDir()
+
+	// Line 3 has 4 inline math expressions. The first 3 (IDs 10-12)
+	// are clean, and the last one (ID 13) is a real violation.
+	// This must NOT be filtered as a bib false positive.
+	mathpos := `S 10 25432578 3
+E 10 25432578 3
+S 11 25432578 3
+E 11 25432578 3
+S 12 25432578 3
+E 12 25432578 3
+S 13 25432578 3
+E 13 24646146 3
+`
+	if err := os.WriteFile(filepath.Join(dir, "test.mathpos"), []byte(mathpos), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tex := `\documentclass{article}
+\begin{document}
+Here $a = b$ and $c > d$, showing $e < f$ as $0 = g(\lambda) > 0$ breaks.
+\end{document}
+`
+	if err := os.WriteFile(filepath.Join(dir, "test.tex"), []byte(tex), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origDir)
+
+	diags := checkMathLinebreak(dir)
+	if len(diags) != 1 {
+		t.Fatalf("got %d diagnostics, want 1 (last inline math violation should NOT be filtered): %v", len(diags), diags)
+	}
+	if diags[0].Line != 3 {
+		t.Errorf("line = %d, want 3", diags[0].Line)
+	}
+}
+
 func TestCheckMathLinebreak_NoFile(t *testing.T) {
 	dir := t.TempDir()
 	diags := checkMathLinebreak(dir)

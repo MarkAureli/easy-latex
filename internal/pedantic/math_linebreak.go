@@ -107,9 +107,11 @@ func checkMathLinebreak(auxDir string) []Diagnostic {
 	// non-violating (same y) pairs.  Bibliography/macro math is
 	// typeset after the document body, so its IDs are higher than
 	// body math on the same source line.  A violation whose ID
-	// exceeds the max non-violating ID for its line is a false
+	// exceeds the max non-violating ID *by a large gap* is a false
 	// positive (e.g. $S_n$ in a bib title whose stale \inputlineno
 	// happens to point at a body line containing $).
+	// A small gap (e.g. the last inline math on a line being the
+	// violating one) is a real violation from the document body.
 	maxCleanID := map[int]int{} // source line → max non-violating ID
 	for id, s := range starts {
 		e, ok := ends[id]
@@ -121,6 +123,14 @@ func checkMathLinebreak(auxDir string) []Diagnostic {
 				maxCleanID[s.Line] = id
 			}
 		}
+	}
+
+	// Count total math entries per source line to determine a
+	// reasonable gap threshold. Body math IDs on the same line are
+	// nearly contiguous; bib-injected IDs are hundreds away.
+	lineEntryCount := map[int]int{}
+	for _, s := range starts {
+		lineEntryCount[s.Line]++
 	}
 
 	var diags []Diagnostic
@@ -136,10 +146,16 @@ func checkMathLinebreak(auxDir string) []Diagnostic {
 			continue
 		}
 		// Skip if this violation's ID exceeds the highest
-		// non-violating ID on the same source line — it comes
-		// from bibliography or macro expansion, not the body.
+		// non-violating ID on the same source line by a large
+		// gap — it comes from bibliography or macro expansion.
+		// Body math IDs on one line are nearly contiguous, so a
+		// gap larger than the number of entries on that line
+		// indicates a bib/macro false positive.
 		if cap, ok := maxCleanID[s.Line]; ok && id > cap {
-			continue
+			gap := id - cap
+			if gap > lineEntryCount[s.Line] {
+				continue
+			}
 		}
 		diags = append(diags, Diagnostic{
 			File:    mainTex,
