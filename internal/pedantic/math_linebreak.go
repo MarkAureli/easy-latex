@@ -103,6 +103,26 @@ func checkMathLinebreak(auxDir string) []Diagnostic {
 	mainTex := stem + ".tex"
 	texLines := readLines(mainTex)
 
+	// Classify entries: per source line, collect the max ID among
+	// non-violating (same y) pairs.  Bibliography/macro math is
+	// typeset after the document body, so its IDs are higher than
+	// body math on the same source line.  A violation whose ID
+	// exceeds the max non-violating ID for its line is a false
+	// positive (e.g. $S_n$ in a bib title whose stale \inputlineno
+	// happens to point at a body line containing $).
+	maxCleanID := map[int]int{} // source line → max non-violating ID
+	for id, s := range starts {
+		e, ok := ends[id]
+		if !ok {
+			continue
+		}
+		if s.YPos == e.YPos {
+			if id > maxCleanID[s.Line] {
+				maxCleanID[s.Line] = id
+			}
+		}
+	}
+
 	var diags []Diagnostic
 	for id, s := range starts {
 		e, ok := ends[id]
@@ -112,8 +132,13 @@ func checkMathLinebreak(auxDir string) []Diagnostic {
 		if s.YPos == e.YPos {
 			continue
 		}
-		// Validate source line contains inline math.
 		if !lineHasInlineMath(texLines, s.Line) {
+			continue
+		}
+		// Skip if this violation's ID exceeds the highest
+		// non-violating ID on the same source line — it comes
+		// from bibliography or macro expansion, not the body.
+		if cap, ok := maxCleanID[s.Line]; ok && id > cap {
 			continue
 		}
 		diags = append(diags, Diagnostic{

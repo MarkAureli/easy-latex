@@ -158,6 +158,50 @@ No math on this line at all.
 	}
 }
 
+func TestCheckMathLinebreak_FiltersBibFalsePositives(t *testing.T) {
+	dir := t.TempDir()
+
+	// Line 3 has body math (ID 5, matching y) and a bib-injected
+	// violation (ID 700, mismatched y).  The high ID should be
+	// filtered because it exceeds the max non-violating ID on that line.
+	// Line 5 has a real violation (ID 10) with no higher clean IDs.
+	mathpos := `S 5 43234099 3
+E 5 43234099 3
+S 700 14107266 3
+E 700 13517442 3
+S 10 41661235 5
+E 10 40874803 5
+S 11 40874803 5
+E 11 40874803 5
+`
+	if err := os.WriteFile(filepath.Join(dir, "test.mathpos"), []byte(mathpos), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tex := `\documentclass{article}
+\begin{document}
+Short $x = 1$ body math.
+
+Real violation $a + b + c$ here plus clean $d$ math.
+\end{document}
+`
+	if err := os.WriteFile(filepath.Join(dir, "test.tex"), []byte(tex), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origDir)
+
+	diags := checkMathLinebreak(dir)
+	if len(diags) != 1 {
+		t.Fatalf("got %d diagnostics, want 1 (bib false positive should be filtered): %v", len(diags), diags)
+	}
+	if diags[0].Line != 5 {
+		t.Errorf("line = %d, want 5", diags[0].Line)
+	}
+}
+
 func TestCheckMathLinebreak_NoFile(t *testing.T) {
 	dir := t.TempDir()
 	diags := checkMathLinebreak(dir)
