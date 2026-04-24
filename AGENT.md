@@ -13,7 +13,7 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 | `internal/bib/` | Bib parsing, key gen, formatting, validation, Logger interface, retry logic |
 | `internal/term/` | Shared terminal detection (`IsTerminal`) + ANSI color codes (`Colors` struct, `Detect()`) |
 | `internal/texscan/` | Tex file scanner for bib declarations |
-| `internal/pedantic/` | Pedantic checks: source-level + post-compile (synctex) |
+| `internal/pedantic/` | Pedantic checks: source-level + post-compile (pdfsavepos) |
 | `internal/lsp/` | Minimal LSP server (JSON-RPC over stdio, cite-key completions) |
 
 ## Bib processing

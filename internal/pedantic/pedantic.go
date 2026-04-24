@@ -25,17 +25,23 @@ func (d Diagnostic) String() string {
 type Phase int
 
 const (
-	PhaseSource Phase = iota // runs on tex source
+	PhaseSource      Phase = iota // runs on tex source
+	PhasePostCompile              // runs after final pdflatex pass
 )
 
 // SourceCheckFunc checks source lines (comment-stripped) for a single file.
 type SourceCheckFunc func(path string, lines []string) []Diagnostic
 
+// PostCompileCheckFunc runs after all pdflatex passes complete.
+// auxDir is the .el/ directory containing build artifacts.
+type PostCompileCheckFunc func(auxDir string) []Diagnostic
+
 // Check describes a registered pedantic check.
 type Check struct {
-	Name   string
-	Phase  Phase
-	Source SourceCheckFunc
+	Name        string
+	Phase       Phase
+	Source      SourceCheckFunc
+	PostCompile PostCompileCheckFunc
 }
 
 var registry = map[string]Check{}

@@ -185,6 +185,7 @@ $ el config unset pedantic                     # clear all checks
 | Check | What it flags |
 |---|---|
 | `no-block-citations` | Multi-key citations (`\cite{a,b}`) or adjacent cite commands (`\cite{a}\cite{b}`, `\cite{a}~\cite{b}`) |
+| `no-math-linebreak` | Inline math (`$...$` or `\(...\)`) that spans multiple lines in the final PDF |
 
 ### `el bib`
 

@@ -1,0 +1,55 @@
+%% el-mathpos.sty — record y-positions of inline math for linebreak detection.
+%% Auto-injected by el compile when pedantic no-math-linebreak is enabled.
+%%
+%% Output format (one line per event in <jobname>.mathpos):
+%%   S <id> <y-sp> <source-line>
+%%   E <id> <y-sp> <source-line>
+%% where y-sp is the vertical PDF position in scaled points (from \pdflastypos).
+%% A pair with differing y values means inline math was split across lines.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{el-mathpos}[2026/04/24 Math position tracking for easy-latex]
+
+\makeatletter
+
+\newwrite\elmathfile
+\immediate\openout\elmathfile=\jobname.mathpos
+
+\newcount\elmathid
+\elmathid=0
+
+%% Local flag: true when we are NOT already inside an outer inline math
+%% expression. \everymath fires for sub/superscripts too; the flag is set
+%% false locally inside the hook, so nested math groups see false and skip.
+\newif\ifelmath@outer
+\elmath@outertrue
+
+\def\elmath@hook{%
+  \ifelmath@outer
+    \elmath@outerfalse
+    \global\advance\elmathid by 1\relax
+    \pdfsavepos
+    \begingroup
+      \edef\act{\endgroup
+        \write\elmathfile{S \the\elmathid\space
+          \noexpand\the\noexpand\pdflastypos\space\the\inputlineno}%
+      }\act
+    \aftergroup\elmath@end
+  \fi
+}
+
+\def\elmath@end{%
+  \pdfsavepos
+  \begingroup
+    \edef\act{\endgroup
+      \write\elmathfile{E \the\elmathid\space
+        \noexpand\the\noexpand\pdflastypos\space\the\inputlineno}%
+    }\act
+}
+
+%% Append to the LaTeX everymath token register.  The kernel's
+%% \frozen@everymath expands \the\everymath, so our tokens run in
+%% every inline math group.
+\everymath\expandafter{\the\everymath\elmath@hook}
+
+\makeatother
+\endinput
