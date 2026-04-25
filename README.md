@@ -181,10 +181,11 @@ $ el config set no-block-citations          # enable a check
 $ el config unset no-block-citations        # disable (sets to false)
 ```
 
-| Check | What it flags |
-|---|---|
-| `no-block-citations` | Multi-key citations (`\cite{a,b}`) or adjacent cite commands (`\cite{a}\cite{b}`, `\cite{a}~\cite{b}`) |
-| `no-math-linebreak` | Inline math (`$...$` or `\(...\)`) that spans multiple lines in the final PDF |
+| Check | Fixable | What it flags |
+|---|---|---|
+| `no-block-citations` | no | Multi-key citations (`\cite{a,b}`) or adjacent cite commands (`\cite{a}\cite{b}`, `\cite{a}~\cite{b}`) |
+| `single-spaces` | yes | Runs of 2+ consecutive spaces past leading whitespace; comment tails preserved |
+| `no-math-linebreak` | no | Inline math (`$...$` or `\(...\)`) that spans multiple lines in the final PDF |
 
 ### `el bib`
 

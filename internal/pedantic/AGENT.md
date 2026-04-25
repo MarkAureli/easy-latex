@@ -11,10 +11,11 @@ Registry-based: each check registers via `init()` → `Register(Check{...})`.
 
 ## Checks
 
-| Name | Phase | What it flags |
-|---|---|---|
-| `no-block-citations` | Source | Multi-key cite `\cite{a,b}` or adjacent cites `\cite{a}\cite{b}` |
-| `no-math-linebreak` | PostCompile | Inline math (`$...$` or `\(...\)`) that spans multiple PDF lines |
+| Name | Phase | Fixable | What it flags |
+|---|---|---|---|
+| `no-block-citations` | Source | no | Multi-key cite `\cite{a,b}` or adjacent cites `\cite{a}\cite{b}` |
+| `single-spaces` | Source | yes | Runs of 2+ spaces past leading whitespace; comment tail preserved |
+| `no-math-linebreak` | PostCompile | no | Inline math (`$...$` or `\(...\)`) that spans multiple PDF lines |
 
 ## no-math-linebreak implementation
 
@@ -35,6 +36,7 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 | `pedantic.go` | `Diagnostic`, `Check`, `SourceCheckFunc`, `SourceFixFunc`, `PostCompileCheckFunc`, registry (`Register`, `Get`, `Known`, `AllNames`, `ValidateCheckNames`) |
 | `run.go` | `RunSourceChecks`, `RunPostCompileChecks`, `RunSourceFixes`, `HasPostCompileChecks`, `HasFixableChecks`, `readAndStripComments` |
 | `block_citations.go` | `no-block-citations` check impl |
+| `single_spaces.go` | `single-spaces` check + fix impl |
 | `math_linebreak.go` | `no-math-linebreak` check impl, `parseMathPos`, `MathPosSty` embed |
 | `el-mathpos.sty` | LaTeX package for position tracking (embedded into binary) |
 
