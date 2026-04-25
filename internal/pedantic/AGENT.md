@@ -6,8 +6,8 @@ Configurable pedantic checks run during `el compile`. Violations are errors (non
 
 Registry-based: each check registers via `init()` → `Register(Check{...})`.
 
-- `PhaseSource` — runs on tex source lines (comment-stripped). Signature: `func(path string, lines []string) []Diagnostic`
-- `PhasePostCompile` — runs after all pdflatex passes complete. Signature: `func(auxDir string) []Diagnostic`
+- `PhaseSource` — runs on tex source lines (comment-stripped). Diagnostic signature: `func(path string, lines []string) []Diagnostic`. May optionally provide `Fix` for autofix (raw lines, not comment-stripped): `func(path string, lines []string) ([]string, bool)` — returns rewritten lines and changed flag.
+- `PhasePostCompile` — runs after all pdflatex passes complete. Read-only. Signature: `func(auxDir string) []Diagnostic`. No Fix permitted (dynamic checks are non-convergent under autofix).
 
 ## Checks
 
@@ -32,8 +32,8 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 
 | File | Role |
 |---|---|
-| `pedantic.go` | `Diagnostic`, `Check`, registry (`Register`, `Get`, `Known`, `AllNames`, `ValidateCheckNames`) |
-| `run.go` | `RunSourceChecks`, `RunPostCompileChecks`, `HasPostCompileChecks`, `readAndStripComments` |
+| `pedantic.go` | `Diagnostic`, `Check`, `SourceCheckFunc`, `SourceFixFunc`, `PostCompileCheckFunc`, registry (`Register`, `Get`, `Known`, `AllNames`, `ValidateCheckNames`) |
+| `run.go` | `RunSourceChecks`, `RunPostCompileChecks`, `RunSourceFixes`, `HasPostCompileChecks`, `HasFixableChecks`, `readAndStripComments` |
 | `block_citations.go` | `no-block-citations` check impl |
 | `math_linebreak.go` | `no-math-linebreak` check impl, `parseMathPos`, `MathPosSty` embed |
 | `el-mathpos.sty` | LaTeX package for position tracking (embedded into binary) |
@@ -41,6 +41,7 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 ## Adding a new check
 
 1. Create `internal/pedantic/<name>.go`
-2. Define check func matching `SourceCheckFunc` or `PostCompileCheckFunc`
-3. Call `Register(Check{Name: "...", Phase: ..., Source/PostCompile: ...})` in `init()`
-4. No changes needed elsewhere — registry handles discovery
+2. Define detector matching `SourceCheckFunc` (source phase) or `PostCompileCheckFunc` (dynamic phase)
+3. Optionally for source-phase checks: define a `SourceFixFunc` that rewrites raw lines
+4. Call `Register(Check{Name: "...", Phase: ..., Source: ..., Fix: ..., PostCompile: ...})` in `init()`
+5. No changes needed elsewhere — registry handles discovery; config CLI auto-exposes the name

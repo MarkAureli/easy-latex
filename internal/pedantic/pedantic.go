@@ -32,15 +32,25 @@ const (
 // SourceCheckFunc checks source lines (comment-stripped) for a single file.
 type SourceCheckFunc func(path string, lines []string) []Diagnostic
 
+// SourceFixFunc rewrites raw source lines (NOT comment-stripped) for a single
+// file. Returns the new lines and true when modifications were made, or the
+// input slice and false when no change is needed. Implementations are
+// responsible for being comment-aware where relevant.
+type SourceFixFunc func(path string, lines []string) ([]string, bool)
+
 // PostCompileCheckFunc runs after all pdflatex passes complete.
 // auxDir is the .el/ directory containing build artifacts.
 type PostCompileCheckFunc func(auxDir string) []Diagnostic
 
 // Check describes a registered pedantic check.
+//
+// Source-phase checks may optionally provide Fix to enable autofix; pure
+// linters leave Fix nil. Dynamic (post-compile) checks are always read-only.
 type Check struct {
 	Name        string
 	Phase       Phase
 	Source      SourceCheckFunc
+	Fix         SourceFixFunc
 	PostCompile PostCompileCheckFunc
 }
 

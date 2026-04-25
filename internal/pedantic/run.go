@@ -3,6 +3,8 @@ package pedantic
 import (
 	"bufio"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
@@ -54,6 +56,53 @@ func HasPostCompileChecks(checkNames []string) bool {
 		}
 	}
 	return false
+}
+
+// HasFixableChecks returns true if any enabled check provides a Fix.
+func HasFixableChecks(checkNames []string) bool {
+	for _, name := range checkNames {
+		if c, ok := Get(name); ok && c.Fix != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// RunSourceFixes applies all enabled fixable checks to texFiles in-place.
+// Returns sorted list of paths that were actually modified.
+func RunSourceFixes(checkNames, texFiles []string) ([]string, error) {
+	var fixes []Check
+	for _, name := range checkNames {
+		if c, ok := Get(name); ok && c.Fix != nil {
+			fixes = append(fixes, c)
+		}
+	}
+	if len(fixes) == 0 {
+		return nil, nil
+	}
+	var modified []string
+	for _, path := range texFiles {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return modified, err
+		}
+		lines := strings.Split(string(data), "\n")
+		changed := false
+		for _, c := range fixes {
+			if newLines, did := c.Fix(path, lines); did {
+				lines = newLines
+				changed = true
+			}
+		}
+		if changed {
+			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+				return modified, err
+			}
+			modified = append(modified, path)
+		}
+	}
+	sort.Strings(modified)
+	return modified, nil
 }
 
 // readAndStripComments reads a file and returns lines with comments stripped.
