@@ -9,7 +9,7 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 | `.el/` | Working directory: config, all pdflatex/bibtex/biber intermediates, bib cache |
 | `.el/config.json` | Config: main tex file, aux dir, bib paths, processing options |
 | `.el/bib.json` | Per-entry validation source cache |
-| `cmd/` | Cobra commands (`bib`, `compile`, `config`, `init`, `lsp`) |
+| `cmd/` | Cobra commands (`bib`, `check`, `compile`, `config`, `init`, `lsp`) |
 | `internal/bib/` | Bib parsing, key gen, formatting, validation, Logger interface, retry logic |
 | `internal/term/` | Shared terminal detection (`IsTerminal`) + ANSI color codes (`Colors` struct, `Detect()`) |
 | `internal/texscan/` | Tex file scanner for bib declarations |
@@ -40,6 +40,7 @@ See `internal/bib/AGENT.md` for entry-type specs.
 |---|---|
 | `cmd/root.agent.md` | Config struct (shared by commands) |
 | `cmd/bib.agent.md` | `el bib` command group (`list`, `add`, `parse`) |
+| `cmd/check.agent.md` | `el check` static-only linter + autofix |
 | `cmd/compile.agent.md` | `el compile` pass sequence |
 | `cmd/config.agent.md` | `el config` flags |
 | `cmd/init.agent.md` | `el init` steps |

@@ -181,6 +181,15 @@ $ el config set no-block-citations          # enable a check
 $ el config unset no-block-citations        # disable (sets to false)
 ```
 
+Static (source-phase) checks can also be run standalone, without compiling, via `el check`:
+
+```
+$ el check          # report violations, exit non-zero on any
+$ el check --fix    # apply autofixes for fixable checks (see table below)
+```
+
+`el check` skips dynamic checks (those requiring compile artifacts).
+
 | Check | Fixable | What it flags |
 |---|---|---|
 | `no-block-citations` | no | Multi-key citations (`\cite{a,b}`) or adjacent cite commands (`\cite{a}\cite{b}`, `\cite{a}~\cite{b}`) |
