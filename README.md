@@ -136,10 +136,10 @@ Corrections are reported on the terminal:
 
 View or update processing options. Settings are stored in `.el/config.json` (local, per-project) and `~/.elconfig.json` (global). Local settings override global settings.
 
-List the effective configuration with `--list`. Use `--list --global` to show only global settings (works outside projects):
+List the effective configuration with `list`. Use `list --global` to show only global settings (works outside projects):
 
 ```
-$ el config --list
+$ el config list
 SETTING                VALUE          SOURCE
 abbreviate-journals    true           (default)
 abbreviate-first-name  true           (default)

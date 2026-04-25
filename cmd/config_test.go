@@ -521,12 +521,20 @@ func TestConfigSet_GlobalNoFile(t *testing.T) {
 func invokeConfigCmd(t *testing.T, args []string) error {
 	t.Helper()
 	cmd := &cobra.Command{}
-	cmd.Flags().Bool("list", false, "")
-	cmd.Flags().Bool("global", false, "")
 	if err := cmd.ParseFlags(args); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
 	return runConfigCmd(cmd, cmd.Flags().Args())
+}
+
+func invokeConfigList(t *testing.T, args []string) error {
+	t.Helper()
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("global", false, "")
+	if err := cmd.ParseFlags(args); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+	return runConfigList(cmd, cmd.Flags().Args())
 }
 
 func TestConfigBare_Fails(t *testing.T) {
@@ -538,8 +546,8 @@ func TestConfigBare_Fails(t *testing.T) {
 func TestConfigList_OutsideProject(t *testing.T) {
 	chdir(t, t.TempDir())
 	setGlobalConfigDir(t, t.TempDir())
-	if err := invokeConfigCmd(t, []string{"--list"}); err != nil {
-		t.Fatalf("expected --list to work outside project, got: %v", err)
+	if err := invokeConfigList(t, nil); err != nil {
+		t.Fatalf("expected list to work outside project, got: %v", err)
 	}
 }
 
@@ -549,7 +557,7 @@ func TestConfigList_NoError(t *testing.T) {
 	chdir(t, dir)
 	setGlobalConfigDir(t, t.TempDir())
 
-	if err := invokeConfigCmd(t, []string{"--list"}); err != nil {
+	if err := invokeConfigList(t, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -562,7 +570,7 @@ func TestConfigList_GlobalOnly(t *testing.T) {
 	// Set a global value first
 	invokeConfigSet(t, []string{"--global", "ieee-format", "true"})
 
-	if err := invokeConfigCmd(t, []string{"--list", "--global"}); err != nil {
+	if err := invokeConfigList(t, []string{"--global"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -572,8 +580,8 @@ func TestConfigList_GlobalOutsideProject(t *testing.T) {
 	setGlobalConfigDir(t, home)
 	chdir(t, t.TempDir()) // not a project
 
-	// --list --global should work outside a project
-	if err := invokeConfigCmd(t, []string{"--list", "--global"}); err != nil {
+	// list --global should work outside a project
+	if err := invokeConfigList(t, []string{"--global"}); err != nil {
 		t.Fatalf("expected to work outside project, got: %v", err)
 	}
 }

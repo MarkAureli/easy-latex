@@ -156,7 +156,7 @@ func boolSetter(set func(*Config, bool)) func(*Config, string) error {
 
 func splitCheckNames(val string) []string {
 	var names []string
-	for _, s := range strings.Split(val, ",") {
+	for s := range strings.SplitSeq(val, ",") {
 		s = strings.TrimSpace(s)
 		if s != "" {
 			names = append(names, s)
@@ -191,6 +191,14 @@ var configCmd = &cobra.Command{
 	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
+var configListCmd = &cobra.Command{
+	Use:               "list",
+	Short:             "Display the effective configuration",
+	Args:              cobra.NoArgs,
+	RunE:              runConfigList,
+	ValidArgsFunction: cobra.NoFileCompletions,
+}
+
 var configSetCmd = &cobra.Command{
 	Use:               "set <key> [value]",
 	Short:             "Set a configuration value",
@@ -208,14 +216,13 @@ var configUnsetCmd = &cobra.Command{
 }
 
 func init() {
-	configCmd.Flags().Bool("list", false,
-		"Display the effective configuration")
-	configCmd.Flags().Bool("global", false,
-		"With --list: show only global config (~/.elconfig.json)")
+	configListCmd.Flags().Bool("global", false,
+		"Show only global config (~/.elconfig.json)")
 	configSetCmd.Flags().Bool("global", false,
 		"Modify the global config (~/.elconfig.json) instead of the local project config")
 	configUnsetCmd.Flags().Bool("global", false,
 		"Modify the global config (~/.elconfig.json) instead of the local project config")
+	configCmd.AddCommand(configListCmd)
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configUnsetCmd)
 }
@@ -234,11 +241,10 @@ func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, c
 // ── Display ──────────────────────────────────────────────────────────────────
 
 func runConfigCmd(cmd *cobra.Command, args []string) error {
-	list, _ := cmd.Flags().GetBool("list")
-	if !list {
-		return fmt.Errorf("usage: el config --list [--global] | el config set <key> [value] | el config unset <key>")
-	}
+	return fmt.Errorf("usage: el config list [--global] | el config set <key> [value] | el config unset <key>")
+}
 
+func runConfigList(cmd *cobra.Command, args []string) error {
 	global, err := loadGlobalConfig()
 	if err != nil {
 		return err

@@ -1,16 +1,14 @@
 # el config (`config.go`)
 
-## Display mode
-
-`el config --list` displays all settings in a table: name, effective value, source.
-Source is one of `(local)`, `(global)`, `(default)`, or `(ieee default)`.
-Requires being inside a project (`.el/` directory).
-
-`el config --list --global` shows global config only. Works outside projects.
-
-Bare `el config` (no flags/subcommand) prints usage error.
+Bare `el config` (no subcommand) prints usage error.
 
 ## Subcommands
+
+### `el config list [--global]`
+Displays all settings in a table: name, effective value, source.
+Source is one of `(local)`, `(global)`, `(default)`, or `(ieee default)`.
+Outside a project, shows global config only.
+`--global` shows only global config (`~/.elconfig.json`); works outside projects.
 
 ### `el config set <key> [value] [--global]`
 Set a configuration value.
