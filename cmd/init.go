@@ -89,7 +89,7 @@ func doInit(dir string, stdin io.Reader, ieee bool) error {
 	cfg := Config{Main: chosen, BibFiles: bibFiles}
 	if ieee {
 		t := true
-		cfg.IEEEFormat = &t
+		cfg.Bib.IEEEFormat = &t
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

@@ -13,17 +13,18 @@ Outside a project, shows global config only.
 ### `el config set <key> [value] [--global]`
 Set a configuration value.
 - Bool keys: value is optional (defaults to "true"). Accepts "true" or "false".
-- Non-bool keys (e.g. max-authors): value is required.
+- Non-bool keys (e.g. `max-authors`): value is required.
 - `--global`: writes to `~/.elconfig.json` instead of `.el/config.json`. Works outside a project.
 
-### `el config unset <key> [value] [--global]`
+### `el config unset <key> [--global]`
 Unset a configuration value.
-- Bool keys: sets the value to false.
-- Non-bool keys: removes the value from config (restores default).
-- Slice keys (pedantic): bare `unset` clears all; `unset pedantic <name>` removes specific entry.
+- Bool keys: sets to explicit false.
+- Non-bool keys: removes the value (restores default).
 - `--global`: modifies `~/.elconfig.json`.
 
 ## Config keys
+
+Bib options (stored under `bib`):
 
 | Key | Type | Default |
 |---|---|---|
@@ -34,7 +35,14 @@ Unset a configuration value.
 | `max-authors` | int | 0 (unlimited; 5 when ieee-format enabled) |
 | `url-from-doi` | bool | false |
 | `retry-timeout` | bool | true |
-| `pedantic` | string (csv) | (none) |
+
+Pedantic checks (stored under `pedantic.checks`, one bool per name):
+
+| Key | Type | Default |
+|---|---|---|
+| `<check-name>` | bool | false |
+
+Pedantic check keys are generated dynamically from the pedantic registry (`pedantic.AllNames()`). No naming collisions with bib keys.
 
 ## Config resolution order
 
@@ -42,8 +50,6 @@ local `.el/config.json` > global `~/.elconfig.json` > built-in default.
 
 ## Implementation
 
-`configField` registry in `configFields` slice maps key names to struct field accessors.
-`loadTargetConfig(cmd)` returns config + save func based on `--global` flag.
-Shell completion via `configKeyCompletion`.
+`configFields` is built as `bibConfigFields` (static slice) + `pedanticConfigFields()` (one entry per registered check). `findField(key)` does a linear lookup; `loadTargetConfig(cmd)` returns config + save func based on `--global` flag. Shell completion via `configKeyCompletion`.
 
-See `cmd/root.agent.md` for Config struct definition.
+See `cmd/root.agent.md` for Config / BibConfig / PedanticConfig struct definitions.

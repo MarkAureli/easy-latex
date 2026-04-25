@@ -540,7 +540,7 @@ func TestDoInit_IEEEFlag_SetsIEEEFormat(t *testing.T) {
 	}
 
 	cfg := readConfig(t, dir)
-	if cfg.IEEEFormat == nil || !*cfg.IEEEFormat {
+	if cfg.Bib.IEEEFormat == nil || !*cfg.Bib.IEEEFormat {
 		t.Error("IEEEFormat should be true in config when --ieee flag is set")
 	}
 }
@@ -555,8 +555,8 @@ func TestDoInit_NoIEEE_IEEEFormatUnset(t *testing.T) {
 	}
 
 	cfg := readConfig(t, dir)
-	if cfg.IEEEFormat != nil {
-		t.Errorf("IEEEFormat should be nil (unset) when --ieee flag is absent, got %v", *cfg.IEEEFormat)
+	if cfg.Bib.IEEEFormat != nil {
+		t.Errorf("IEEEFormat should be nil (unset) when --ieee flag is absent, got %v", *cfg.Bib.IEEEFormat)
 	}
 }
 

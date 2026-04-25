@@ -65,7 +65,7 @@ func TestAbbreviateJournals_NilDefaultsTrue(t *testing.T) {
 
 func TestAbbreviateJournals_ExplicitTrue(t *testing.T) {
 	v := true
-	cfg := &Config{AbbreviateJournals: &v}
+	cfg := &Config{Bib: BibConfig{AbbreviateJournals: &v}}
 	if !cfg.abbreviateJournals() {
 		t.Error("expected true when AbbreviateJournals is &true")
 	}
@@ -73,7 +73,7 @@ func TestAbbreviateJournals_ExplicitTrue(t *testing.T) {
 
 func TestAbbreviateJournals_ExplicitFalse(t *testing.T) {
 	v := false
-	cfg := &Config{AbbreviateJournals: &v}
+	cfg := &Config{Bib: BibConfig{AbbreviateJournals: &v}}
 	if cfg.abbreviateJournals() {
 		t.Error("expected false when AbbreviateJournals is &false")
 	}
@@ -88,7 +88,7 @@ func TestBraceTitles_NilDefaultsFalse(t *testing.T) {
 
 func TestBraceTitles_ExplicitTrue(t *testing.T) {
 	v := true
-	cfg := &Config{BraceTitles: &v}
+	cfg := &Config{Bib: BibConfig{BraceTitles: &v}}
 	if !cfg.braceTitles() {
 		t.Error("expected true when BraceTitles is &true")
 	}
@@ -96,7 +96,7 @@ func TestBraceTitles_ExplicitTrue(t *testing.T) {
 
 func TestBraceTitles_ExplicitFalse(t *testing.T) {
 	v := false
-	cfg := &Config{BraceTitles: &v}
+	cfg := &Config{Bib: BibConfig{BraceTitles: &v}}
 	if cfg.braceTitles() {
 		t.Error("expected false when BraceTitles is &false")
 	}
@@ -111,7 +111,7 @@ func TestIEEEFormat_NilDefaultsFalse(t *testing.T) {
 
 func TestIEEEFormat_ExplicitTrue(t *testing.T) {
 	v := true
-	cfg := &Config{IEEEFormat: &v}
+	cfg := &Config{Bib: BibConfig{IEEEFormat: &v}}
 	if !cfg.ieeeFormat() {
 		t.Error("expected true when IEEEFormat is &true")
 	}
@@ -119,7 +119,7 @@ func TestIEEEFormat_ExplicitTrue(t *testing.T) {
 
 func TestIEEEFormat_ExplicitFalse(t *testing.T) {
 	v := false
-	cfg := &Config{IEEEFormat: &v}
+	cfg := &Config{Bib: BibConfig{IEEEFormat: &v}}
 	if cfg.ieeeFormat() {
 		t.Error("expected false when IEEEFormat is &false")
 	}
@@ -134,7 +134,7 @@ func TestAbbreviateFirstName_NilDefaultsTrue(t *testing.T) {
 
 func TestAbbreviateFirstName_ExplicitTrue(t *testing.T) {
 	v := true
-	cfg := &Config{AbbreviateFirstName: &v}
+	cfg := &Config{Bib: BibConfig{AbbreviateFirstName: &v}}
 	if !cfg.abbreviateFirstName() {
 		t.Error("expected true when AbbreviateFirstName is &true")
 	}
@@ -142,7 +142,7 @@ func TestAbbreviateFirstName_ExplicitTrue(t *testing.T) {
 
 func TestAbbreviateFirstName_ExplicitFalse(t *testing.T) {
 	v := false
-	cfg := &Config{AbbreviateFirstName: &v}
+	cfg := &Config{Bib: BibConfig{AbbreviateFirstName: &v}}
 	if cfg.abbreviateFirstName() {
 		t.Error("expected false when AbbreviateFirstName is &false")
 	}
@@ -157,7 +157,7 @@ func TestUrlFromDOI_NilDefaultsFalse(t *testing.T) {
 
 func TestUrlFromDOI_ExplicitTrue(t *testing.T) {
 	v := true
-	cfg := &Config{UrlFromDOI: &v}
+	cfg := &Config{Bib: BibConfig{UrlFromDOI: &v}}
 	if !cfg.urlFromDOI() {
 		t.Error("expected true when UrlFromDOI is &true")
 	}
@@ -165,7 +165,7 @@ func TestUrlFromDOI_ExplicitTrue(t *testing.T) {
 
 func TestUrlFromDOI_ExplicitFalse(t *testing.T) {
 	v := false
-	cfg := &Config{UrlFromDOI: &v}
+	cfg := &Config{Bib: BibConfig{UrlFromDOI: &v}}
 	if cfg.urlFromDOI() {
 		t.Error("expected false when UrlFromDOI is &false")
 	}
@@ -180,7 +180,7 @@ func TestMaxAuthors_NilDefaultsUnlimited(t *testing.T) {
 
 func TestMaxAuthors_ExplicitValue(t *testing.T) {
 	v := 10
-	cfg := &Config{MaxAuthors: &v}
+	cfg := &Config{Bib: BibConfig{MaxAuthors: &v}}
 	if cfg.maxAuthors() != 10 {
 		t.Errorf("expected 10, got %d", cfg.maxAuthors())
 	}
@@ -188,7 +188,7 @@ func TestMaxAuthors_ExplicitValue(t *testing.T) {
 
 func TestMaxAuthors_ZeroValue(t *testing.T) {
 	v := 0
-	cfg := &Config{MaxAuthors: &v}
+	cfg := &Config{Bib: BibConfig{MaxAuthors: &v}}
 	if cfg.maxAuthors() != 0 {
 		t.Errorf("expected 0 (unlimited), got %d", cfg.maxAuthors())
 	}
@@ -196,7 +196,7 @@ func TestMaxAuthors_ZeroValue(t *testing.T) {
 
 func TestMaxAuthors_IEEEImpliesFive(t *testing.T) {
 	trueVal := true
-	cfg := &Config{IEEEFormat: &trueVal, MaxAuthors: nil}
+	cfg := &Config{Bib: BibConfig{IEEEFormat: &trueVal, MaxAuthors: nil}}
 	if cfg.maxAuthors() != 5 {
 		t.Errorf("expected 5 when IEEEFormat is true and MaxAuthors is nil, got %d", cfg.maxAuthors())
 	}
@@ -205,7 +205,7 @@ func TestMaxAuthors_IEEEImpliesFive(t *testing.T) {
 func TestMaxAuthors_ExplicitValueOverridesIEEE(t *testing.T) {
 	trueVal := true
 	v := 3
-	cfg := &Config{IEEEFormat: &trueVal, MaxAuthors: &v}
+	cfg := &Config{Bib: BibConfig{IEEEFormat: &trueVal, MaxAuthors: &v}}
 	if cfg.maxAuthors() != 3 {
 		t.Errorf("expected 3 (explicit value overrides IEEE), got %d", cfg.maxAuthors())
 	}
@@ -215,28 +215,28 @@ func TestMaxAuthors_ExplicitValueOverridesIEEE(t *testing.T) {
 
 func TestMergeConfig_LocalOverridesGlobal(t *testing.T) {
 	lv, gv := false, true
-	local := &Config{AbbreviateJournals: &lv}
-	global := &Config{AbbreviateJournals: &gv}
+	local := &Config{Bib: BibConfig{AbbreviateJournals: &lv}}
+	global := &Config{Bib: BibConfig{AbbreviateJournals: &gv}}
 	merged := mergeConfig(local, global)
-	if merged.AbbreviateJournals == nil || *merged.AbbreviateJournals != false {
-		t.Errorf("expected local false to win, got %v", merged.AbbreviateJournals)
+	if merged.Bib.AbbreviateJournals == nil || *merged.Bib.AbbreviateJournals != false {
+		t.Errorf("expected local false to win, got %v", merged.Bib.AbbreviateJournals)
 	}
 }
 
 func TestMergeConfig_GlobalFallback(t *testing.T) {
 	gv := true
 	local := &Config{}
-	global := &Config{BraceTitles: &gv}
+	global := &Config{Bib: BibConfig{BraceTitles: &gv}}
 	merged := mergeConfig(local, global)
-	if merged.BraceTitles == nil || *merged.BraceTitles != true {
-		t.Errorf("expected global true, got %v", merged.BraceTitles)
+	if merged.Bib.BraceTitles == nil || *merged.Bib.BraceTitles != true {
+		t.Errorf("expected global true, got %v", merged.Bib.BraceTitles)
 	}
 }
 
 func TestMergeConfig_BothNil(t *testing.T) {
 	merged := mergeConfig(&Config{}, &Config{})
-	if merged.AbbreviateJournals != nil {
-		t.Errorf("expected nil, got %v", merged.AbbreviateJournals)
+	if merged.Bib.AbbreviateJournals != nil {
+		t.Errorf("expected nil, got %v", merged.Bib.AbbreviateJournals)
 	}
 }
 
@@ -252,10 +252,10 @@ func TestMergeConfig_MainFromLocal(t *testing.T) {
 func TestMergeConfig_IntField(t *testing.T) {
 	gv := 5
 	local := &Config{}
-	global := &Config{MaxAuthors: &gv}
+	global := &Config{Bib: BibConfig{MaxAuthors: &gv}}
 	merged := mergeConfig(local, global)
-	if merged.MaxAuthors == nil || *merged.MaxAuthors != 5 {
-		t.Errorf("expected global max-authors 5, got %v", merged.MaxAuthors)
+	if merged.Bib.MaxAuthors == nil || *merged.Bib.MaxAuthors != 5 {
+		t.Errorf("expected global max-authors 5, got %v", merged.Bib.MaxAuthors)
 	}
 }
 
@@ -270,8 +270,8 @@ func TestConfigSet_BoolNoValue(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readConfig(t, dir)
-	if cfg.AbbreviateJournals == nil || *cfg.AbbreviateJournals != true {
-		t.Errorf("AbbreviateJournals = %v, want &true", cfg.AbbreviateJournals)
+	if cfg.Bib.AbbreviateJournals == nil || *cfg.Bib.AbbreviateJournals != true {
+		t.Errorf("AbbreviateJournals = %v, want &true", cfg.Bib.AbbreviateJournals)
 	}
 }
 
@@ -284,8 +284,8 @@ func TestConfigSet_BoolTrue(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readConfig(t, dir)
-	if cfg.BraceTitles == nil || *cfg.BraceTitles != true {
-		t.Errorf("BraceTitles = %v, want &true", cfg.BraceTitles)
+	if cfg.Bib.BraceTitles == nil || *cfg.Bib.BraceTitles != true {
+		t.Errorf("BraceTitles = %v, want &true", cfg.Bib.BraceTitles)
 	}
 }
 
@@ -298,8 +298,8 @@ func TestConfigSet_BoolFalse(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readConfig(t, dir)
-	if cfg.AbbreviateJournals == nil || *cfg.AbbreviateJournals != false {
-		t.Errorf("AbbreviateJournals = %v, want &false", cfg.AbbreviateJournals)
+	if cfg.Bib.AbbreviateJournals == nil || *cfg.Bib.AbbreviateJournals != false {
+		t.Errorf("AbbreviateJournals = %v, want &false", cfg.Bib.AbbreviateJournals)
 	}
 }
 
@@ -312,8 +312,8 @@ func TestConfigSet_IntValue(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readConfig(t, dir)
-	if cfg.MaxAuthors == nil || *cfg.MaxAuthors != 10 {
-		t.Errorf("MaxAuthors = %v, want &10", cfg.MaxAuthors)
+	if cfg.Bib.MaxAuthors == nil || *cfg.Bib.MaxAuthors != 10 {
+		t.Errorf("MaxAuthors = %v, want &10", cfg.Bib.MaxAuthors)
 	}
 }
 
@@ -326,8 +326,8 @@ func TestConfigSet_IntZero(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readConfig(t, dir)
-	if cfg.MaxAuthors == nil || *cfg.MaxAuthors != 0 {
-		t.Errorf("MaxAuthors = %v, want &0", cfg.MaxAuthors)
+	if cfg.Bib.MaxAuthors == nil || *cfg.Bib.MaxAuthors != 0 {
+		t.Errorf("MaxAuthors = %v, want &0", cfg.Bib.MaxAuthors)
 	}
 }
 
@@ -416,8 +416,8 @@ func TestConfigUnset_Bool(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readConfig(t, dir)
-	if cfg.BraceTitles == nil || *cfg.BraceTitles != false {
-		t.Errorf("BraceTitles after unset = %v, want &false", cfg.BraceTitles)
+	if cfg.Bib.BraceTitles == nil || *cfg.Bib.BraceTitles != false {
+		t.Errorf("BraceTitles after unset = %v, want &false", cfg.Bib.BraceTitles)
 	}
 }
 
@@ -434,8 +434,8 @@ func TestConfigUnset_Int(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readConfig(t, dir)
-	if cfg.MaxAuthors != nil {
-		t.Errorf("MaxAuthors after unset = %v, want nil", cfg.MaxAuthors)
+	if cfg.Bib.MaxAuthors != nil {
+		t.Errorf("MaxAuthors after unset = %v, want nil", cfg.Bib.MaxAuthors)
 	}
 }
 
@@ -459,8 +459,8 @@ func TestConfigSet_Global(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readGlobalConfig(t, home)
-	if cfg.IEEEFormat == nil || *cfg.IEEEFormat != true {
-		t.Errorf("global IEEEFormat = %v, want &true", cfg.IEEEFormat)
+	if cfg.Bib.IEEEFormat == nil || *cfg.Bib.IEEEFormat != true {
+		t.Errorf("global IEEEFormat = %v, want &true", cfg.Bib.IEEEFormat)
 	}
 }
 
@@ -472,8 +472,8 @@ func TestConfigSet_GlobalBoolNoValue(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readGlobalConfig(t, home)
-	if cfg.IEEEFormat == nil || *cfg.IEEEFormat != true {
-		t.Errorf("global IEEEFormat = %v, want &true", cfg.IEEEFormat)
+	if cfg.Bib.IEEEFormat == nil || *cfg.Bib.IEEEFormat != true {
+		t.Errorf("global IEEEFormat = %v, want &true", cfg.Bib.IEEEFormat)
 	}
 }
 
@@ -487,8 +487,8 @@ func TestConfigUnset_Global(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readGlobalConfig(t, home)
-	if cfg.IEEEFormat == nil || *cfg.IEEEFormat != false {
-		t.Errorf("global IEEEFormat after unset = %v, want &false", cfg.IEEEFormat)
+	if cfg.Bib.IEEEFormat == nil || *cfg.Bib.IEEEFormat != false {
+		t.Errorf("global IEEEFormat after unset = %v, want &false", cfg.Bib.IEEEFormat)
 	}
 }
 
@@ -511,8 +511,8 @@ func TestConfigSet_GlobalNoFile(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readGlobalConfig(t, home)
-	if cfg.RetryTimeout == nil || *cfg.RetryTimeout != false {
-		t.Errorf("RetryTimeout = %v, want &false", cfg.RetryTimeout)
+	if cfg.Bib.RetryTimeout == nil || *cfg.Bib.RetryTimeout != false {
+		t.Errorf("RetryTimeout = %v, want &false", cfg.Bib.RetryTimeout)
 	}
 }
 
@@ -590,7 +590,7 @@ func TestConfigList_GlobalOutsideProject(t *testing.T) {
 
 func TestConfigSource_Local(t *testing.T) {
 	v := true
-	local := &Config{BraceTitles: &v}
+	local := &Config{Bib: BibConfig{BraceTitles: &v}}
 	global := &Config{}
 	merged := mergeConfig(local, global)
 	f := *findField("brace-titles")
@@ -602,7 +602,7 @@ func TestConfigSource_Local(t *testing.T) {
 func TestConfigSource_Global(t *testing.T) {
 	v := true
 	local := &Config{}
-	global := &Config{BraceTitles: &v}
+	global := &Config{Bib: BibConfig{BraceTitles: &v}}
 	merged := mergeConfig(local, global)
 	f := *findField("brace-titles")
 	if s := configSource(f, local, global, merged); s != "(global)" {
@@ -622,7 +622,7 @@ func TestConfigSource_Default(t *testing.T) {
 
 func TestConfigSource_IEEEDefault(t *testing.T) {
 	v := true
-	local := &Config{IEEEFormat: &v}
+	local := &Config{Bib: BibConfig{IEEEFormat: &v}}
 	global := &Config{}
 	merged := mergeConfig(local, global)
 	f := *findField("max-authors")

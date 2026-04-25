@@ -65,13 +65,14 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(cfg.Pedantic) > 0 {
-		if err := pedantic.ValidateCheckNames(cfg.Pedantic); err != nil {
+	enabledChecks := cfg.Pedantic.EnabledNames()
+	if len(enabledChecks) > 0 {
+		if err := pedantic.ValidateCheckNames(enabledChecks); err != nil {
 			return err
 		}
 	}
 
-	needsMathPos := pedantic.HasPostCompileChecks(cfg.Pedantic)
+	needsMathPos := pedantic.HasPostCompileChecks(enabledChecks)
 	if needsMathPos {
 		styPath := filepath.Join(auxDir, "el-mathpos.sty")
 		if err := os.WriteFile(styPath, pedantic.MathPosSty, 0644); err != nil {
@@ -227,10 +228,10 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Pedantic checks
-	if len(cfg.Pedantic) > 0 {
+	if len(enabledChecks) > 0 {
 		texFiles := texscan.FindTexFiles(cfg.Main, ".")
-		diags := pedantic.RunSourceChecks(cfg.Pedantic, texFiles)
-		diags = append(diags, pedantic.RunPostCompileChecks(cfg.Pedantic, auxDir)...)
+		diags := pedantic.RunSourceChecks(enabledChecks, texFiles)
+		diags = append(diags, pedantic.RunPostCompileChecks(enabledChecks, auxDir)...)
 
 		if len(diags) > 0 {
 			fmt.Fprintf(os.Stderr, "%s%sPedantic:%s\n", compileColors.Bold, compileColors.Red, compileColors.Reset)

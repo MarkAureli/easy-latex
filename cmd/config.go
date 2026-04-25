@@ -13,43 +13,42 @@ import (
 
 // configField describes a single configurable setting.
 type configField struct {
-	key      string
-	isBool   bool
-	setVal   func(*Config, string) error // parse value string and set field
-	unset    func(*Config)               // bool: set to false; int/slice: clear to nil
-	unsetVal   func(*Config, string) error // optional: remove specific value (slice fields)
-	allowEmpty bool                        // allow set with no value
-	isSet      func(*Config) bool          // true when pointer is non-nil
-	display    func(*Config) string        // effective value for display
+	key     string
+	isBool  bool
+	setVal  func(*Config, string) error // parse value string and set field
+	unset   func(*Config)               // bool: set to false; int: clear to nil
+	isSet   func(*Config) bool          // true when explicitly set (non-nil)
+	display func(*Config) string        // effective value for display
 }
 
-var configFields = []configField{
+// bibConfigFields lists configurable bib options (statically typed).
+var bibConfigFields = []configField{
 	{
 		key: "abbreviate-journals", isBool: true,
-		setVal:  boolSetter(func(c *Config, v bool) { c.AbbreviateJournals = &v }),
-		unset:   func(c *Config) { v := false; c.AbbreviateJournals = &v },
-		isSet:   func(c *Config) bool { return c.AbbreviateJournals != nil },
+		setVal:  bibBoolSetter(func(c *Config, v bool) { c.Bib.AbbreviateJournals = &v }),
+		unset:   func(c *Config) { v := false; c.Bib.AbbreviateJournals = &v },
+		isSet:   func(c *Config) bool { return c.Bib.AbbreviateJournals != nil },
 		display: func(c *Config) string { return strconv.FormatBool(c.abbreviateJournals()) },
 	},
 	{
 		key: "abbreviate-first-name", isBool: true,
-		setVal:  boolSetter(func(c *Config, v bool) { c.AbbreviateFirstName = &v }),
-		unset:   func(c *Config) { v := false; c.AbbreviateFirstName = &v },
-		isSet:   func(c *Config) bool { return c.AbbreviateFirstName != nil },
+		setVal:  bibBoolSetter(func(c *Config, v bool) { c.Bib.AbbreviateFirstName = &v }),
+		unset:   func(c *Config) { v := false; c.Bib.AbbreviateFirstName = &v },
+		isSet:   func(c *Config) bool { return c.Bib.AbbreviateFirstName != nil },
 		display: func(c *Config) string { return strconv.FormatBool(c.abbreviateFirstName()) },
 	},
 	{
 		key: "brace-titles", isBool: true,
-		setVal:  boolSetter(func(c *Config, v bool) { c.BraceTitles = &v }),
-		unset:   func(c *Config) { v := false; c.BraceTitles = &v },
-		isSet:   func(c *Config) bool { return c.BraceTitles != nil },
+		setVal:  bibBoolSetter(func(c *Config, v bool) { c.Bib.BraceTitles = &v }),
+		unset:   func(c *Config) { v := false; c.Bib.BraceTitles = &v },
+		isSet:   func(c *Config) bool { return c.Bib.BraceTitles != nil },
 		display: func(c *Config) string { return strconv.FormatBool(c.braceTitles()) },
 	},
 	{
 		key: "ieee-format", isBool: true,
-		setVal:  boolSetter(func(c *Config, v bool) { c.IEEEFormat = &v }),
-		unset:   func(c *Config) { v := false; c.IEEEFormat = &v },
-		isSet:   func(c *Config) bool { return c.IEEEFormat != nil },
+		setVal:  bibBoolSetter(func(c *Config, v bool) { c.Bib.IEEEFormat = &v }),
+		unset:   func(c *Config) { v := false; c.Bib.IEEEFormat = &v },
+		isSet:   func(c *Config) bool { return c.Bib.IEEEFormat != nil },
 		display: func(c *Config) string { return strconv.FormatBool(c.ieeeFormat()) },
 	},
 	{
@@ -62,11 +61,11 @@ var configFields = []configField{
 			if n < 0 {
 				return fmt.Errorf("max-authors must be 0 (unlimited) or a positive integer")
 			}
-			c.MaxAuthors = &n
+			c.Bib.MaxAuthors = &n
 			return nil
 		},
-		unset: func(c *Config) { c.MaxAuthors = nil },
-		isSet: func(c *Config) bool { return c.MaxAuthors != nil },
+		unset: func(c *Config) { c.Bib.MaxAuthors = nil },
+		isSet: func(c *Config) bool { return c.Bib.MaxAuthors != nil },
 		display: func(c *Config) string {
 			v := c.maxAuthors()
 			if v == 0 {
@@ -77,92 +76,94 @@ var configFields = []configField{
 	},
 	{
 		key: "url-from-doi", isBool: true,
-		setVal:  boolSetter(func(c *Config, v bool) { c.UrlFromDOI = &v }),
-		unset:   func(c *Config) { v := false; c.UrlFromDOI = &v },
-		isSet:   func(c *Config) bool { return c.UrlFromDOI != nil },
+		setVal:  bibBoolSetter(func(c *Config, v bool) { c.Bib.UrlFromDOI = &v }),
+		unset:   func(c *Config) { v := false; c.Bib.UrlFromDOI = &v },
+		isSet:   func(c *Config) bool { return c.Bib.UrlFromDOI != nil },
 		display: func(c *Config) string { return strconv.FormatBool(c.urlFromDOI()) },
 	},
 	{
 		key: "retry-timeout", isBool: true,
-		setVal:  boolSetter(func(c *Config, v bool) { c.RetryTimeout = &v }),
-		unset:   func(c *Config) { v := false; c.RetryTimeout = &v },
-		isSet:   func(c *Config) bool { return c.RetryTimeout != nil },
+		setVal:  bibBoolSetter(func(c *Config, v bool) { c.Bib.RetryTimeout = &v }),
+		unset:   func(c *Config) { v := false; c.Bib.RetryTimeout = &v },
+		isSet:   func(c *Config) bool { return c.Bib.RetryTimeout != nil },
 		display: func(c *Config) string { return strconv.FormatBool(c.retryTimeout()) },
 	},
-	{
-		key: "pedantic", isBool: false, allowEmpty: true,
-		setVal: func(c *Config, val string) error {
-			var names []string
-			if val == "" {
-				names = pedantic.AllNames()
-			} else {
-				names = splitCheckNames(val)
-				if err := pedantic.ValidateCheckNames(names); err != nil {
+}
+
+// pedanticConfigFields builds a configField per registered pedantic check.
+// Each check is a bool toggle stored in cfg.Pedantic.Checks[name].
+func pedanticConfigFields() []configField {
+	names := pedantic.AllNames()
+	fields := make([]configField, 0, len(names))
+	for _, name := range names {
+		n := name
+		fields = append(fields, configField{
+			key:    n,
+			isBool: true,
+			setVal: func(c *Config, val string) error {
+				v, err := parseBool(val)
+				if err != nil {
 					return err
 				}
-			}
-			// Append, dedup
-			seen := map[string]bool{}
-			for _, n := range c.Pedantic {
-				seen[n] = true
-			}
-			for _, n := range names {
-				if !seen[n] {
-					c.Pedantic = append(c.Pedantic, n)
-					seen[n] = true
+				if c.Pedantic.Checks == nil {
+					c.Pedantic.Checks = map[string]*bool{}
 				}
-			}
-			return nil
-		},
-		unset: func(c *Config) { c.Pedantic = nil },
-		unsetVal: func(c *Config, val string) error {
-			remove := map[string]bool{}
-			for _, n := range splitCheckNames(val) {
-				remove[n] = true
-			}
-			var kept []string
-			for _, n := range c.Pedantic {
-				if !remove[n] {
-					kept = append(kept, n)
+				c.Pedantic.Checks[n] = &v
+				return nil
+			},
+			unset: func(c *Config) {
+				v := false
+				if c.Pedantic.Checks == nil {
+					c.Pedantic.Checks = map[string]*bool{}
 				}
-			}
-			c.Pedantic = kept
-			return nil
-		},
-		isSet: func(c *Config) bool { return len(c.Pedantic) > 0 },
-		display: func(c *Config) string {
-			if len(c.Pedantic) == 0 {
-				return "(none)"
-			}
-			return strings.Join(c.Pedantic, ", ")
-		},
-	},
+				c.Pedantic.Checks[n] = &v
+			},
+			isSet: func(c *Config) bool {
+				v, ok := c.Pedantic.Checks[n]
+				return ok && v != nil
+			},
+			display: func(c *Config) string {
+				return strconv.FormatBool(c.Pedantic.Enabled(n))
+			},
+		})
+	}
+	return fields
 }
 
-// boolSetter returns a setVal function for a boolean config field.
-func boolSetter(set func(*Config, bool)) func(*Config, string) error {
+// allConfigFields returns bib + pedantic fields. Built fresh each call so the
+// pedantic registry can be populated by package init() before use.
+func allConfigFields() []configField {
+	out := make([]configField, 0, len(bibConfigFields)+8)
+	out = append(out, bibConfigFields...)
+	out = append(out, pedanticConfigFields()...)
+	return out
+}
+
+// configFields is the public list, populated lazily on first access.
+var configFields = allConfigFields()
+
+// parseBool accepts "", "true", "false". Empty string treated as true.
+func parseBool(val string) (bool, error) {
+	switch val {
+	case "", "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid boolean value: %q (use true or false)", val)
+	}
+}
+
+// bibBoolSetter returns a setVal function for a bib boolean option.
+func bibBoolSetter(set func(*Config, bool)) func(*Config, string) error {
 	return func(c *Config, val string) error {
-		switch val {
-		case "", "true":
-			set(c, true)
-		case "false":
-			set(c, false)
-		default:
-			return fmt.Errorf("invalid boolean value: %q (use true or false)", val)
+		v, err := parseBool(val)
+		if err != nil {
+			return err
 		}
+		set(c, v)
 		return nil
 	}
-}
-
-func splitCheckNames(val string) []string {
-	var names []string
-	for s := range strings.SplitSeq(val, ",") {
-		s = strings.TrimSpace(s)
-		if s != "" {
-			names = append(names, s)
-		}
-	}
-	return names
 }
 
 func findField(key string) *configField {
@@ -208,9 +209,9 @@ var configSetCmd = &cobra.Command{
 }
 
 var configUnsetCmd = &cobra.Command{
-	Use:               "unset <key> [value]",
+	Use:               "unset <key>",
 	Short:             "Unset a configuration value",
-	Args:              cobra.RangeArgs(1, 2),
+	Args:              cobra.ExactArgs(1),
 	RunE:              runConfigUnset,
 	ValidArgsFunction: configKeyCompletion,
 }
@@ -333,7 +334,7 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 	if len(args) > 1 {
 		val = args[1]
 	}
-	if !f.isBool && !f.allowEmpty && val == "" {
+	if !f.isBool && val == "" {
 		return fmt.Errorf("key %q requires a value", key)
 	}
 
@@ -358,12 +359,6 @@ func runConfigUnset(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(args) > 1 && f.unsetVal != nil {
-		if err := f.unsetVal(cfg, args[1]); err != nil {
-			return err
-		}
-	} else {
-		f.unset(cfg)
-	}
+	f.unset(cfg)
 	return save(cfg)
 }
