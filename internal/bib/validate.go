@@ -229,7 +229,8 @@ func WriteBibFromCache(path string, citeKeys []string, auxDir string, opts Write
 		}
 
 		e := Entry{Key: key, Type: cached.Type}
-		for name, val := range cached.Fields {
+		for _, name := range slices.Sorted(maps.Keys(cached.Fields)) {
+			val := cached.Fields[name]
 			if name == "journal" && opts.AbbreviateJournals && cached.Source == "crossref" {
 				SetField(&e, name, "{"+AbbreviateISO4(val)+"}")
 			} else {
