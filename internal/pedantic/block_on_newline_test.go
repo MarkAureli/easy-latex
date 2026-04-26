@@ -7,13 +7,15 @@ import (
 
 func TestBlockOnNewline_Detector(t *testing.T) {
 	lines := []string{
-		`\section{Intro} \subsection{Bg}`, // line 1: subsection mid-line → flag
-		`Hello \\ world`,                  // line 2: \\ mid-line → flag
+		`\section{Intro} \subsection{Bg}`, // line 1: subsection mid-line → flag (leading)
+		`Hello \\ world`,                  // line 2: \\ has content after → flag (trailing)
 		`  \section{Foo}`,                 // line 3: leading-ws ok
-		`\begin{itemize} \item one`,       // line 4: \item mid-line → flag
-		`text \input{foo} more`,           // line 5: \input mid-line → flag
+		`\begin{itemize} \item one`,       // line 4: \item mid-line → flag (leading)
+		`text \input{foo} more`,           // line 5: \input mid-line → flag (leading)
 		`text \label{x} ok`,               // line 6: \label not block → no flag
 		`text \hspace*{1em} ok`,           // line 7: \hspace* not block → no flag
+		`Some text\\`,                     // line 8: \\ at end of line → no flag
+		`Para break\newline`,              // line 9: \newline at end of line → no flag
 	}
 	diags := checkBlockOnNewline("t.tex", lines)
 	wantLines := []int{1, 2, 4, 5}
@@ -24,6 +26,21 @@ func TestBlockOnNewline_Detector(t *testing.T) {
 		if diags[i].Line != want {
 			t.Errorf("diag[%d].Line = %d, want %d (msg=%q)", i, diags[i].Line, want, diags[i].Message)
 		}
+	}
+}
+
+func TestBlockOnNewline_MathSkipped(t *testing.T) {
+	// `\\` inside math envs is a row separator and must not be flagged.
+	// Nested `\begin{cases}` mid-equation is also legitimate.
+	lines := []string{
+		`\begin{align}`,
+		`    f(x) \coloneqq \begin{cases} a \\ b \end{cases} \\`,
+		`    g(x) \coloneqq c. \\`,
+		`\end{align}`,
+	}
+	diags := checkBlockOnNewline("t.tex", lines)
+	if len(diags) != 0 {
+		t.Errorf("expected 0 diags inside math, got %d: %+v", len(diags), diags)
 	}
 }
 
@@ -45,15 +62,17 @@ func TestBlockOnNewline_Fixer(t *testing.T) {
 		`  text \\ more`,
 		`\begin{itemize} \item one`,
 		`clean line`,
+		`At end\\`, // already trailing, no change
 	}
 	want := []string{
 		`\section{Intro}`,
 		`\subsection{Bg}`,
-		`  text`,
-		`  \\ more`,
+		`  text \\`,
+		`  more`,
 		`\begin{itemize}`,
 		`\item one`,
 		`clean line`,
+		`At end\\`,
 	}
 	out, changed := fixBlockOnNewline("t.tex", append([]string(nil), in...))
 	if !changed {
@@ -82,17 +101,15 @@ func TestBlockOnNewline_FixerPreservesComment(t *testing.T) {
 }
 
 func TestBlockOnNewline_EndVerbatimMidLineFlagged(t *testing.T) {
-	// After the verbatim env closes, `\end{verbatim}` itself is a block
-	// token — if it sits mid-line, it should be flagged.
 	lines := []string{
 		`\begin{verbatim}`,
 		`raw text`,
 		`\end{verbatim} trailing text`,
 	}
 	diags := checkBlockOnNewline("t.tex", lines)
+	// `\end{verbatim}` is at column 0 — allowed even though "trailing text"
+	// follows on the same line (the env closer is leading, not trailing).
 	if len(diags) != 0 {
-		// `\end{verbatim}` itself is at column 0, so allowed; nothing else
-		// after the closer is a block token.
 		t.Errorf("expected 0 diags, got %d: %+v", len(diags), diags)
 	}
 
@@ -112,6 +129,21 @@ func TestBlockOnNewline_NoFalsePositiveAtIndent(t *testing.T) {
 		`    \item indented item content stays`,
 		`\begin{document}`,
 		`\end{document}`,
+	}
+	diags := checkBlockOnNewline("t.tex", lines)
+	if len(diags) != 0 {
+		t.Errorf("expected 0 diags, got %d: %+v", len(diags), diags)
+	}
+}
+
+func TestBlockOnNewline_BraceGroupAllowed(t *testing.T) {
+	// Macro-definition bodies wrapping a leading block token in a brace group
+	// (e.g. inside \NewDocumentEnvironment{name}{begin-body}{end-body}) must
+	// not be flagged.
+	lines := []string{
+		` {\end{subequations}}`,
+		`{\begin{itemize}}`,
+		`  { \section{Foo}}`,
 	}
 	diags := checkBlockOnNewline("t.tex", lines)
 	if len(diags) != 0 {

@@ -16,72 +16,85 @@ func init() {
 	})
 }
 
-// blockTokens lists tex commands that should always start a new source line.
-// Token text includes the leading backslash and trailing star variant where
-// applicable. Environment delimiters \begin{...} / \end{...} are handled
-// inline via the explicit `\begin`/`\end` check in findBlockViolations.
-var blockTokens = map[string]bool{
+// blockKind classifies how a block token relates to its source line.
+//   - blockLeading: the token must be the first non-whitespace on its line
+//     (e.g. `\section`, `\begin{…}`, `\item`). Content/arguments may follow on
+//     the same line.
+//   - blockTrailing: the token must be the last non-whitespace on its line
+//     (e.g. `\\` line break, `\newline`). Content before it may share the line.
+type blockKind uint8
+
+const (
+	blockLeading blockKind = iota
+	blockTrailing
+)
+
+// blockTokens maps tex commands subject to the block-on-newline rule to their
+// kind. Token text includes the leading backslash and trailing star variant
+// where applicable. Environment delimiters \begin{…} / \end{…} are leading
+// and handled inline (see findBlockViolations).
+var blockTokens = map[string]blockKind{
 	// Display-math delimiters
-	"\\[": true,
-	"\\]": true,
-	// Line breaks
-	"\\\\":      true,
-	"\\newline": true,
+	"\\[": blockLeading,
+	"\\]": blockLeading,
+	// Line breaks (must end the line, not start it)
+	"\\\\":      blockTrailing,
+	"\\newline": blockTrailing,
 	// List item
-	"\\item": true,
+	"\\item": blockLeading,
 	// Sectioning
-	"\\part": true, "\\part*": true,
-	"\\chapter": true, "\\chapter*": true,
-	"\\section": true, "\\section*": true,
-	"\\subsection": true, "\\subsection*": true,
-	"\\subsubsection": true, "\\subsubsection*": true,
-	"\\paragraph": true, "\\paragraph*": true,
-	"\\subparagraph": true, "\\subparagraph*": true,
+	"\\part": blockLeading, "\\part*": blockLeading,
+	"\\chapter": blockLeading, "\\chapter*": blockLeading,
+	"\\section": blockLeading, "\\section*": blockLeading,
+	"\\subsection": blockLeading, "\\subsection*": blockLeading,
+	"\\subsubsection": blockLeading, "\\subsubsection*": blockLeading,
+	"\\paragraph": blockLeading, "\\paragraph*": blockLeading,
+	"\\subparagraph": blockLeading, "\\subparagraph*": blockLeading,
 	// Page / vertical-space breaks
-	"\\newpage":   true,
-	"\\clearpage": true,
-	"\\pagebreak": true,
-	"\\linebreak": true,
-	"\\bigskip":   true,
-	"\\medskip":   true,
-	"\\smallskip": true,
-	"\\vspace":    true, "\\vspace*": true,
+	"\\newpage":   blockLeading,
+	"\\clearpage": blockLeading,
+	"\\pagebreak": blockLeading,
+	"\\linebreak": blockLeading,
+	"\\bigskip":   blockLeading,
+	"\\medskip":   blockLeading,
+	"\\smallskip": blockLeading,
+	"\\vspace":    blockLeading, "\\vspace*": blockLeading,
 	// Float meta
-	"\\caption": true, "\\caption*": true,
+	"\\caption": blockLeading, "\\caption*": blockLeading,
 	// File inclusion
-	"\\input":   true,
-	"\\include": true,
-	"\\subfile": true,
-	"\\import":  true,
+	"\\input":   blockLeading,
+	"\\include": blockLeading,
+	"\\subfile": blockLeading,
+	"\\import":  blockLeading,
 	// Front / back matter
-	"\\maketitle":         true,
-	"\\tableofcontents":   true,
-	"\\listoffigures":     true,
-	"\\listoftables":      true,
-	"\\printbibliography": true,
-	"\\bibliography":      true,
-	"\\appendix":          true,
-	"\\frontmatter":       true,
-	"\\mainmatter":        true,
-	"\\backmatter":        true,
+	"\\maketitle":         blockLeading,
+	"\\tableofcontents":   blockLeading,
+	"\\listoffigures":     blockLeading,
+	"\\listoftables":      blockLeading,
+	"\\printbibliography": blockLeading,
+	"\\bibliography":      blockLeading,
+	"\\appendix":          blockLeading,
+	"\\frontmatter":       blockLeading,
+	"\\mainmatter":        blockLeading,
+	"\\backmatter":        blockLeading,
 	// Preamble
-	"\\documentclass":       true,
-	"\\usepackage":          true,
-	"\\title":               true,
-	"\\author":              true,
-	"\\date":                true,
-	"\\newcommand":          true,
-	"\\renewcommand":        true,
-	"\\newenvironment":      true,
-	"\\DeclareMathOperator": true,
-	"\\theoremstyle":        true,
-	"\\newtheorem":          true,
+	"\\documentclass":       blockLeading,
+	"\\usepackage":          blockLeading,
+	"\\title":               blockLeading,
+	"\\author":              blockLeading,
+	"\\date":                blockLeading,
+	"\\newcommand":          blockLeading,
+	"\\renewcommand":        blockLeading,
+	"\\newenvironment":      blockLeading,
+	"\\DeclareMathOperator": blockLeading,
+	"\\theoremstyle":        blockLeading,
+	"\\newtheorem":          blockLeading,
 	// Tabular rules
-	"\\hline":      true,
-	"\\midrule":    true,
-	"\\toprule":    true,
-	"\\bottomrule": true,
-	"\\cmidrule":   true,
+	"\\hline":      blockLeading,
+	"\\midrule":    blockLeading,
+	"\\toprule":    blockLeading,
+	"\\bottomrule": blockLeading,
+	"\\cmidrule":   blockLeading,
 }
 
 func checkBlockOnNewline(path string, lines []string) []Diagnostic {
@@ -92,7 +105,7 @@ func checkBlockOnNewline(path string, lines []string) []Diagnostic {
 			diags = append(diags, Diagnostic{
 				File:    path,
 				Line:    li + 1,
-				Message: fmt.Sprintf("block-level token %s should start a new line (column %d)", v.tok, v.pos+1),
+				Message: v.message(),
 			})
 		}
 	}
@@ -117,7 +130,7 @@ func fixBlockOnNewline(path string, lines []string) ([]string, bool) {
 		}
 		splits := make([]int, len(violations))
 		for k, v := range violations {
-			splits[k] = v.pos
+			splits[k] = v.split
 		}
 		out = append(out, splitLineAt(body, comment, body[:leadingWS(body)], splits)...)
 		changed = true
@@ -126,19 +139,30 @@ func fixBlockOnNewline(path string, lines []string) ([]string, bool) {
 }
 
 type blockViolation struct {
-	pos int    // byte offset of the violating token in the line
-	tok string // token text (with leading backslash)
+	tok    string    // token text (with leading backslash)
+	tokCol int       // 1-based column of the offending token
+	split  int       // byte offset at which to insert a newline
+	kind   blockKind // leading or trailing
 }
 
-// findBlockViolations returns the positions of block tokens that are not at
-// the leading-whitespace column. The first block token on a line (if it sits
-// at the indent) is allowed; subsequent ones are violations.
+func (v blockViolation) message() string {
+	switch v.kind {
+	case blockTrailing:
+		return fmt.Sprintf("block-level token %s should end the line; content after it should start a new line (column %d)", v.tok, v.split+1)
+	default:
+		return fmt.Sprintf("block-level token %s should start a new line (column %d)", v.tok, v.tokCol)
+	}
+}
+
+// findBlockViolations walks line and returns block-token placement issues.
+// Math and verbatim regions are skipped (they have their own conventions —
+// e.g. tabular/matrix `\\` row separators, `\begin{cases}` mid-equation).
 func findBlockViolations(line string, mask []regionKind) []blockViolation {
 	var out []blockViolation
 	leadEnd := leadingWS(line)
 	i := leadEnd
 	for i < len(line) {
-		if i < len(mask) && mask[i] == regVerbatim {
+		if i < len(mask) && mask[i] != regText {
 			i++
 			continue
 		}
@@ -151,22 +175,50 @@ func findBlockViolations(line string, mask []regionKind) []blockViolation {
 			i++
 			continue
 		}
-		isBlock := blockTokens[tok]
+		kind, isBlock := blockTokens[tok]
 		isEnv := tok == "\\begin" || tok == "\\end"
 		if !isBlock && !isEnv {
 			i += n
 			continue
 		}
-		if i != leadEnd {
-			out = append(out, blockViolation{pos: i, tok: tok})
+		if isEnv {
+			kind = blockLeading
 		}
 		// Advance past the token (and the env brace group, if applicable).
-		i += n
-		if isEnv && i < len(line) && line[i] == '{' {
-			if end := strings.IndexByte(line[i:], '}'); end >= 0 {
-				i += end + 1
+		end := i + n
+		if isEnv && end < len(line) && line[end] == '{' {
+			if br := strings.IndexByte(line[end:], '}'); br >= 0 {
+				end += br + 1
 			}
 		}
+		switch kind {
+		case blockLeading:
+			// Allow leading tokens preceded only by whitespace and `{` so that
+			// macro-definition bodies like `{\end{subequations}}` (used in
+			// \NewDocumentEnvironment) are not flagged.
+			if !precededByOnlyOpenGrouping(line, i) {
+				out = append(out, blockViolation{
+					tok:    tok,
+					tokCol: i + 1,
+					split:  i,
+					kind:   blockLeading,
+				})
+			}
+		case blockTrailing:
+			tail := end
+			for tail < len(line) && (line[tail] == ' ' || line[tail] == '\t') {
+				tail++
+			}
+			if tail < len(line) {
+				out = append(out, blockViolation{
+					tok:    tok,
+					tokCol: i + 1,
+					split:  tail,
+					kind:   blockTrailing,
+				})
+			}
+		}
+		i = end
 	}
 	return out
 }
@@ -197,4 +249,16 @@ func nextTokenAt(line string, i int) (string, int) {
 
 func isLetter(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// precededByOnlyOpenGrouping reports whether all bytes in line[:i] are spaces,
+// tabs, or `{`. This treats macro-body group openings as transparent indent.
+func precededByOnlyOpenGrouping(line string, i int) bool {
+	for j := range i {
+		c := line[j]
+		if c != ' ' && c != '\t' && c != '{' {
+			return false
+		}
+	}
+	return true
 }
