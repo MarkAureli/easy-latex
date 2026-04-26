@@ -5,21 +5,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MarkAureli/easy-latex/internal/pedantic"
 )
 
 const codeMethodNotFound = -32601
 
+// Config carries optional integration points for the server.
+type Config struct {
+	Items         []completionItem // cite-key items
+	EnabledChecks []string         // static pedantic check names; empty = no linting
+}
+
 // Serve starts the LSP server, reading JSON-RPC from r and writing to w.
-// items must be pre-built via BuildItems.
-func Serve(items []completionItem, r io.Reader, w io.Writer) error {
+func Serve(cfg Config, r io.Reader, w io.Writer) error {
 	s := &server{
-		docs:  make(map[string]string),
-		items: items,
-		w:     w,
+		docs:          make(map[string]string),
+		items:         cfg.Items,
+		enabledChecks: cfg.EnabledChecks,
+		w:             w,
 	}
 	br := bufio.NewReader(r)
 	for {
@@ -37,10 +46,11 @@ func Serve(items []completionItem, r io.Reader, w io.Writer) error {
 }
 
 type server struct {
-	docs         map[string]string // uri → full text
-	items        []completionItem
-	w            io.Writer
-	shuttingDown bool
+	docs          map[string]string // uri → full text
+	items         []completionItem
+	enabledChecks []string
+	w             io.Writer
+	shuttingDown  bool
 }
 
 func (s *server) handle(req *request) (stop bool) {
@@ -52,6 +62,7 @@ func (s *server) handle(req *request) (stop bool) {
 				CompletionProvider: &completionOptions{
 					TriggerCharacters: []string{"{", ","},
 				},
+				CodeActionProvider: len(s.enabledChecks) > 0,
 			},
 		})
 
@@ -62,13 +73,23 @@ func (s *server) handle(req *request) (stop bool) {
 		var p didOpenParams
 		if err := json.Unmarshal(req.Params, &p); err == nil {
 			s.docs[p.TextDocument.URI] = p.TextDocument.Text
+			s.publishDiagnostics(p.TextDocument.URI)
 		}
 
 	case "textDocument/didChange":
 		var p didChangeParams
 		if err := json.Unmarshal(req.Params, &p); err == nil && len(p.ContentChanges) > 0 {
 			s.docs[p.TextDocument.URI] = p.ContentChanges[len(p.ContentChanges)-1].Text
+			s.publishDiagnostics(p.TextDocument.URI)
 		}
+
+	case "textDocument/codeAction":
+		var p codeActionParams
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			s.replyError(req.ID, codeMethodNotFound, err.Error())
+			return false
+		}
+		s.reply(req.ID, s.codeActions(p))
 
 	case "textDocument/completion":
 		var p completionParams
@@ -96,6 +117,109 @@ func (s *server) handle(req *request) (stop bool) {
 		}
 	}
 	return false
+}
+
+// publishDiagnostics runs static pedantic checks on the document at uri and
+// pushes a textDocument/publishDiagnostics notification to the client. Always
+// emits, even when empty, so previously-shown diagnostics clear.
+func (s *server) publishDiagnostics(uri string) {
+	if len(s.enabledChecks) == 0 {
+		return
+	}
+	text, ok := s.docs[uri]
+	if !ok {
+		return
+	}
+	path := uriToPath(uri)
+	pedDiags := pedantic.RunSourceChecksText(s.enabledChecks, path, text)
+	lspDiags := make([]lspDiagnostic, 0, len(pedDiags))
+	rawLines := strings.Split(text, "\n")
+	for _, d := range pedDiags {
+		line := d.Line - 1
+		if line < 0 {
+			line = 0
+		}
+		end := 0
+		if line < len(rawLines) {
+			end = len(rawLines[line])
+		}
+		lspDiags = append(lspDiags, lspDiagnostic{
+			Range: lspRange{
+				Start: position{Line: line, Character: 0},
+				End:   position{Line: line, Character: end},
+			},
+			Severity: 2, // Warning
+			Source:   "el-pedantic",
+			Message:  d.Message,
+		})
+	}
+	s.notify("textDocument/publishDiagnostics", publishDiagnosticsParams{
+		URI:         uri,
+		Diagnostics: lspDiags,
+	})
+}
+
+// codeActions returns autofix actions for the requested range. Currently a
+// single "Apply pedantic autofix" action that runs all enabled fixable checks
+// over the document and returns the result as one whole-document text edit.
+func (s *server) codeActions(p codeActionParams) []codeAction {
+	if len(s.enabledChecks) == 0 {
+		return nil
+	}
+	if !pedantic.HasFixableChecks(s.enabledChecks) {
+		return nil
+	}
+	text, ok := s.docs[p.TextDocument.URI]
+	if !ok {
+		return nil
+	}
+	path := uriToPath(p.TextDocument.URI)
+	newText, changed := pedantic.RunSourceFixesText(s.enabledChecks, path, text)
+	if !changed {
+		return nil
+	}
+	return []codeAction{{
+		Title:       "Apply pedantic autofix",
+		Kind:        "quickfix",
+		IsPreferred: true,
+		Edit: &workspaceEdit{
+			Changes: map[string][]textEdit{
+				p.TextDocument.URI: {{
+					Range:   wholeDocRange(text),
+					NewText: newText,
+				}},
+			},
+		},
+	}}
+}
+
+// notify sends a server→client JSON-RPC notification.
+func (s *server) notify(method string, params any) {
+	writeMessage(s.w, notification{
+		JSONRPC: "2.0",
+		Method:  method,
+		Params:  params,
+	})
+}
+
+// uriToPath converts a file:// URI to a local path. Returns the URI unchanged
+// when no scheme is present (best-effort).
+func uriToPath(uri string) string {
+	u, err := url.Parse(uri)
+	if err != nil || u.Scheme != "file" {
+		return uri
+	}
+	return u.Path
+}
+
+// wholeDocRange returns a range covering the entire document text.
+func wholeDocRange(text string) lspRange {
+	lines := strings.Split(text, "\n")
+	last := len(lines) - 1
+	return lspRange{
+		Start: position{Line: 0, Character: 0},
+		End:   position{Line: last, Character: len(lines[last])},
+	}
 }
 
 // complete returns filtered cite-key completions for the cursor position.

@@ -12,7 +12,14 @@ var lspCmd = &cobra.Command{
 	Short:             "Start LSP server (cite-key completions over stdio)",
 	ValidArgsFunction: cobra.NoFileCompletions,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		items := lsp.BuildItems(auxDir)
-		return lsp.Serve(items, os.Stdin, os.Stdout)
+		cfg, _ := loadConfig()
+		var enabled []string
+		if cfg != nil {
+			enabled = cfg.Pedantic.EnabledNames()
+		}
+		return lsp.Serve(lsp.Config{
+			Items:         lsp.BuildItems(auxDir),
+			EnabledChecks: enabled,
+		}, os.Stdin, os.Stdout)
 	},
 }

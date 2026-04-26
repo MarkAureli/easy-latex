@@ -68,6 +68,56 @@ func HasFixableChecks(checkNames []string) bool {
 	return false
 }
 
+// RunSourceChecksText runs all enabled source-level checks on the given text
+// for diagnostic reporting. path is recorded in the diagnostics' File field.
+func RunSourceChecksText(checkNames []string, path, text string) []Diagnostic {
+	var checks []Check
+	for _, name := range checkNames {
+		if c, ok := Get(name); ok && c.Phase == PhaseSource {
+			checks = append(checks, c)
+		}
+	}
+	if len(checks) == 0 {
+		return nil
+	}
+	raw := strings.Split(text, "\n")
+	stripped := make([]string, len(raw))
+	for i, l := range raw {
+		stripped[i] = texscan.StripComment(l)
+	}
+	var all []Diagnostic
+	for _, c := range checks {
+		all = append(all, c.Source(path, stripped)...)
+	}
+	return all
+}
+
+// RunSourceFixesText applies all enabled fixable checks to text and returns
+// the rewritten text plus a changed flag. Pure (no disk I/O).
+func RunSourceFixesText(checkNames []string, path, text string) (string, bool) {
+	var fixes []Check
+	for _, name := range checkNames {
+		if c, ok := Get(name); ok && c.Fix != nil {
+			fixes = append(fixes, c)
+		}
+	}
+	if len(fixes) == 0 {
+		return text, false
+	}
+	lines := strings.Split(text, "\n")
+	changed := false
+	for _, c := range fixes {
+		if newLines, did := c.Fix(path, lines); did {
+			lines = newLines
+			changed = true
+		}
+	}
+	if !changed {
+		return text, false
+	}
+	return strings.Join(lines, "\n"), true
+}
+
 // RunSourceFixes applies all enabled fixable checks to texFiles in-place.
 // Returns sorted list of paths that were actually modified.
 func RunSourceFixes(checkNames, texFiles []string) ([]string, error) {
