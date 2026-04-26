@@ -51,11 +51,7 @@ func fixSingleSpaces(path string, lines []string) ([]string, bool) {
 // findMultiSpace returns the 0-based index of the first run of 2+ spaces past
 // any leading whitespace, or -1 if none.
 func findMultiSpace(line string) int {
-	start := 0
-	for start < len(line) && (line[start] == ' ' || line[start] == '\t') {
-		start++
-	}
-	for i := start; i+1 < len(line); i++ {
+	for i := leadingWS(line); i+1 < len(line); i++ {
 		if line[i] == ' ' && line[i+1] == ' ' {
 			return i
 		}
@@ -66,10 +62,7 @@ func findMultiSpace(line string) int {
 // collapseSpaces reduces runs of 2+ spaces to a single space in s, preserving
 // any leading run of spaces and tabs.
 func collapseSpaces(s string) string {
-	start := 0
-	for start < len(s) && (s[start] == ' ' || s[start] == '\t') {
-		start++
-	}
+	start := leadingWS(s)
 	if start == len(s) {
 		return s
 	}

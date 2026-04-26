@@ -194,6 +194,8 @@ $ el check --fix    # apply autofixes for fixable checks (see table below)
 |---|---|---|
 | `no-block-citations` | no | Multi-key citations (`\cite{a,b}`) or adjacent cite commands (`\cite{a}\cite{b}`, `\cite{a}~\cite{b}`) |
 | `single-spaces` | yes | Runs of 2+ consecutive spaces past leading whitespace; comment tails preserved |
+| `block-on-newline` | yes | Block-level tokens that don't start their own source line — `\begin{…}`/`\end{…}`, sectioning (`\section`, `\subsection`, …), `\item`, `\\`, page/space breaks (`\newpage`, `\vspace`, …), file inclusion (`\input`, `\include`, …), front matter (`\maketitle`, `\tableofcontents`, …), preamble declarations (`\documentclass`, `\usepackage`, `\newcommand`, …), and tabular rules (`\hline`, `\toprule`, …). Verbatim envs are skipped. The autofix splits the line at each violation and reapplies the original indent. |
+| `sentence-on-newline` | yes | A sentence boundary `[.?!] <space> <Capital>` mid-line in text-mode source. Skips inline math (`$...$`, `\(...\)`), display math (`\[...\]`, `equation`, `align`, …), verbatim envs, common abbreviations (`e.g`, `i.e`, `Mr`, `Dr`, `Fig`, `Eq`, `etc`, …), and digit-only words (`1. Foo`). The autofix splits the line at each new sentence with the original indent. |
 | `no-math-linebreak` | no | Inline math (`$...$` or `\(...\)`) that spans multiple lines in the final PDF |
 
 ### `el bib`

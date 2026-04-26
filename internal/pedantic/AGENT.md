@@ -15,6 +15,8 @@ Registry-based: each check registers via `init()` → `Register(Check{...})`.
 |---|---|---|---|
 | `no-block-citations` | Source | no | Multi-key cite `\cite{a,b}` or adjacent cites `\cite{a}\cite{b}` |
 | `single-spaces` | Source | yes | Runs of 2+ spaces past leading whitespace; comment tail preserved |
+| `block-on-newline` | Source | yes | Block-level token (env begin/end, sectioning, `\item`, `\\`, page/space breaks, file inclusion, front matter, preamble decls, tabular rules) not at start of line |
+| `sentence-on-newline` | Source | yes | Sentence boundary `[.?!] <space> <Capital>` mid-line in text region; abbreviations and digit-only words excluded |
 | `no-math-linebreak` | PostCompile | no | Inline math (`$...$` or `\(...\)`) that spans multiple PDF lines |
 
 ## no-math-linebreak implementation
@@ -35,8 +37,11 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 |---|---|
 | `pedantic.go` | `Diagnostic`, `Check`, `SourceCheckFunc`, `SourceFixFunc`, `PostCompileCheckFunc`, registry (`Register`, `Get`, `Known`, `AllNames`, `ValidateCheckNames`) |
 | `run.go` | `RunSourceChecks`, `RunPostCompileChecks`, `RunSourceFixes`, `HasPostCompileChecks`, `HasFixableChecks`, `readAndStripComments` |
+| `region.go` | `regionMask` — per-byte text/math/verbatim classification; tracks `$`, `\(\)`, `\[\]`, math envs, verbatim envs across lines |
 | `block_citations.go` | `no-block-citations` check impl |
 | `single_spaces.go` | `single-spaces` check + fix impl |
+| `block_on_newline.go` | `block-on-newline` check + fix impl, `blockTokens` set, `nextTokenAt` parser |
+| `sentence_on_newline.go` | `sentence-on-newline` check + fix impl, `sentenceAbbrevs` set |
 | `math_linebreak.go` | `no-math-linebreak` check impl, `parseMathPos`, `MathPosSty` embed |
 | `el-mathpos.sty` | LaTeX package for position tracking (embedded into binary) |
 
