@@ -25,8 +25,9 @@ func (d Diagnostic) String() string {
 type Phase int
 
 const (
-	PhaseSource      Phase = iota // runs on tex source
-	PhasePostCompile              // runs after final pdflatex pass
+	PhaseSource        Phase = iota // runs per-file on tex source
+	PhaseProjectSource              // runs once with all tex source files at hand
+	PhasePostCompile                // runs after final pdflatex pass
 )
 
 // SourceCheckFunc checks source lines (comment-stripped) for a single file.
@@ -38,6 +39,10 @@ type SourceCheckFunc func(path string, lines []string) []Diagnostic
 // responsible for being comment-aware where relevant.
 type SourceFixFunc func(path string, lines []string) ([]string, bool)
 
+// ProjectSourceCheckFunc inspects every tex file in the project at once.
+// files maps path → comment-stripped lines. Read-only; no autofix.
+type ProjectSourceCheckFunc func(files map[string][]string) []Diagnostic
+
 // PostCompileCheckFunc runs after all pdflatex passes complete.
 // auxDir is the .el/ directory containing build artifacts.
 type PostCompileCheckFunc func(auxDir string) []Diagnostic
@@ -45,13 +50,14 @@ type PostCompileCheckFunc func(auxDir string) []Diagnostic
 // Check describes a registered pedantic check.
 //
 // Source-phase checks may optionally provide Fix to enable autofix; pure
-// linters leave Fix nil. Dynamic (post-compile) checks are always read-only.
+// linters leave Fix nil. Project-source and post-compile checks are read-only.
 type Check struct {
-	Name        string
-	Phase       Phase
-	Source      SourceCheckFunc
-	Fix         SourceFixFunc
-	PostCompile PostCompileCheckFunc
+	Name          string
+	Phase         Phase
+	Source        SourceCheckFunc
+	Fix           SourceFixFunc
+	ProjectSource ProjectSourceCheckFunc
+	PostCompile   PostCompileCheckFunc
 }
 
 var registry = map[string]Check{}

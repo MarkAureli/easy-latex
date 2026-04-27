@@ -9,23 +9,36 @@ import (
 	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
 
-// RunSourceChecks runs all enabled source-level checks on the given tex files.
+// RunSourceChecks runs all enabled source-level checks (per-file and
+// project-scoped) on the given tex files.
 func RunSourceChecks(checkNames, texFiles []string) []Diagnostic {
-	var checks []Check
+	var perFile, project []Check
 	for _, name := range checkNames {
-		if c, ok := Get(name); ok && c.Phase == PhaseSource {
-			checks = append(checks, c)
+		c, ok := Get(name)
+		if !ok {
+			continue
+		}
+		switch c.Phase {
+		case PhaseSource:
+			perFile = append(perFile, c)
+		case PhaseProjectSource:
+			project = append(project, c)
 		}
 	}
-	if len(checks) == 0 {
+	if len(perFile) == 0 && len(project) == 0 {
 		return nil
 	}
+	files := make(map[string][]string, len(texFiles))
 	var all []Diagnostic
 	for _, path := range texFiles {
 		lines := readAndStripComments(path)
-		for _, c := range checks {
+		files[path] = lines
+		for _, c := range perFile {
 			all = append(all, c.Source(path, lines)...)
 		}
+	}
+	for _, c := range project {
+		all = append(all, c.ProjectSource(files)...)
 	}
 	return all
 }
@@ -70,14 +83,22 @@ func HasFixableChecks(checkNames []string) bool {
 
 // RunSourceChecksText runs all enabled source-level checks on the given text
 // for diagnostic reporting. path is recorded in the diagnostics' File field.
+// Project-scoped checks see only this single file.
 func RunSourceChecksText(checkNames []string, path, text string) []Diagnostic {
-	var checks []Check
+	var perFile, project []Check
 	for _, name := range checkNames {
-		if c, ok := Get(name); ok && c.Phase == PhaseSource {
-			checks = append(checks, c)
+		c, ok := Get(name)
+		if !ok {
+			continue
+		}
+		switch c.Phase {
+		case PhaseSource:
+			perFile = append(perFile, c)
+		case PhaseProjectSource:
+			project = append(project, c)
 		}
 	}
-	if len(checks) == 0 {
+	if len(perFile) == 0 && len(project) == 0 {
 		return nil
 	}
 	raw := strings.Split(text, "\n")
@@ -86,8 +107,14 @@ func RunSourceChecksText(checkNames []string, path, text string) []Diagnostic {
 		stripped[i] = texscan.StripComment(l)
 	}
 	var all []Diagnostic
-	for _, c := range checks {
+	for _, c := range perFile {
 		all = append(all, c.Source(path, stripped)...)
+	}
+	if len(project) > 0 {
+		files := map[string][]string{path: stripped}
+		for _, c := range project {
+			all = append(all, c.ProjectSource(files)...)
+		}
 	}
 	return all
 }

@@ -6,7 +6,8 @@ Configurable pedantic checks run during `el compile`. Violations are errors (non
 
 Registry-based: each check registers via `init()` → `Register(Check{...})`.
 
-- `PhaseSource` — runs on tex source lines (comment-stripped). Diagnostic signature: `func(path string, lines []string) []Diagnostic`. May optionally provide `Fix` for autofix (raw lines, not comment-stripped): `func(path string, lines []string) ([]string, bool)` — returns rewritten lines and changed flag.
+- `PhaseSource` — runs on tex source lines (comment-stripped) per file. Diagnostic signature: `func(path string, lines []string) []Diagnostic`. May optionally provide `Fix` for autofix (raw lines, not comment-stripped): `func(path string, lines []string) ([]string, bool)` — returns rewritten lines and changed flag.
+- `PhaseProjectSource` — runs once with all tex files at hand. Signature: `func(files map[string][]string) []Diagnostic`. Read-only (no autofix). Use when a check needs cross-file analysis (e.g. labels defined in one file, referenced in another).
 - `PhasePostCompile` — runs after all pdflatex passes complete. Read-only. Signature: `func(auxDir string) []Diagnostic`. No Fix permitted (dynamic checks are non-convergent under autofix).
 
 ## Checks
@@ -19,7 +20,19 @@ Registry-based: each check registers via `init()` → `Register(Check{...})`.
 | `block-on-newline` | Source | yes | Block-level token misplaced on its source line. **Leading** tokens (env begin/end, sectioning, `\item`, `\[`/`\]`, page/space breaks, file inclusion, front matter, preamble decls, tabular rules) must start the line. **Trailing** tokens (`\\`, `\newline`) must end the line. Math/verbatim regions skipped. Leading tokens preceded only by `{`/whitespace are allowed (covers `\NewDocumentEnvironment` brace-wrapped bodies). |
 | `sentence-on-newline` | Source | yes | Sentence boundary `[.?!] <space> <Capital>` mid-line in text region; abbreviations and digit-only words excluded |
 | `env-indent` | Source | yes | Each line indented `depth*4` spaces. `\begin`/`\end` and `\[`/`\]` push/pop. `document` transparent (depth 0 inside). Verbatim envs (`verbatim`, `lstlisting`, `minted`, `comment`, `alltt`, …) preserved untouched. Math envs are indented. Fix overwrites leading WS — tabs vanish so order vs `no-tabs` is irrelevant. Comment-only lines re-indented; blank lines untouched. Relies on `block-on-newline` keeping `\begin`/`\end` alone at line start. |
+| `unused-labels` | ProjectSource | no | `\label{name}` never referenced across the project. Refs scanned: `\ref`/`\Ref`/`\eqref`/`\autoref`/`\Autoref`/`\cref`/`\Cref`/`\crefrange`/`\Crefrange`/`\labelcref`/`\pageref`/`\nameref`/`\vref`/`\Vref`/`\vpageref`/`\autopageref` (curly-brace, comma-list, starred variants) plus `\hyperref[...]`. Verbatim envs skipped; math regions tracked. Hardcoded ignore set silences prophylactic prefixes (see below). |
 | `no-math-linebreak` | PostCompile | no | Inline math (`$...$` or `\(...\)`) that spans multiple PDF lines |
+
+### `unused-labels` ignore set
+
+Labels whose name (before the first `:`) matches one of these spelled-out prefixes are never flagged, since labeling them by convention is common even when unreferenced:
+
+- Sectioning: `part`, `chapter`, `section`, `subsection`, `subsubsection`, `paragraph`, `subparagraph`, `appendix`
+- Theorem-likes: `definition`, `theorem`, `corollary`, `lemma`, `proposition`, `example`, `remark`
+- Proof structure: `proof`, `claim`, `conjecture`, `axiom`, `fact`, `observation`, `note`, `assumption`, `hypothesis`, `property`
+- Textbook style: `exercise`, `problem`, `solution`, `case`
+
+All other prefixes — including bare labels, `eq:`/`fig:`/`tab:`/etc. abbreviations, and project-defined prefixes — are flagged when unreferenced. Escape hatches: rename to a standard prefix or disable the check.
 
 ## no-math-linebreak implementation
 
@@ -37,8 +50,8 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 
 | File | Role |
 |---|---|
-| `pedantic.go` | `Diagnostic`, `Check`, `SourceCheckFunc`, `SourceFixFunc`, `PostCompileCheckFunc`, registry (`Register`, `Get`, `Known`, `AllNames`, `ValidateCheckNames`) |
-| `run.go` | `RunSourceChecks`, `RunPostCompileChecks`, `RunSourceFixes`, `HasPostCompileChecks`, `HasFixableChecks`, `readAndStripComments` |
+| `pedantic.go` | `Diagnostic`, `Check`, `SourceCheckFunc`, `SourceFixFunc`, `ProjectSourceCheckFunc`, `PostCompileCheckFunc`, registry (`Register`, `Get`, `Known`, `AllNames`, `ValidateCheckNames`) |
+| `run.go` | `RunSourceChecks` (per-file + project-source dispatch), `RunPostCompileChecks`, `RunSourceFixes`, `HasPostCompileChecks`, `HasFixableChecks`, `readAndStripComments` |
 | `region.go` | `regionMask` — per-byte text/math/verbatim classification; tracks `$`, `\(\)`, `\[\]`, math envs, verbatim envs across lines |
 | `block_citations.go` | `no-block-citations` check impl |
 | `single_spaces.go` | `single-spaces` check + fix impl |
@@ -46,6 +59,7 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 | `block_on_newline.go` | `block-on-newline` check + fix impl, `blockTokens` (leading/trailing kinds), `nextTokenAt` parser |
 | `sentence_on_newline.go` | `sentence-on-newline` check + fix impl, `sentenceAbbrevs` set |
 | `env_indent.go` | `env-indent` check + fix impl, `noIndentBodyEnvs`, `transparentEnvs`, `classifyLine`, `nextDecision` state machine |
+| `unused_labels.go` | `unused-labels` check impl, `reLabelCall`/`reRefCall`/`reHyperref`, `ignoredLabelPrefixes` set, project-source phase |
 | `math_linebreak.go` | `no-math-linebreak` check impl, `parseMathPos`, `MathPosSty` embed |
 | `el-mathpos.sty` | LaTeX package for position tracking (embedded into binary) |
 
