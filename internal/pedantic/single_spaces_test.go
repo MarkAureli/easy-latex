@@ -53,6 +53,23 @@ func TestSingleSpaces_Fixer(t *testing.T) {
 	}
 }
 
+func TestSingleSpaces_AlignmentTerminators(t *testing.T) {
+	// Runs immediately before `=` or `&` are alignment spacing and must not
+	// be flagged or collapsed.
+	in := []string{
+		"    colorlinks  = true,",
+		"    citecolor   = PineGreen,",
+		"a   & b   & c \\\\",
+	}
+	if diags := checkSingleSpaces("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+	out, changed := fixSingleSpaces("t.tex", append([]string(nil), in...))
+	if changed {
+		t.Errorf("expected no change, got:\n%q", out)
+	}
+}
+
 func TestSingleSpaces_FixerNoChange(t *testing.T) {
 	in := []string{"clean line", "  indented", "% comment  only"}
 	_, changed := fixSingleSpaces("t.tex", append([]string(nil), in...))

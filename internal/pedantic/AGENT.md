@@ -15,7 +15,7 @@ Registry-based: each check registers via `init()` → `Register(Check{...})`.
 | Name | Phase | Fixable | What it flags |
 |---|---|---|---|
 | `no-block-citations` | Source | no | Multi-key cite `\cite{a,b}` or adjacent cites `\cite{a}\cite{b}` |
-| `single-spaces` | Source | yes | Runs of 2+ spaces past leading whitespace; leading WS, trailing WS, and comment tail preserved (so column-aligned `% comment` blocks aren't flagged after comment-strip turns alignment spaces into trailing WS) |
+| `single-spaces` | Source | yes | Runs of 2+ spaces past leading whitespace. Preserved: leading WS, trailing WS / pre-comment alignment (post-strip), and runs immediately followed by an alignment terminator `=` or `&` (key=value blocks like `\hypersetup`, tabular/align column separators) |
 | `no-tabs` | Source | yes | Tab characters outside verbatim regions. Fix expands to spaces with column-aware tabstop (width 4); comments rewritten too |
 | `block-on-newline` | Source | yes | Block-level token misplaced on its source line. **Leading** tokens (env begin/end, sectioning, `\item`, `\[`/`\]`, page/space breaks, file inclusion, front matter, preamble decls, tabular rules) must start the line. **Trailing** tokens (`\\`, `\newline`) must end the line. Math/verbatim regions skipped. Leading tokens preceded only by `{`/whitespace are allowed (covers `\NewDocumentEnvironment` brace-wrapped bodies). |
 | `sentence-on-newline` | Source | yes | Sentence boundary `[.?!] <space> <Capital>` mid-line in text region; abbreviations and digit-only words excluded |
