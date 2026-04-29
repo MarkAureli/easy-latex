@@ -44,7 +44,18 @@ func RunSourceChecks(checkNames, texFiles []string) []Diagnostic {
 	for _, c := range project {
 		all = append(all, c.ProjectSource(files)...)
 	}
+	sortDiagnostics(all)
 	return all
+}
+
+// sortDiagnostics orders diagnostics by File then Line for stable output.
+func sortDiagnostics(d []Diagnostic) {
+	sort.SliceStable(d, func(i, j int) bool {
+		if d[i].File != d[j].File {
+			return d[i].File < d[j].File
+		}
+		return d[i].Line < d[j].Line
+	})
 }
 
 // RunPostCompileChecks runs all enabled post-compile checks.
@@ -62,6 +73,7 @@ func RunPostCompileChecks(checkNames []string, auxDir string) []Diagnostic {
 	for _, c := range checks {
 		all = append(all, c.PostCompile(auxDir)...)
 	}
+	sortDiagnostics(all)
 	return all
 }
 
@@ -124,6 +136,7 @@ func RunSourceChecksText(checkNames []string, path, text string) []Diagnostic {
 			all = append(all, c.ProjectSource(files)...)
 		}
 	}
+	sortDiagnostics(all)
 	return all
 }
 
