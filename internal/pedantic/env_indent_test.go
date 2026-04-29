@@ -302,6 +302,19 @@ func TestEnvIndent_EscapedBracesIgnored(t *testing.T) {
 	}
 }
 
+func TestEnvIndent_SquareBracketsNotTracked(t *testing.T) {
+	// Math interval notation `[0, \infty)` is unmatched at the source level.
+	// Square brackets must not push brace depth or following lines cascade.
+	in := []string{
+		`For all $\lambda \in [0, \infty)$ it holds that`,
+		`stuff happens.`,
+		`More stuff.`,
+	}
+	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+}
+
 func TestEnvIndent_CommentedBraceIgnored(t *testing.T) {
 	// A `{` inside a comment must not push brace depth.
 	in := []string{

@@ -130,32 +130,35 @@ func anyNoIndentAncestor(stack []string) bool {
 	return false
 }
 
-// braceCounts summarizes unmatched bracket activity on a single (comment-
-// stripped) line. leadingCloses is the count of consecutive `}` or `]` at the
-// start of the line (after whitespace); it determines how much the line itself
+// braceCounts summarizes unmatched brace activity on a single (comment-
+// stripped) line. leadingCloses is the count of consecutive `}` at the start
+// of the line (after whitespace); it determines how much the line itself
 // de-dents relative to the previous line. opens and closes are totals across
 // the whole line; their difference advances the running brace depth for
 // subsequent lines.
+//
+// Only `{`/`}` are tracked: they are TeX grouping characters and always
+// paired (or escaped as `\{`/`\}`). `[`/`]` are deliberately *not* tracked
+// because they are commonly used as literal math characters (intervals like
+// `[0, \infty)`, ceilings `\lceil … \rceil`, etc.) where they appear unpaired
+// and would otherwise cascade phantom indent on every following line. The
+// trade-off: multi-line optional arguments (`\documentclass[\n  opts\n]`)
+// won't auto-indent inside the `[...]`.
 type braceCounts struct {
 	leadingCloses int
 	opens         int
 	closes        int
 }
 
-// countBraces tallies unescaped `{`/`[`/`}`/`]` on a line. A bracket is
-// considered escaped when it is the character immediately following an
-// unescaped `\`. This naturally skips `\{`, `\}`, `\[`, `\]`, and bracket-like
-// characters appearing as the first letter of a control word (which never
-// happens for letters anyway, but we treat `\` uniformly). Comments must be
-// stripped by the caller.
+// countBraces tallies unescaped `{`/`}` on a line. A brace is considered
+// escaped when it is the character immediately following an unescaped `\`.
+// This naturally skips `\{`, `\}`, and brace-like characters appearing as the
+// first letter of a control word (which never happens for letters anyway, but
+// we treat `\` uniformly). Comments must be stripped by the caller.
 func countBraces(stripped string) braceCounts {
 	bc := braceCounts{}
 	i := leadingWS(stripped)
-	for i < len(stripped) {
-		c := stripped[i]
-		if c != '}' && c != ']' {
-			break
-		}
+	for i < len(stripped) && stripped[i] == '}' {
 		bc.leadingCloses++
 		i++
 	}
@@ -171,9 +174,9 @@ func countBraces(stripped string) braceCounts {
 			continue
 		}
 		switch c {
-		case '{', '[':
+		case '{':
 			bc.opens++
-		case '}', ']':
+		case '}':
 			bc.closes++
 		}
 	}
