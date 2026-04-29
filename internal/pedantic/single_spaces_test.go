@@ -8,12 +8,13 @@ import (
 
 func TestSingleSpaces_Detector(t *testing.T) {
 	lines := []string{
-		"Hello  world.",         // 1: violation
-		"Hello world.",          // 2: ok
-		"  indented",            // 3: leading whitespace ignored
-		"Hello   world  foo.",   // 4: violation (first run reported)
-		"",                      // 5: empty
-		"\t\tindented with tab", // 6: leading tab ignored
+		"Hello  world.",          // 1: violation
+		"Hello world.",           // 2: ok
+		"  indented",             // 3: leading whitespace ignored
+		"Hello   world  foo.",    // 4: violation (first run reported)
+		"",                       // 5: empty
+		"\t\tindented with tab",  // 6: leading tab ignored
+		"\\definecolor{x}     ",  // 7: trailing alignment WS ignored
 	}
 	diags := checkSingleSpaces("t.tex", lines)
 	if len(diags) != 2 {
@@ -31,13 +32,15 @@ func TestSingleSpaces_Fixer(t *testing.T) {
 		"no change here",
 		"trailing  %  comment  preserved",
 		"foo   bar   baz",
+		"\\foo  bar     ", // trailing alignment-style WS before stripped EOL
 	}
 	want := []string{
 		"Hello world.",
 		"  indented body",
 		"no change here",
-		"trailing %  comment  preserved",
+		"trailing  %  comment  preserved", // alignment WS before % kept
 		"foo bar baz",
+		"\\foo bar     ", // body collapses, trailing run preserved
 	}
 	out, changed := fixSingleSpaces("t.tex", append([]string(nil), in...))
 	if !changed {

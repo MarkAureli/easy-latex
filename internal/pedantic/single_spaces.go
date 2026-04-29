@@ -49,9 +49,13 @@ func fixSingleSpaces(path string, lines []string) ([]string, bool) {
 }
 
 // findMultiSpace returns the 0-based index of the first run of 2+ spaces past
-// any leading whitespace, or -1 if none.
+// any leading whitespace, or -1 if none. Runs that are part of the line's
+// trailing whitespace are ignored: after comment stripping, alignment spaces
+// before a `%` comment look identical to trailing whitespace, and collapsing
+// them would destroy the user's intentional column alignment of comments.
 func findMultiSpace(line string) int {
-	for i := leadingWS(line); i+1 < len(line); i++ {
+	end := trailingWSStart(line)
+	for i := leadingWS(line); i+1 < end; i++ {
 		if line[i] == ' ' && line[i+1] == ' ' {
 			return i
 		}
@@ -60,17 +64,19 @@ func findMultiSpace(line string) int {
 }
 
 // collapseSpaces reduces runs of 2+ spaces to a single space in s, preserving
-// any leading run of spaces and tabs.
+// any leading run of spaces and tabs as well as any trailing whitespace (so
+// alignment spacing before a stripped comment is left intact).
 func collapseSpaces(s string) string {
 	start := leadingWS(s)
-	if start == len(s) {
+	end := trailingWSStart(s)
+	if start >= end {
 		return s
 	}
 	var b strings.Builder
 	b.Grow(len(s))
 	b.WriteString(s[:start])
 	prevSpace := false
-	for i := start; i < len(s); i++ {
+	for i := start; i < end; i++ {
 		c := s[i]
 		if c == ' ' {
 			if prevSpace {
@@ -82,5 +88,17 @@ func collapseSpaces(s string) string {
 		}
 		b.WriteByte(c)
 	}
+	b.WriteString(s[end:])
 	return b.String()
+}
+
+// trailingWSStart returns the byte offset of the first character of the
+// line's trailing run of spaces and tabs, or len(s) if the line has no
+// trailing whitespace.
+func trailingWSStart(s string) int {
+	i := len(s)
+	for i > 0 && (s[i-1] == ' ' || s[i-1] == '\t') {
+		i--
+	}
+	return i
 }
