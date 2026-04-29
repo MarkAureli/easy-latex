@@ -31,9 +31,13 @@ func RunSourceChecks(checkNames, texFiles []string) []Diagnostic {
 	files := make(map[string][]string, len(texFiles))
 	var all []Diagnostic
 	for _, path := range texFiles {
-		lines := readAndStripComments(path)
-		files[path] = lines
+		raw, stripped := readSource(path)
+		files[path] = stripped
 		for _, c := range perFile {
+			lines := stripped
+			if c.WantRaw {
+				lines = raw
+			}
 			all = append(all, c.Source(path, lines)...)
 		}
 	}
@@ -108,7 +112,11 @@ func RunSourceChecksText(checkNames []string, path, text string) []Diagnostic {
 	}
 	var all []Diagnostic
 	for _, c := range perFile {
-		all = append(all, c.Source(path, stripped)...)
+		lines := stripped
+		if c.WantRaw {
+			lines = raw
+		}
+		all = append(all, c.Source(path, lines)...)
 	}
 	if len(project) > 0 {
 		files := map[string][]string{path: stripped}
@@ -182,17 +190,18 @@ func RunSourceFixes(checkNames, texFiles []string) ([]string, error) {
 	return modified, nil
 }
 
-// readAndStripComments reads a file and returns lines with comments stripped.
-func readAndStripComments(path string) []string {
+// readSource reads a file and returns raw lines plus comment-stripped lines.
+func readSource(path string) (raw, stripped []string) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	defer f.Close()
-	var lines []string
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		lines = append(lines, texscan.StripComment(sc.Text()))
+		line := sc.Text()
+		raw = append(raw, line)
+		stripped = append(stripped, texscan.StripComment(line))
 	}
-	return lines
+	return raw, stripped
 }

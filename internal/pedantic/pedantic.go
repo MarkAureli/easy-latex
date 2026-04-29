@@ -51,11 +51,15 @@ type PostCompileCheckFunc func(auxDir string) []Diagnostic
 //
 // Source-phase checks may optionally provide Fix to enable autofix; pure
 // linters leave Fix nil. Project-source and post-compile checks are read-only.
+//
+// WantRaw (source phase only): when true, Source receives raw lines (NOT
+// comment-stripped). Default is false; runner passes comment-stripped lines.
 type Check struct {
 	Name          string
 	Phase         Phase
 	Source        SourceCheckFunc
 	Fix           SourceFixFunc
+	WantRaw       bool
 	ProjectSource ProjectSourceCheckFunc
 	PostCompile   PostCompileCheckFunc
 }
