@@ -208,6 +208,156 @@ func TestEnvIndent_Detector(t *testing.T) {
 	}
 }
 
+func TestEnvIndent_MultilineBraceArg(t *testing.T) {
+	in := []string{
+		`\usetikzlibrary{`,
+		`    shapes.geometric,`,
+		`    arrows`,
+		`}`,
+	}
+	out, changed := fixEnvIndent("t.tex", append([]string(nil), in...))
+	if changed {
+		t.Errorf("expected no change, got:\n%q", out)
+	}
+	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+}
+
+func TestEnvIndent_MultilineBraceArgWrongIndent(t *testing.T) {
+	in := []string{
+		`\hypersetup{`,
+		`colorlinks = true,`,
+		`}`,
+	}
+	diags := checkEnvIndent("t.tex", in)
+	if len(diags) != 1 || diags[0].Line != 2 {
+		t.Errorf("expected 1 diag on line 2, got: %+v", diags)
+	}
+	want := []string{
+		`\hypersetup{`,
+		`    colorlinks = true,`,
+		`}`,
+	}
+	out, changed := fixEnvIndent("t.tex", append([]string(nil), in...))
+	if !changed {
+		t.Fatal("expected changed=true")
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("got:\n%q\nwant:\n%q", out, want)
+	}
+}
+
+func TestEnvIndent_NewcommandWithBracketArg(t *testing.T) {
+	// \newcommand{name}[n]{ ... } leaves one brace open at end of first line.
+	in := []string{
+		`\makeatletter`,
+		`\newcommand{\foo}[3]{%`,
+		`    \edef#2{\the\pgf@x}%`,
+		`}`,
+		`\makeatother`,
+	}
+	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+}
+
+func TestEnvIndent_NestedBraces(t *testing.T) {
+	in := []string{
+		`\foo{`,
+		`    \bar{`,
+		`        baz`,
+		`    }`,
+		`}`,
+	}
+	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+}
+
+func TestEnvIndent_BraceInsideEnv(t *testing.T) {
+	// Brace depth stacks on top of env depth.
+	in := []string{
+		`\begin{document}`,
+		`\begin{itemize}`,
+		`    \item \foo{`,
+		`        bar`,
+		`    }`,
+		`\end{itemize}`,
+		`\end{document}`,
+	}
+	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+}
+
+func TestEnvIndent_EscapedBracesIgnored(t *testing.T) {
+	// \{ and \} should not affect brace depth.
+	in := []string{
+		`a \{ b \} c`,
+		`d`,
+	}
+	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+}
+
+func TestEnvIndent_CommentedBraceIgnored(t *testing.T) {
+	// A `{` inside a comment must not push brace depth.
+	in := []string{
+		`foo % opens here {`,
+		`bar`,
+	}
+	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+}
+
+func TestEnvIndent_BraceWrappedEndBody(t *testing.T) {
+	// \newenvironment second-arg body `{\end{env}}` must register as env-end
+	// so subsequent lines aren't shifted by phantom env depth.
+	in := []string{
+		`\newenvironment{wrap}[1]{`,
+		`    \begin{subequations}`,
+		`        body`,
+		`    }`,
+		`{\end{subequations}}`,
+		`after`,
+	}
+	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+}
+
+func TestEnvIndent_InlineCasesInsideAlign(t *testing.T) {
+	// `\begin{cases}` mid-line in math is idiomatic. Body must be tracked at
+	// align+cases depth (8 spaces), and \end{cases} must close cases — not
+	// silently pop align.
+	in := []string{
+		`\begin{align}\label{eq:foo}`,
+		`    \tilde{c}(\bm{b}) \coloneqq \begin{cases}`,
+		`        c(\bm{b}),& \text{if } x`,
+		`        c(\bm{b}) + \alpha,& \text{else}.`,
+		`    \end{cases}`,
+		`\end{align}`,
+		`after`,
+	}
+	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+}
+
+func TestEnvIndent_TwoBeginsOnOneLine(t *testing.T) {
+	in := []string{
+		`\begin{outer}\begin{inner}`,
+		`        body`,
+		`\end{inner}\end{outer}`,
+	}
+	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+		t.Errorf("expected no diags, got: %+v", diags)
+	}
+}
+
 func TestEnvIndent_PreambleAtDepthZero(t *testing.T) {
 	in := []string{
 		`\documentclass{article}`,
