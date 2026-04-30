@@ -262,7 +262,9 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-var rerunPattern = regexp.MustCompile(`(?i)rerun`)
+// "may have changed" catches natbib's two-line rerun signal where the
+// continuation "(natbib) Rerun to get them right." is filtered from output.
+var rerunPattern = regexp.MustCompile(`(?i)rerun|may have changed`)
 
 func needsRerun(lines []string) bool {
 	return slices.ContainsFunc(lines, func(line string) bool {
