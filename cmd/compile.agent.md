@@ -15,7 +15,10 @@ Post-compile: copy `<stem>.pdf` from `.el/` to project root. If `cfg.Pedantic.En
 
 Uses `internal/term` for ANSI colors (replaces inline color vars). Uses `bibLogger` (`cmd/biblog.go`) for bib operation messages.
 
-Flags: `--open` / `-o` — call `open <pdf>` after success.
+Flags:
+- `--open` / `-o` — call `open <pdf>` after success.
+- `--fix` — apply `pedantic.RunSourceFixes` to source files before running checks (static-with-fix checks only); reports modified files. Mutually exclusive with `--no-check`.
+- `--no-check` — skip all pedantic checks for this run (static and dynamic); also skips writing `el-mathpos.sty` and `needsMathPos` instrumentation. Mutually exclusive with `--fix`.
 
 Output filtering (`filterLines`): keeps lines matching `^!`, `^l.\d+`, warning, error, undefined, multiply defined, Over/Underfull.
 

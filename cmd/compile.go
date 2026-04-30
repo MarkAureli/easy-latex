@@ -17,11 +17,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var openAfter bool
+var (
+	openAfter       bool
+	compileFix      bool
+	compileNoCheck  bool
+)
 
 var compileCmd = &cobra.Command{
-	Use:               "compile",
-	Short:             "Compile the LaTeX document",
+	Use:   "compile",
+	Short: "Compile the LaTeX document",
+	Long: `Compile the LaTeX document, running multiple pdflatex passes as needed.
+
+Runs bibliography tools (biber/bibtex) when detected and stabilises
+cross-references with up to two additional passes.
+
+If pedantic checks are enabled in config, they run after compilation:
+static source checks (PhaseSource / PhaseProjectSource) and dynamic
+post-compile checks (PhasePostCompile).  Use --fix to apply available
+autofixes to source files before the check phase.  Use --no-check to
+skip all pedantic checks for this run.`,
 	SilenceUsage:      true,
 	RunE:              runCompile,
 	ValidArgsFunction: cobra.NoFileCompletions,
@@ -29,6 +43,8 @@ var compileCmd = &cobra.Command{
 
 func init() {
 	compileCmd.Flags().BoolVarP(&openAfter, "open", "o", false, "Open PDF after successful compilation")
+	compileCmd.Flags().BoolVar(&compileFix, "fix", false, "Apply autofixes to source files before running checks")
+	compileCmd.Flags().BoolVar(&compileNoCheck, "no-check", false, "Skip all pedantic checks (static and dynamic)")
 }
 
 var errorPatterns = []*regexp.Regexp{
@@ -61,18 +77,22 @@ func isContextLine(line string) bool {
 }
 
 func runCompile(cmd *cobra.Command, args []string) error {
+	if compileFix && compileNoCheck {
+		return fmt.Errorf("--fix and --no-check are mutually exclusive")
+	}
+
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
 	enabledChecks := cfg.Pedantic.EnabledNames()
-	if len(enabledChecks) > 0 {
+	if !compileNoCheck && len(enabledChecks) > 0 {
 		if err := pedantic.ValidateCheckNames(enabledChecks); err != nil {
 			return err
 		}
 	}
 
-	needsMathPos := pedantic.HasPostCompileChecks(enabledChecks)
+	needsMathPos := !compileNoCheck && pedantic.HasPostCompileChecks(enabledChecks)
 	if needsMathPos {
 		styPath := filepath.Join(auxDir, "el-mathpos.sty")
 		if err := os.WriteFile(styPath, pedantic.MathPosSty, 0644); err != nil {
@@ -228,8 +248,24 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Pedantic checks
-	if len(enabledChecks) > 0 {
+	if !compileNoCheck && len(enabledChecks) > 0 {
 		texFiles := texscan.FindTexFiles(cfg.Main, ".")
+
+		if compileFix {
+			modified, err := pedantic.RunSourceFixes(enabledChecks, texFiles)
+			if err != nil {
+				return err
+			}
+			if len(modified) == 0 {
+				fmt.Println("No fixes applied.")
+			} else {
+				fmt.Printf("Applied fixes to %d file(s):\n", len(modified))
+				for _, p := range modified {
+					fmt.Printf("  %s%s%s\n", compileColors.Green, p, compileColors.Reset)
+				}
+			}
+		}
+
 		diags := pedantic.RunSourceChecks(enabledChecks, texFiles)
 		diags = append(diags, pedantic.RunPostCompileChecks(enabledChecks, auxDir)...)
 
