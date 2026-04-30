@@ -28,9 +28,7 @@ var compileCmd = &cobra.Command{
 	Short: "Compile the LaTeX document",
 	Long: `Compile the LaTeX document (multiple pdflatex passes, bib tools as needed).
 
-Runs pedantic checks after compilation if enabled in config.
---fix applies available autofixes to source before checking.
---no-check skips all pedantic checks for this run.`,
+Runs pedantic checks after compilation if enabled in config.`,
 	SilenceUsage:      true,
 	RunE:              runCompile,
 	ValidArgsFunction: cobra.NoFileCompletions,
@@ -38,7 +36,7 @@ Runs pedantic checks after compilation if enabled in config.
 
 func init() {
 	compileCmd.Flags().BoolVarP(&openAfter, "open", "o", false, "Open PDF after successful compilation")
-	compileCmd.Flags().BoolVarP(&compileFix, "fix", "f", false, "Apply autofixes to source files before running checks")
+	compileCmd.Flags().BoolVarP(&compileFix, "fix", "f", false, "Apply autofixes to source files where available")
 	compileCmd.Flags().BoolVarP(&compileNoCheck, "no-check", "n", false, "Skip all pedantic checks (static and dynamic)")
 }
 

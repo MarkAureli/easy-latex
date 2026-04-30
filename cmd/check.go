@@ -21,7 +21,7 @@ var checkCmd = &cobra.Command{
 }
 
 func init() {
-	checkCmd.Flags().BoolVar(&checkFix, "fix", false, "Apply autofixes to source files where available")
+	checkCmd.Flags().BoolVarP(&checkFix, "fix", "f", false, "Apply autofixes to source files where available")
 	rootCmd.AddCommand(checkCmd)
 }
 
