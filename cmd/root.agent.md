@@ -28,11 +28,13 @@ Config struct + load/save/merge. Shared by all commands that load config.
 |---|---|---|---|
 | `abbreviate_journals` | *bool | true | ISO 4 journal abbrev |
 | `brace_titles` | *bool | false | Double-brace title field |
-| `ieee_format` | *bool | false | IEEE mode (forces brace-titles, max-authors=5, @misc→@unpublished) |
-| `max_authors` | *int | 0 (unlimited) | Truncate authors list; IEEE implies 5 if unset |
+| `max_authors` | *int | 0 (unlimited) | Truncate authors list |
 | `abbreviate_first_name` | *bool | true | Abbreviate first/middle names to initials |
 | `url_from_doi` | *bool | false | Replace url field with `https://doi.org/<doi>` when doi non-empty |
 | `retry_timeout` | *bool | true | Re-validate entries that previously timed out |
+| `arxiv_as_unpublished` | *bool | false | Convert arXiv @misc entries to @unpublished |
+
+**IEEEtran auto-detection** — if main `.tex` file uses `\documentclass{IEEEtran}`, compile locally sets brace-titles=true, max-authors=5, arxiv-as-unpublished=true (no config changes needed).
 
 ### `PedanticConfig`
 

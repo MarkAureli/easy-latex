@@ -27,7 +27,7 @@ Embedded bib content (`\begin{filecontents}{*.bib}...`) is extracted to disk bef
 
 In a git repository, `el init` appends `.el` to `.git/info/exclude` automatically, so generated files are never accidentally committed.
 
-Use `--ieee` to use IEEE-style bib file names (`IEEEabrv.bib` instead of `preamble.bib`) and enable IEEE formatting in the config.
+If the main `.tex` file uses `\documentclass{IEEEtran}`, the preamble file is automatically named `IEEEabrv.bib` instead of `preamble.bib`.
 
 ### `el compile`
 
@@ -144,7 +144,7 @@ SETTING                VALUE          SOURCE
 abbreviate-journals    true           (default)
 abbreviate-first-name  true           (default)
 brace-titles           false          (default)
-ieee-format            false          (default)
+arxiv-as-unpublished   false          (default)
 max-authors            0 (unlimited)  (default)
 url-from-doi           false          (default)
 retry-timeout          true           (default)
@@ -155,11 +155,11 @@ no-math-linebreak      false          (default)
 Set and unset values:
 
 ```
-$ el config set ieee-format              # bool without value → true
+$ el config set arxiv-as-unpublished     # bool without value → true
 $ el config set max-authors 3
 $ el config unset max-authors            # non-bool: removes from config
 $ el config unset brace-titles           # bool: sets to false
-$ el config set --global ieee-format     # writes to ~/.elconfig.json
+$ el config set --global arxiv-as-unpublished  # writes to ~/.elconfig.json
 ```
 
 | Key | Type | Default | Effect |
@@ -167,10 +167,17 @@ $ el config set --global ieee-format     # writes to ~/.elconfig.json
 | `abbreviate-journals` | bool | true | Abbreviate journal names to ISO 4 form |
 | `abbreviate-first-name` | bool | true | Abbreviate first/middle names to initials |
 | `brace-titles` | bool | false | Wrap title field in double braces `{{…}}` |
-| `ieee-format` | bool | false | IEEE mode: forces brace titles, max 5 authors, converts arXiv `@misc` to `@unpublished` |
-| `max-authors` | int | 0 | Truncate author list (0 = unlimited); IEEE implies 5 if unset |
+| `arxiv-as-unpublished` | bool | false | Convert arXiv `@misc` entries to `@unpublished` with note field |
+| `max-authors` | int | 0 | Truncate author list (0 = unlimited) |
 | `url-from-doi` | bool | false | Replace `url` field with `https://doi.org/<doi>` when DOI is present |
 | `retry-timeout` | bool | true | Re-validate entries that previously timed out during validation |
+
+**IEEEtran formatting** — if the main `.tex` file uses `\documentclass{IEEEtran}`, the following formatting is applied automatically during compilation:
+- `brace-titles` is set to true
+- `max-authors` is set to 5 (unless explicitly configured)
+- `arxiv-as-unpublished` is set to true
+
+These overrides are applied locally during each compilation and do not require explicit configuration.
 
 #### Pedantic checks
 
