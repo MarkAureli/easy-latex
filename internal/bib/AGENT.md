@@ -144,7 +144,7 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 | `validate.go` | `Version`, `WriteOptions`, `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation |
 | `logger.go` | `Logger` interface, `nopLogger`, `logOrNop`, `stderrLogger` |
 | `retry.go` | `doWithRetry`, `friendlyHTTPError`, `retryableStatusCode`, `isRetryableError` |
-| `cache.go` | `loadCache`, `saveCache`, `LoadRenames`, `SaveRenames`, `ClearRenames`, `BibFileChanged`, `UpdateBibHash`, `LoadCacheKeys`, `LoadCacheEntries`, `CacheEntryInfo` |
+| `cache.go` | `loadCache`, `saveCache`, `LoadRenames`, `SaveRenames`, `ClearRenames`, `BibFileChanged`, `UpdateBibHash`, `LoadCacheKeys`, `LoadCacheEntries`, `RemoveEntryFromCache`, `CacheEntryInfo` |
 | `crossref.go` | `httpClient`, `queryCrossref`, `mapCrossrefType`, `containerTitleField`, `formatCrossrefAuthors` |
 | `arxiv.go` | `queryArxiv`, `formatArxivAuthors`, `reverseArxivName` |
 | `xmltitle.go` | `cleanCrossrefTitle`, MathML→LaTeX converter (`encoding/xml` Decoder), Crossref face markup→LaTeX, XML tag stripper |

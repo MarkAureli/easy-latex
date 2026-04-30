@@ -38,6 +38,14 @@ Add a single entry to bib cache from a bare DOI or arXiv ID. Implemented by `run
 
 Uses `bibLogger` (`cmd/biblog.go`) for colored output. No config load required.
 
+### `el bib remove <key>`
+
+Remove a single entry from bib cache by key. Implemented by `runBibRemove`. Calls `bib.RemoveEntryFromCache(key, auxDir)` which returns `(removed bool, err error)`.
+
+- Key completion via `bibKeyCompletion` — shows all keys in cache
+- Warns if key not found, exits 0
+- No config load required
+
 ## Related
 
 - `cmd/biblog.go` — `bibLogger` implements `bib.Logger` with colored output via `internal/term`

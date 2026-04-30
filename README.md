@@ -250,7 +250,19 @@ Doe2023SomePreprint         misc      arxiv     Some Preprint
 2 entries in bib cache.
 ```
 
-### `el bib parse`
+#### `el bib remove <key>`
+
+Remove an entry from the bib cache by key. Shell completion shows available keys.
+
+```
+$ el bib remove Smith2023AGreatPaper
+Removed "Smith2023AGreatPaper" from bib cache.
+
+$ el bib remove nonexistent
+[bib] warning: "nonexistent" not found in bib cache
+```
+
+#### `el bib parse`
 
 Pre-populate the bib cache from registered `.bib` files without compiling. Useful for validating entries against Crossref/arXiv ahead of time, or for re-populating the cache after deleting `.el/bib.json`. Shows progress during API calls and announces key renames.
 
