@@ -38,8 +38,8 @@ Runs pedantic checks after compilation if enabled in config.
 
 func init() {
 	compileCmd.Flags().BoolVarP(&openAfter, "open", "o", false, "Open PDF after successful compilation")
-	compileCmd.Flags().BoolVar(&compileFix, "fix", false, "Apply autofixes to source files before running checks")
-	compileCmd.Flags().BoolVar(&compileNoCheck, "no-check", false, "Skip all pedantic checks (static and dynamic)")
+	compileCmd.Flags().BoolVarP(&compileFix, "fix", "f", false, "Apply autofixes to source files before running checks")
+	compileCmd.Flags().BoolVarP(&compileNoCheck, "no-check", "n", false, "Skip all pedantic checks (static and dynamic)")
 }
 
 var errorPatterns = []*regexp.Regexp{
