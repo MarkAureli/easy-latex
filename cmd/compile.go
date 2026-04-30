@@ -26,16 +26,11 @@ var (
 var compileCmd = &cobra.Command{
 	Use:   "compile",
 	Short: "Compile the LaTeX document",
-	Long: `Compile the LaTeX document, running multiple pdflatex passes as needed.
+	Long: `Compile the LaTeX document (multiple pdflatex passes, bib tools as needed).
 
-Runs bibliography tools (biber/bibtex) when detected and stabilises
-cross-references with up to two additional passes.
-
-If pedantic checks are enabled in config, they run after compilation:
-static source checks (PhaseSource / PhaseProjectSource) and dynamic
-post-compile checks (PhasePostCompile).  Use --fix to apply available
-autofixes to source files before the check phase.  Use --no-check to
-skip all pedantic checks for this run.`,
+Runs pedantic checks after compilation if enabled in config.
+--fix applies available autofixes to source before checking.
+--no-check skips all pedantic checks for this run.`,
 	SilenceUsage:      true,
 	RunE:              runCompile,
 	ValidArgsFunction: cobra.NoFileCompletions,
