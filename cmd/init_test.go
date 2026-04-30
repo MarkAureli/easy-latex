@@ -523,10 +523,19 @@ func TestDoInit_IEEEtran_FileNames(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "preamble.bib")); err == nil {
 		t.Error("preamble.bib must not be created when IEEEtran document class is used")
 	}
-	// config bib_files order: IEEEabrv.bib first
+	// config bib_files order: IEEEabrv.bib first, and IEEE options set locally
 	cfg := readConfig(t, dir)
 	if len(cfg.BibFiles) != 2 || cfg.BibFiles[0] != "IEEEabrv.bib" || cfg.BibFiles[1] != "bibliography.bib" {
 		t.Errorf("BibFiles = %v, want [IEEEabrv.bib bibliography.bib]", cfg.BibFiles)
+	}
+	if cfg.Bib.BraceTitles == nil || !*cfg.Bib.BraceTitles {
+		t.Error("brace-titles should be set to true for IEEEtran")
+	}
+	if cfg.Bib.MaxAuthors == nil || *cfg.Bib.MaxAuthors != 5 {
+		t.Errorf("max-authors = %v, want 5 for IEEEtran", cfg.Bib.MaxAuthors)
+	}
+	if cfg.Bib.ArxivAsUnpublished == nil || !*cfg.Bib.ArxivAsUnpublished {
+		t.Error("arxiv-as-unpublished should be set to true for IEEEtran")
 	}
 }
 

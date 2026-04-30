@@ -82,6 +82,12 @@ func doInit(dir string, stdin io.Reader) error {
 	}
 
 	cfg := Config{Main: chosen, BibFiles: bibFiles}
+	if usesIEEEtran {
+		t, n := true, 5
+		cfg.Bib.BraceTitles = &t
+		cfg.Bib.MaxAuthors = &n
+		cfg.Bib.ArxivAsUnpublished = &t
+	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err

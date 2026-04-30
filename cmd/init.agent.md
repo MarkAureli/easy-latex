@@ -13,6 +13,6 @@ No flags. IEEEtran usage is detected from document class in main `.tex` file.
    - IEEEtran:     entries → `bibliography.bib`; `@string`/`@preamble` → `IEEEabrv.bib`
    - Preamble file only created if non-empty; original files deleted
 8. `texscan.RewriteBibReferences` — update `\bibliography`/`\addbibresource` in all tex files
-9. Write `.el/config.json` (no special fields set; formatting applied auto at compile)
+9. Write `.el/config.json`; if IEEEtran detected, sets `brace_titles=true`, `max_authors=5`, `arxiv_as_unpublished=true` in local config
 10. Append `.el` to `.git/info/exclude` (idempotent, no-op if no `.git`)
 11. `bib.AllocateCacheEntries([entries bib file], ...)` — seed `.el/bib.json`; if renames returned, persist via `bib.SaveRenames` so first `el compile` rewrites `\cite{}` keys

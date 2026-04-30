@@ -163,24 +163,15 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Detect IEEEtran document class and apply local overrides.
-	usesIEEEtran := texscan.HasDocumentClass(cfg.Main, "IEEEtran")
-	effectiveBraceTitles := cfg.braceTitles() || usesIEEEtran
-	effectiveMaxAuthors := cfg.maxAuthors()
-	if usesIEEEtran && effectiveMaxAuthors == 0 {
-		effectiveMaxAuthors = 5
-	}
-	effectiveArxivAsUnpublished := cfg.arxivAsUnpublished() || usesIEEEtran
-
 	// Generate bibliography.bib from cache for cited entries only.
 	if ef := entriesBibFile(cfg.BibFiles); ef != "" {
 		citeKeys := citedKeysFromArtifacts(stem, auxDir)
 		if len(citeKeys) > 0 {
 			if err := bib.WriteBibFromCache(ef, citeKeys, auxDir, bib.WriteOptions{
 				AbbreviateJournals:  cfg.abbreviateJournals(),
-				BraceTitles:         effectiveBraceTitles,
-				ArxivAsUnpublished:  effectiveArxivAsUnpublished,
-				MaxAuthors:          effectiveMaxAuthors,
+				BraceTitles:         cfg.braceTitles(),
+				ArxivAsUnpublished:  cfg.arxivAsUnpublished(),
+				MaxAuthors:          cfg.maxAuthors(),
 				AbbreviateFirstName: cfg.abbreviateFirstName(),
 				UrlFromDOI:          cfg.urlFromDOI(),
 			}); err != nil {

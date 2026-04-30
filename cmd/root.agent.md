@@ -34,7 +34,7 @@ Config struct + load/save/merge. Shared by all commands that load config.
 | `retry_timeout` | *bool | true | Re-validate entries that previously timed out |
 | `arxiv_as_unpublished` | *bool | false | Convert arXiv @misc entries to @unpublished |
 
-**IEEEtran auto-detection** — if main `.tex` file uses `\documentclass{IEEEtran}`, compile locally sets brace-titles=true, max-authors=5, arxiv-as-unpublished=true (no config changes needed).
+**IEEEtran auto-detection** — `el init` detects `\documentclass{IEEEtran}` and writes brace-titles=true, max-authors=5, arxiv-as-unpublished=true into the local `.el/config.json`.
 
 ### `PedanticConfig`
 

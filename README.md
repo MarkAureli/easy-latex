@@ -172,12 +172,10 @@ $ el config set --global arxiv-as-unpublished  # writes to ~/.elconfig.json
 | `url-from-doi` | bool | false | Replace `url` field with `https://doi.org/<doi>` when DOI is present |
 | `retry-timeout` | bool | true | Re-validate entries that previously timed out during validation |
 
-**IEEEtran formatting** — if the main `.tex` file uses `\documentclass{IEEEtran}`, the following formatting is applied automatically during compilation:
-- `brace-titles` is set to true
-- `max-authors` is set to 5 (unless explicitly configured)
-- `arxiv-as-unpublished` is set to true
-
-These overrides are applied locally during each compilation and do not require explicit configuration.
+**IEEEtran formatting** — if the main `.tex` file uses `\documentclass{IEEEtran}`, `el init` automatically sets the following options in `.el/config.json`:
+- `brace-titles: true`
+- `max-authors: 5`
+- `arxiv-as-unpublished: true`
 
 #### Pedantic checks
 
