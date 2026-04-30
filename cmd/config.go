@@ -45,11 +45,11 @@ var bibConfigFields = []configField{
 		display: func(c *Config) string { return strconv.FormatBool(c.braceTitles()) },
 	},
 	{
-		key: "ieee-format", isBool: true,
-		setVal:  bibBoolSetter(func(c *Config, v bool) { c.Bib.IEEEFormat = &v }),
-		unset:   func(c *Config) { v := false; c.Bib.IEEEFormat = &v },
-		isSet:   func(c *Config) bool { return c.Bib.IEEEFormat != nil },
-		display: func(c *Config) string { return strconv.FormatBool(c.ieeeFormat()) },
+		key: "arxiv-as-unpublished", isBool: true,
+		setVal:  bibBoolSetter(func(c *Config, v bool) { c.Bib.ArxivAsUnpublished = &v }),
+		unset:   func(c *Config) { v := false; c.Bib.ArxivAsUnpublished = &v },
+		isSet:   func(c *Config) bool { return c.Bib.ArxivAsUnpublished != nil },
+		display: func(c *Config) string { return strconv.FormatBool(c.arxivAsUnpublished()) },
 	},
 	{
 		key: "max-authors", isBool: false,
@@ -284,15 +284,12 @@ func displayConfig(merged, local, global *Config) {
 	w.Flush()
 }
 
-func configSource(f configField, local, global, merged *Config) string {
+func configSource(f configField, local, global, _ *Config) string {
 	if f.isSet(local) {
 		return "(local)"
 	}
 	if f.isSet(global) {
 		return "(global)"
-	}
-	if f.key == "max-authors" && merged.ieeeFormat() {
-		return "(ieee default)"
 	}
 	return "(default)"
 }

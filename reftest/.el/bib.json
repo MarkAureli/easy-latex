@@ -1,0 +1,642 @@
+{
+  "Abbas2024ChallengesAndOpportunitiesInQuantumOptimization": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Abbas, Amira and Ambainis, Andris and Augustino, Brandon and Bärtschi, Andreas and Buhrman, Harry and Coffrin, Carleton and Cortiana, Giorgio and Dunjko, Vedran and Egger, Daniel J. and Elmegreen, Bruce G. and Franco, Nicola and Fratini, Filippo and Fuller, Bryce and Gacon, Julien and Gonciulea, Constantin and Gribling, Sander and Gupta, Swati and Hadfield, Stuart and Heese, Raoul and Kircher, Gerhard and Kleinert, Thomas and Koch, Thorsten and Korpas, Georgios and Lenk, Steve and Marecek, Jakub and Markov, Vanio and Mazzola, Guglielmo and Mensa, Stefano and Mohseni, Naeimeh and Nannicini, Giacomo and O’Meara, Corey and Tapia, Elena Peña and Pokutta, Sebastian and Proissl, Manuel and Rebentrost, Patrick and Sahin, Emre and Symons, Benjamin C. B. and Tornow, Sabine and Valls, Víctor and Woerner, Stefan and Wolf-Bauwens, Mira L. and Yard, Jon and Yarkoni, Sheir and Zechiel, Dirk and Zhuk, Sergiy and Zoufal, Christa",
+      "doi": "10.1038/s42254-024-00770-9",
+      "journal": "Nature Reviews Physics",
+      "number": "12",
+      "pages": "718-735",
+      "title": "Challenges and opportunities in quantum optimization",
+      "url": "https://doi.org/10.1038/s42254-024-00770-9",
+      "volume": "6",
+      "year": "2024"
+    }
+  },
+  "Ambainis2019QuantumSpeedupsForExponentialTimeDynamicProgrammingAlgorithms": {
+    "source": "crossref",
+    "type": "incollection",
+    "fields": {
+      "author": "Ambainis, Andris and Balodis, Kaspars and Iraids, Jānis and Kokainis, Martins and Prūsis, Krišjānis and Vihrovs, Jevgēnijs",
+      "booktitle": "Proceedings of the Thirtieth Annual ACM-SIAM Symposium on Discrete Algorithms",
+      "doi": "10.1137/1.9781611975482.107",
+      "pages": "1783-1793",
+      "publisher": "Society for Industrial and Applied Mathematics",
+      "title": "Quantum Speedups for Exponential-Time Dynamic Programming Algorithms",
+      "url": "https://doi.org/10.1137/1.9781611975482.107",
+      "year": "2019"
+    }
+  },
+  "Applegate2009CertificationOfAnOptimalTspTourThrough85900Cities": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Applegate, David L. and Bixby, Robert E. and Chvátal, Vašek and Cook, William and Espinoza, Daniel G. and Goycoolea, Marcos and Helsgaun, Keld",
+      "doi": "10.1016/j.orl.2008.09.006",
+      "journal": "Operations Research Letters",
+      "number": "1",
+      "pages": "11-15",
+      "title": "Certification of an optimal TSP tour through 85,900 cities",
+      "url": "https://doi.org/10.1016/j.orl.2008.09.006",
+      "volume": "37",
+      "year": "2009"
+    }
+  },
+  "Arrasmith2021EffectOfBarrenPlateausOnGradientFreeOptimization": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Arrasmith, Andrew and Cerezo, M. and Czarnik, Piotr and Cincio, Lukasz and Coles, Patrick J.",
+      "doi": "10.22331/q-2021-10-05-558",
+      "journal": "Quantum",
+      "pages": "558",
+      "title": "Effect of barren plateaus on gradient-free optimization",
+      "url": "https://doi.org/10.22331/q-2021-10-05-558",
+      "volume": "5",
+      "year": "2021"
+    }
+  },
+  "Bartschi2020GroverMixersForQaoaShiftingComplexityFromMixerDesignToStatePreparation": {
+    "source": "crossref",
+    "type": "inproceedings",
+    "fields": {
+      "author": "Bartschi, Andreas and Eidenbenz, Stephan",
+      "booktitle": "2020 IEEE International Conference on Quantum Computing and Engineering (QCE)",
+      "doi": "10.1109/qce49297.2020.00020",
+      "pages": "72-82",
+      "title": "Grover Mixers for QAOA: Shifting Complexity from Mixer Design to State Preparation",
+      "url": "https://doi.org/10.1109/qce49297.2020.00020",
+      "year": "2020"
+    }
+  },
+  "Bharti2021IterativeQuantumAssistedEigensolver": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Bharti, Kishor and Haug, Tobias",
+      "doi": "10.1103/physreva.104.l050401",
+      "journal": "Physical Review A",
+      "number": "5",
+      "title": "Iterative quantum-assisted eigensolver",
+      "url": "https://doi.org/10.1103/physreva.104.l050401",
+      "volume": "104",
+      "year": "2021"
+    }
+  },
+  "Bharti2022NoisyIntermediateScaleQuantumAlgorithmForSemidefiniteProgramming": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Bharti, Kishor and Haug, Tobias and Vedral, Vlatko and Kwek, Leong-Chuan",
+      "doi": "10.1103/physreva.105.052445",
+      "journal": "Physical Review A",
+      "number": "5",
+      "pages": "052445",
+      "title": "Noisy intermediate-scale quantum algorithm for semidefinite programming",
+      "url": "https://doi.org/10.1103/physreva.105.052445",
+      "volume": "105",
+      "year": "2022"
+    }
+  },
+  "Binkowski2024ElementaryProofOfQaoaConvergence": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Binkowski, Lennart and Koßmann, Gereon and Ziegler, Timo and Schwonnek, René",
+      "doi": "10.1088/1367-2630/ad59bb",
+      "journal": "New Journal of Physics",
+      "number": "7",
+      "pages": "073001",
+      "title": "Elementary proof of QAOA convergence",
+      "url": "https://doi.org/10.1088/1367-2630/ad59bb",
+      "volume": "26",
+      "year": "2024"
+    }
+  },
+  "Binkowski2025FromBarrenPlateausThroughFertileValleysConicExtensionsOfParameterisedQuantumCircuits": {
+    "source": "crossref",
+    "type": "inproceedings",
+    "fields": {
+      "author": "Binkowski, Lennart and Koßmann, Gereon and Osborne, Tobias J. and Schwonnek, René and Ziegler, Timo",
+      "booktitle": "2025 IEEE International Conference on Quantum Computing and Engineering (QCE)",
+      "doi": "10.1109/qce65121.2025.00022",
+      "pages": "111-118",
+      "title": "From Barren Plateaus Through Fertile Valleys: Conic Extensions of Parameterised Quantum Circuits",
+      "url": "https://doi.org/10.1109/qce65121.2025.00022",
+      "year": "2025"
+    }
+  },
+  "Binkowski2025SymmetryBasedQuantumAlgorithmsForOpenShopSchedulingWithHardConstraints": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Binkowski, Lennart and Koßmann, Gereon and Tutschku, Christian and Schwonnek, René",
+      "doi": "10.20935/acadquant7900",
+      "journal": "Academia Quantum",
+      "number": "3",
+      "title": "Symmetry-based quantum algorithms for open-shop scheduling with hard constraints",
+      "url": "https://doi.org/10.20935/acadquant7900",
+      "volume": "2",
+      "year": "2025"
+    }
+  },
+  "Bittel2021TrainingVariationalQuantumAlgorithmsIsNpHard": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Bittel, Lennart and Kliesch, Martin",
+      "doi": "10.1103/physrevlett.127.120502",
+      "journal": "Physical Review Letters",
+      "number": "12",
+      "pages": "120502",
+      "title": "Training Variational Quantum Algorithms Is NP-Hard",
+      "url": "https://doi.org/10.1103/physrevlett.127.120502",
+      "volume": "127",
+      "year": "2021"
+    }
+  },
+  "BonetMonroig2023PerformanceComparisonOfOptimizationMethodsOnVariationalQuantumAlgorithms": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Bonet-Monroig, Xavier and Wang, Hao and Vermetten, Diederick and Senjean, Bruno and Moussa, Charles and Bäck, Thomas and Dunjko, Vedran and O'Brien, Thomas E.",
+      "doi": "10.1103/physreva.107.032407",
+      "journal": "Physical Review A",
+      "number": "3",
+      "pages": "032407",
+      "title": "Performance comparison of optimization methods on variational quantum algorithms",
+      "url": "https://doi.org/10.1103/physreva.107.032407",
+      "volume": "107",
+      "year": "2023"
+    }
+  },
+  "Brandt1999QubitDevicesAndTheIssueOfQuantumDecoherence": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Brandt, Howard E.",
+      "doi": "10.1016/s0079-6727(99)00003-8",
+      "journal": "Progress in Quantum Electronics",
+      "number": "5-6",
+      "pages": "257-370",
+      "title": "Qubit devices and the issue of quantum decoherence",
+      "url": "https://doi.org/10.1016/s0079-6727(99)00003-8",
+      "volume": "22",
+      "year": "1999"
+    }
+  },
+  "Cerezo2021CostFunctionDependentBarrenPlateausInShallowParametrizedQuantumCircuits": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Cerezo, M. and Sone, Akira and Volkoff, Tyler and Cincio, Lukasz and Coles, Patrick J.",
+      "doi": "10.1038/s41467-021-21728-w",
+      "journal": "Nature Communications",
+      "number": "1",
+      "pages": "1791",
+      "title": "Cost function dependent barren plateaus in shallow parametrized quantum circuits",
+      "url": "https://doi.org/10.1038/s41467-021-21728-w",
+      "volume": "12",
+      "year": "2021"
+    }
+  },
+  "Cerezo2021VariationalQuantumAlgorithms": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Cerezo, M. and Arrasmith, Andrew and Babbush, Ryan and Benjamin, Simon C. and Endo, Suguru and Fujii, Keisuke and McClean, Jarrod R. and Mitarai, Kosuke and Yuan, Xiao and Cincio, Lukasz and Coles, Patrick J.",
+      "doi": "10.1038/s42254-021-00348-9",
+      "journal": "Nature Reviews Physics",
+      "number": "9",
+      "pages": "625-644",
+      "title": "Variational quantum algorithms",
+      "url": "https://doi.org/10.1038/s42254-021-00348-9",
+      "volume": "3",
+      "year": "2021"
+    }
+  },
+  "Childs2012HamiltonianSimulationUsingLinearCombinationsOfUnitaryOperations": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Childs, A. M. and Wiebe, N.",
+      "doi": "10.26421/qic12.11-12",
+      "journal": "Quantum Information and Computation",
+      "number": "11\u002612",
+      "pages": "901--924",
+      "title": "{Hamiltonian Simulation Using Linear Combinations of Unitary Operations}",
+      "url": "https://doi.org/10.26421/qic12.11-12",
+      "volume": "12",
+      "year": "2012"
+    }
+  },
+  "Ekert2002DirectEstimationsOfLinearAndNonlinearFunctionalsOfAQuantumState": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Ekert, Artur K. and Alves, Carolina Moura and Oi, Daniel K. L. and Horodecki, Michał and Horodecki, Paweł and Kwek, L. C.",
+      "doi": "10.1103/physrevlett.88.217901",
+      "journal": "Physical Review Letters",
+      "number": "21",
+      "pages": "217901",
+      "title": "Direct Estimations of Linear and Nonlinear Functionals of a Quantum State",
+      "url": "https://doi.org/10.1103/physrevlett.88.217901",
+      "volume": "88",
+      "year": "2002"
+    }
+  },
+  "Farhi2000QuantumComputationByAdiabaticEvolution": {
+    "source": "no-id",
+    "type": "unpublished",
+    "fields": {
+      "author": "Farhi, E. and Goldstone, J. and Gutmann, S. and Sipser, M.",
+      "note": "[arXiv preprint \\href{https://arxiv.org/abs/quant-ph/0001106}{arXiv:quant-ph/0001106}]",
+      "title": "Quantum Computation by Adiabatic Evolution",
+      "year": "2000"
+    }
+  },
+  "Farhi2014AQuantumApproximateOptimizationAlgorithm": {
+    "source": "no-id",
+    "type": "unpublished",
+    "fields": {
+      "author": "Farhi, E. and Goldstone, J. and Gutmann, S.",
+      "note": "[arXiv preprint \\href{https://arxiv.org/abs/1411.4028}{arXiv:1411.4028}]",
+      "title": "A Quantum Approximate Optimization Algorithm",
+      "year": "2014"
+    }
+  },
+  "Ghojogh2019EigenvalueAndGeneralizedEigenvalueProblemsTutorial": {
+    "source": "no-id",
+    "type": "unpublished",
+    "fields": {
+      "author": "Ghojogh, B. and Karray, F. and Crowley, M.",
+      "note": "[arXiv preprint \\href{https://arxiv.org/abs/1903.11240}{arXiv:1903.11240}]",
+      "title": "Eigenvalue and Generalized Eigenvalue Problems: Tutorial",
+      "year": "2019"
+    }
+  },
+  "GoogleQuantumAi2023SuppressingQuantumErrorsByScalingASurfaceCodeLogicalQubit": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "{Google Quantum AI}",
+      "doi": "10.1038/s41586-022-05434-1",
+      "journal": "Nature",
+      "number": "7949",
+      "pages": "676-681",
+      "title": "Suppressing quantum errors by scaling a surface code logical qubit",
+      "url": "https://doi.org/10.1038/s41586-022-05434-1",
+      "volume": "614",
+      "year": "2023"
+    }
+  },
+  "GrandRive2019KnapsackProblemVariantsOfQaoaForBatteryRevenueOptimisation": {
+    "source": "no-id",
+    "type": "unpublished",
+    "fields": {
+      "author": "Grand'rive, P. D. d. l. and Hullo, J.",
+      "note": "[arXiv preprint \\href{https://arxiv.org/abs/1908.02210}{arXiv:1908.02210}]",
+      "title": "Knapsack Problem variants of QAOA for battery revenue optimisation",
+      "year": "2019"
+    }
+  },
+  "Grover1997QuantumMechanicsHelpsInSearchingForANeedleInAHaystack": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Grover, Lov K.",
+      "doi": "10.1103/physrevlett.79.325",
+      "journal": "Physical Review Letters",
+      "number": "2",
+      "pages": "325-328",
+      "title": "Quantum Mechanics Helps in Searching for a Needle in a Haystack",
+      "url": "https://doi.org/10.1103/physrevlett.79.325",
+      "volume": "79",
+      "year": "1997"
+    }
+  },
+  "Hadfield2019FromTheQuantumApproximateOptimizationAlgorithmToAQuantumAlternatingOperatorAnsatz": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Hadfield, Stuart and Wang, Zhihui and O’Gorman, Bryan and Rieffel, Eleanor G. and Venturelli, Davide and Biswas, Rupak",
+      "doi": "10.3390/a12020034",
+      "journal": "Algorithms",
+      "number": "2",
+      "pages": "34",
+      "title": "From the Quantum Approximate Optimization Algorithm to a Quantum Alternating Operator Ansatz",
+      "url": "https://doi.org/10.3390/a12020034",
+      "volume": "12",
+      "year": "2019"
+    }
+  },
+  "Huang2007ComplexMatrixDecompositionAndQuadraticProgramming": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Huang, Yongwei and Zhang, Shuzhong",
+      "doi": "10.1287/moor.1070.0268",
+      "journal": "Mathematics of Operations Research",
+      "number": "3",
+      "pages": "758-768",
+      "title": "Complex Matrix Decomposition and Quadratic Programming",
+      "url": "https://doi.org/10.1287/moor.1070.0268",
+      "volume": "32",
+      "year": "2007"
+    }
+  },
+  "Huggins2020ANonOrthogonalVariationalQuantumEigensolver": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Huggins, William J and Lee, Joonho and Baek, Unpil and O’Gorman, Bryan and Whaley, K Birgitta",
+      "doi": "10.1088/1367-2630/ab867b",
+      "journal": "New Journal of Physics",
+      "number": "7",
+      "pages": "073009",
+      "title": "A non-orthogonal variational quantum eigensolver",
+      "url": "https://doi.org/10.1088/1367-2630/ab867b",
+      "volume": "22",
+      "year": "2020"
+    }
+  },
+  "Kadowaki1998QuantumAnnealingInTheTransverseIsingModel": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Kadowaki, Tadashi and Nishimori, Hidetoshi",
+      "doi": "10.1103/physreve.58.5355",
+      "journal": "Physical Review E",
+      "number": "5",
+      "pages": "5355-5363",
+      "title": "Quantum annealing in the transverse Ising model",
+      "url": "https://doi.org/10.1103/physreve.58.5355",
+      "volume": "58",
+      "year": "1998"
+    }
+  },
+  "Karp1972ReducibilityAmongCombinatorialProblems": {
+    "source": "crossref",
+    "type": "incollection",
+    "fields": {
+      "address": "Boston, {MA}",
+      "author": "Karp, Richard M.",
+      "booktitle": "Complexity of Computer Computations",
+      "doi": "10.1007/978-1-4684-2001-2_9",
+      "pages": "85-103",
+      "publisher": "Springer {US}",
+      "title": "Reducibility among Combinatorial Problems",
+      "url": "https://doi.org/10.1007/978-1-4684-2001-2_9",
+      "year": "1972"
+    }
+  },
+  "Kato1995PerturbationTheoryForLinearOperators": {
+    "source": "crossref",
+    "type": "book",
+    "fields": {
+      "address": "Berlin, Heidelberg",
+      "author": "Kato, Tosio",
+      "doi": "10.1007/978-3-642-66282-9",
+      "journal": "Classics in Mathematics",
+      "publisher": "Springer",
+      "title": "Perturbation Theory for Linear Operators",
+      "url": "https://doi.org/10.1007/978-3-642-66282-9",
+      "year": "1995"
+    }
+  },
+  "Kellerer2004KnapsackProblems": {
+    "source": "crossref",
+    "type": "book",
+    "fields": {
+      "author": "Kellerer, Hans and Pferschy, Ulrich and Pisinger, David",
+      "doi": "10.1007/978-3-540-24777-7",
+      "publisher": "Springer",
+      "title": "Knapsack Problems",
+      "url": "https://doi.org/10.1007/978-3-540-24777-7",
+      "year": "2004"
+    }
+  },
+  "Kuebler2020AnAdaptiveOptimizerForMeasurementFrugalVariationalAlgorithms": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Kübler, Jonas M. and Arrasmith, Andrew and Cincio, Lukasz and Coles, Patrick J.",
+      "doi": "10.22331/q-2020-05-11-263",
+      "journal": "Quantum",
+      "pages": "263",
+      "title": "An Adaptive Optimizer for Measurement-Frugal Variational Algorithms",
+      "url": "https://doi.org/10.22331/q-2020-05-11-263",
+      "volume": "4",
+      "year": "2020"
+    }
+  },
+  "Larocca2025BarrenPlateausInVariationalQuantumComputing": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Larocca, Martín and Thanasilp, Supanut and Wang, Samson and Sharma, Kunal and Biamonte, Jacob and Coles, Patrick J. and Cincio, Lukasz and McClean, Jarrod R. and Holmes, Zoë and Cerezo, M.",
+      "doi": "10.1038/s42254-025-00813-9",
+      "journal": "Nature Reviews Physics",
+      "number": "4",
+      "pages": "174-189",
+      "title": "Barren plateaus in variational quantum computing",
+      "url": "https://doi.org/10.1038/s42254-025-00813-9",
+      "volume": "7",
+      "year": "2025"
+    }
+  },
+  "Mcclean2017HybridQuantumClassicalHierarchyForMitigationOfDecoherenceAndDeterminationOfExcitedStates": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "McClean, Jarrod R. and Kimchi-Schwartz, Mollie E. and Carter, Jonathan and de Jong, Wibe A.",
+      "doi": "10.1103/physreva.95.042308",
+      "journal": "Physical Review A",
+      "number": "4",
+      "pages": "042308",
+      "title": "Hybrid quantum-classical hierarchy for mitigation of decoherence and determination of excited states",
+      "url": "https://doi.org/10.1103/physreva.95.042308",
+      "volume": "95",
+      "year": "2017"
+    }
+  },
+  "Mcclean2018BarrenPlateausInQuantumNeuralNetworkTrainingLandscapes": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "McClean, Jarrod R. and Boixo, Sergio and Smelyanskiy, Vadim N. and Babbush, Ryan and Neven, Hartmut",
+      "doi": "10.1038/s41467-018-07090-4",
+      "journal": "Nature Communications",
+      "number": "1",
+      "pages": "4812",
+      "title": "Barren plateaus in quantum neural network training landscapes",
+      "url": "https://doi.org/10.1038/s41467-018-07090-4",
+      "volume": "9",
+      "year": "2018"
+    }
+  },
+  "Montanaro2020QuantumSpeedupOfBranchAndBoundAlgorithms": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Montanaro, Ashley",
+      "doi": "10.1103/physrevresearch.2.013056",
+      "journal": "Physical Review Research",
+      "number": "1",
+      "pages": "013056",
+      "title": "Quantum speedup of branch-and-bound algorithms",
+      "url": "https://doi.org/10.1103/physrevresearch.2.013056",
+      "volume": "2",
+      "year": "2020"
+    }
+  },
+  "Nguyen2022StrongDualityForGeneralQuadraticProgramsWithQuadraticEqualityConstraints": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Nguyen, Duy-Van",
+      "doi": "10.1007/s10957-022-02082-3",
+      "journal": "Journal of Optimization Theory and Applications",
+      "number": "1",
+      "pages": "297-313",
+      "title": "Strong Duality for General Quadratic Programs with Quadratic Equality Constraints",
+      "url": "https://doi.org/10.1007/s10957-022-02082-3",
+      "volume": "195",
+      "year": "2022"
+    }
+  },
+  "OrtizMarrero2021EntanglementInducedBarrenPlateaus": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Ortiz Marrero, Carlos and Kieferová, Mária and Wiebe, Nathan",
+      "doi": "10.1103/prxquantum.2.040316",
+      "journal": "PRX Quantum",
+      "number": "4",
+      "pages": "040316",
+      "title": "Entanglement-Induced Barren Plateaus",
+      "url": "https://doi.org/10.1103/prxquantum.2.040316",
+      "volume": "2",
+      "year": "2021"
+    }
+  },
+  "Preskill2018QuantumComputingInTheNisqEraAndBeyond": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Preskill, John",
+      "doi": "10.22331/q-2018-08-06-79",
+      "journal": "Quantum",
+      "pages": "79",
+      "title": "Quantum Computing in the NISQ era and beyond",
+      "url": "https://doi.org/10.22331/q-2018-08-06-79",
+      "volume": "2",
+      "year": "2018"
+    }
+  },
+  "PsiquantumTeam2025AManufacturablePlatformForPhotonicQuantumComputing": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "{PsiQuantum team}",
+      "doi": "10.1038/s41586-025-08820-7",
+      "journal": "Nature",
+      "number": "8064",
+      "pages": "876-883",
+      "title": "A manufacturable platform for photonic quantum computing",
+      "url": "https://doi.org/10.1038/s41586-025-08820-7",
+      "volume": "641",
+      "year": "2025"
+    }
+  },
+  "Ramacciotti2024SimpleQuantumAlgorithmToEfficientlyPrepareSparseStates": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Ramacciotti, Debora and Lefterovici, Andreea I. and Rotundo, Antonio F.",
+      "doi": "10.1103/physreva.110.032609",
+      "journal": "Physical Review A",
+      "number": "3",
+      "pages": "032609",
+      "title": "Simple quantum algorithm to efficiently prepare sparse states",
+      "url": "https://doi.org/10.1103/physreva.110.032609",
+      "volume": "110",
+      "year": "2024"
+    }
+  },
+  "Tarjan1977FindingAMaximumIndependentSet": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Tarjan, Robert Endre and Trojanowski, Anthony E.",
+      "doi": "10.1137/0206038",
+      "journal": "SIAM Journal on Computing",
+      "number": "3",
+      "pages": "537-546",
+      "title": "Finding a Maximum Independent Set",
+      "url": "https://doi.org/10.1137/0206038",
+      "volume": "6",
+      "year": "1977"
+    }
+  },
+  "Thoai2000DualityBoundMethodForTheGeneralQuadraticProgrammingProblemWithQuadraticConstraints": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Thoai, N. V.",
+      "doi": "10.1023/a:1026437621223",
+      "journal": "Journal of Optimization Theory and Applications",
+      "number": "2",
+      "pages": "331-354",
+      "title": "Duality Bound Method for the General Quadratic Programming Problem with Quadratic Constraints",
+      "url": "https://doi.org/10.1023/a:1026437621223",
+      "volume": "107",
+      "year": "2000"
+    }
+  },
+  "VanApeldoorn2020QuantumSdpSolversBetterUpperAndLowerBounds": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "van Apeldoorn, Joran and Gilyén, András and Gribling, Sander and de Wolf, Ronald",
+      "doi": "10.22331/q-2020-02-14-230",
+      "journal": "Quantum",
+      "pages": "230",
+      "title": "Quantum SDP-Solvers: Better upper and lower bounds",
+      "url": "https://doi.org/10.22331/q-2020-02-14-230",
+      "volume": "4",
+      "year": "2020"
+    }
+  },
+  "Wang2021NoiseInducedBarrenPlateausInVariationalQuantumAlgorithms": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Wang, Samson and Fontana, Enrico and Cerezo, M. and Sharma, Kunal and Sone, Akira and Cincio, Lukasz and Coles, Patrick J.",
+      "doi": "10.1038/s41467-021-27045-6",
+      "journal": "Nature Communications",
+      "number": "1",
+      "pages": "6961",
+      "title": "Noise-induced barren plateaus in variational quantum algorithms",
+      "url": "https://doi.org/10.1038/s41467-021-27045-6",
+      "volume": "12",
+      "year": "2021"
+    }
+  },
+  "Zhang2017ReviewOfJobShopSchedulingResearchAndItsNewPerspectivesUnderIndustry40": {
+    "source": "crossref",
+    "type": "article",
+    "fields": {
+      "author": "Zhang, Jian and Ding, Guofu and Zou, Yisheng and Qin, Shengfeng and Fu, Jianlin",
+      "doi": "10.1007/s10845-017-1350-2",
+      "journal": "Journal of Intelligent Manufacturing",
+      "number": "4",
+      "pages": "1809-1830",
+      "title": "Review of job shop scheduling research and its new perspectives under Industry 4.0",
+      "url": "https://doi.org/10.1007/s10845-017-1350-2",
+      "volume": "30",
+      "year": "2017"
+    }
+  }
+}

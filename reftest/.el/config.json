@@ -1,0 +1,23 @@
+{
+  "main": "main.tex",
+  "bib_files": [
+    "IEEEabrv.bib",
+    "bibliography.bib"
+  ],
+  "bib": {
+    "ieee_format": true
+  },
+  "pedantic": {
+    "checks": {
+      "block-on-newline": true,
+      "env-indent": true,
+      "no-block-citations": true,
+      "no-math-linebreak": true,
+      "no-tabs": true,
+      "no-trailing-whitespace": true,
+      "sentence-on-newline": true,
+      "single-spaces": true,
+      "unused-labels": true
+    }
+  }
+}

@@ -26,11 +26,11 @@ type Config struct {
 type BibConfig struct {
 	AbbreviateJournals  *bool `json:"abbreviate_journals,omitempty"`
 	BraceTitles         *bool `json:"brace_titles,omitempty"`
-	IEEEFormat          *bool `json:"ieee_format,omitempty"`
 	MaxAuthors          *int  `json:"max_authors,omitempty"`
 	AbbreviateFirstName *bool `json:"abbreviate_first_name,omitempty"`
 	UrlFromDOI          *bool `json:"url_from_doi,omitempty"`
 	RetryTimeout        *bool `json:"retry_timeout,omitempty"`
+	ArxivAsUnpublished  *bool `json:"arxiv_as_unpublished,omitempty"`
 }
 
 // PedanticConfig holds per-check enable/disable state. Map key = check name,
@@ -71,10 +71,10 @@ func (cfg *Config) braceTitles() bool {
 	return cfg.Bib.BraceTitles != nil && *cfg.Bib.BraceTitles
 }
 
-// ieeeFormat returns true when IEEE bib formatting is enabled.
-// Defaults to false when the field is absent (nil).
-func (cfg *Config) ieeeFormat() bool {
-	return cfg.Bib.IEEEFormat != nil && *cfg.Bib.IEEEFormat
+// arxivAsUnpublished returns true when arXiv @misc entries should be written as
+// @unpublished. Defaults to false when the field is absent (nil).
+func (cfg *Config) arxivAsUnpublished() bool {
+	return cfg.Bib.ArxivAsUnpublished != nil && *cfg.Bib.ArxivAsUnpublished
 }
 
 // abbreviateFirstName returns true when first (and middle) names should be
@@ -97,12 +97,8 @@ func (cfg *Config) retryTimeout() bool {
 
 // maxAuthors returns the maximum number of authors to store, or 0 for unlimited.
 // Defaults to 0 (unlimited) when the field is absent (nil).
-// IEEE format implies a maximum of 5 authors when no explicit limit is set.
 func (cfg *Config) maxAuthors() int {
 	if cfg.Bib.MaxAuthors == nil || *cfg.Bib.MaxAuthors == 0 {
-		if cfg.ieeeFormat() {
-			return 5
-		}
 		return 0
 	}
 	return *cfg.Bib.MaxAuthors
@@ -192,11 +188,11 @@ func mergeConfig(local, global *Config) *Config {
 	}
 	merged.Bib.AbbreviateJournals = mergeBool(local.Bib.AbbreviateJournals, global.Bib.AbbreviateJournals)
 	merged.Bib.BraceTitles = mergeBool(local.Bib.BraceTitles, global.Bib.BraceTitles)
-	merged.Bib.IEEEFormat = mergeBool(local.Bib.IEEEFormat, global.Bib.IEEEFormat)
 	merged.Bib.MaxAuthors = mergeInt(local.Bib.MaxAuthors, global.Bib.MaxAuthors)
 	merged.Bib.AbbreviateFirstName = mergeBool(local.Bib.AbbreviateFirstName, global.Bib.AbbreviateFirstName)
 	merged.Bib.UrlFromDOI = mergeBool(local.Bib.UrlFromDOI, global.Bib.UrlFromDOI)
 	merged.Bib.RetryTimeout = mergeBool(local.Bib.RetryTimeout, global.Bib.RetryTimeout)
+	merged.Bib.ArxivAsUnpublished = mergeBool(local.Bib.ArxivAsUnpublished, global.Bib.ArxivAsUnpublished)
 
 	// Pedantic: per-key pointer merge (local wins for keys it sets).
 	if len(local.Pedantic.Checks) > 0 || len(global.Pedantic.Checks) > 0 {

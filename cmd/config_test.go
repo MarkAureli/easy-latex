@@ -102,26 +102,26 @@ func TestBraceTitles_ExplicitFalse(t *testing.T) {
 	}
 }
 
-func TestIEEEFormat_NilDefaultsFalse(t *testing.T) {
+func TestArxivAsUnpublished_NilDefaultsFalse(t *testing.T) {
 	cfg := &Config{}
-	if cfg.ieeeFormat() {
-		t.Error("expected false when IEEEFormat is nil")
+	if cfg.arxivAsUnpublished() {
+		t.Error("expected false when ArxivAsUnpublished is nil")
 	}
 }
 
-func TestIEEEFormat_ExplicitTrue(t *testing.T) {
+func TestArxivAsUnpublished_ExplicitTrue(t *testing.T) {
 	v := true
-	cfg := &Config{Bib: BibConfig{IEEEFormat: &v}}
-	if !cfg.ieeeFormat() {
-		t.Error("expected true when IEEEFormat is &true")
+	cfg := &Config{Bib: BibConfig{ArxivAsUnpublished: &v}}
+	if !cfg.arxivAsUnpublished() {
+		t.Error("expected true when ArxivAsUnpublished is &true")
 	}
 }
 
-func TestIEEEFormat_ExplicitFalse(t *testing.T) {
+func TestArxivAsUnpublished_ExplicitFalse(t *testing.T) {
 	v := false
-	cfg := &Config{Bib: BibConfig{IEEEFormat: &v}}
-	if cfg.ieeeFormat() {
-		t.Error("expected false when IEEEFormat is &false")
+	cfg := &Config{Bib: BibConfig{ArxivAsUnpublished: &v}}
+	if cfg.arxivAsUnpublished() {
+		t.Error("expected false when ArxivAsUnpublished is &false")
 	}
 }
 
@@ -194,22 +194,6 @@ func TestMaxAuthors_ZeroValue(t *testing.T) {
 	}
 }
 
-func TestMaxAuthors_IEEEImpliesFive(t *testing.T) {
-	trueVal := true
-	cfg := &Config{Bib: BibConfig{IEEEFormat: &trueVal, MaxAuthors: nil}}
-	if cfg.maxAuthors() != 5 {
-		t.Errorf("expected 5 when IEEEFormat is true and MaxAuthors is nil, got %d", cfg.maxAuthors())
-	}
-}
-
-func TestMaxAuthors_ExplicitValueOverridesIEEE(t *testing.T) {
-	trueVal := true
-	v := 3
-	cfg := &Config{Bib: BibConfig{IEEEFormat: &trueVal, MaxAuthors: &v}}
-	if cfg.maxAuthors() != 3 {
-		t.Errorf("expected 3 (explicit value overrides IEEE), got %d", cfg.maxAuthors())
-	}
-}
 
 // ── mergeConfig tests ────────────────────────────────────────────────────────
 
@@ -455,12 +439,12 @@ func TestConfigSet_Global(t *testing.T) {
 	home := t.TempDir()
 	setGlobalConfigDir(t, home)
 
-	if err := invokeConfigSet(t, []string{"--global", "ieee-format", "true"}); err != nil {
+	if err := invokeConfigSet(t, []string{"--global", "arxiv-as-unpublished", "true"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readGlobalConfig(t, home)
-	if cfg.Bib.IEEEFormat == nil || *cfg.Bib.IEEEFormat != true {
-		t.Errorf("global IEEEFormat = %v, want &true", cfg.Bib.IEEEFormat)
+	if cfg.Bib.ArxivAsUnpublished == nil || *cfg.Bib.ArxivAsUnpublished != true {
+		t.Errorf("global ArxivAsUnpublished = %v, want &true", cfg.Bib.ArxivAsUnpublished)
 	}
 }
 
@@ -468,12 +452,12 @@ func TestConfigSet_GlobalBoolNoValue(t *testing.T) {
 	home := t.TempDir()
 	setGlobalConfigDir(t, home)
 
-	if err := invokeConfigSet(t, []string{"--global", "ieee-format"}); err != nil {
+	if err := invokeConfigSet(t, []string{"--global", "arxiv-as-unpublished"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readGlobalConfig(t, home)
-	if cfg.Bib.IEEEFormat == nil || *cfg.Bib.IEEEFormat != true {
-		t.Errorf("global IEEEFormat = %v, want &true", cfg.Bib.IEEEFormat)
+	if cfg.Bib.ArxivAsUnpublished == nil || *cfg.Bib.ArxivAsUnpublished != true {
+		t.Errorf("global ArxivAsUnpublished = %v, want &true", cfg.Bib.ArxivAsUnpublished)
 	}
 }
 
@@ -482,13 +466,13 @@ func TestConfigUnset_Global(t *testing.T) {
 	setGlobalConfigDir(t, home)
 
 	// Set then unset
-	invokeConfigSet(t, []string{"--global", "ieee-format", "true"})
-	if err := invokeConfigUnset(t, []string{"--global", "ieee-format"}); err != nil {
+	invokeConfigSet(t, []string{"--global", "arxiv-as-unpublished", "true"})
+	if err := invokeConfigUnset(t, []string{"--global", "arxiv-as-unpublished"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := readGlobalConfig(t, home)
-	if cfg.Bib.IEEEFormat == nil || *cfg.Bib.IEEEFormat != false {
-		t.Errorf("global IEEEFormat after unset = %v, want &false", cfg.Bib.IEEEFormat)
+	if cfg.Bib.ArxivAsUnpublished == nil || *cfg.Bib.ArxivAsUnpublished != false {
+		t.Errorf("global ArxivAsUnpublished after unset = %v, want &false", cfg.Bib.ArxivAsUnpublished)
 	}
 }
 
@@ -568,7 +552,7 @@ func TestConfigList_GlobalOnly(t *testing.T) {
 	chdir(t, t.TempDir()) // not a project
 
 	// Set a global value first
-	invokeConfigSet(t, []string{"--global", "ieee-format", "true"})
+	invokeConfigSet(t, []string{"--global", "arxiv-as-unpublished", "true"})
 
 	if err := invokeConfigList(t, []string{"--global"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -620,21 +604,10 @@ func TestConfigSource_Default(t *testing.T) {
 	}
 }
 
-func TestConfigSource_IEEEDefault(t *testing.T) {
-	v := true
-	local := &Config{Bib: BibConfig{IEEEFormat: &v}}
-	global := &Config{}
-	merged := mergeConfig(local, global)
-	f := *findField("max-authors")
-	if s := configSource(f, local, global, merged); s != "(ieee default)" {
-		t.Errorf("source = %q, want %q", s, "(ieee default)")
-	}
-}
-
 // ── findField / validKeys ────────────────────────────────────────────────────
 
 func TestFindField_Known(t *testing.T) {
-	for _, name := range []string{"abbreviate-journals", "max-authors", "ieee-format"} {
+	for _, name := range []string{"abbreviate-journals", "max-authors", "arxiv-as-unpublished"} {
 		if findField(name) == nil {
 			t.Errorf("findField(%q) = nil", name)
 		}

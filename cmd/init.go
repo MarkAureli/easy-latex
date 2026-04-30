@@ -21,18 +21,11 @@ var initCmd = &cobra.Command{
 	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
-var flagInitIEEE bool
-
-func init() {
-	initCmd.Flags().BoolVar(&flagInitIEEE, "ieee", false,
-		"Use IEEE bib file names (IEEEabrv.bib, bibliography.bib) and enable IEEE formatting")
-}
-
 func runInit(cmd *cobra.Command, args []string) error {
-	return doInit(".", os.Stdin, flagInitIEEE)
+	return doInit(".", os.Stdin)
 }
 
-func doInit(dir string, stdin io.Reader, ieee bool) error {
+func doInit(dir string, stdin io.Reader) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("cannot read current directory: %w", err)
@@ -74,9 +67,11 @@ func doInit(dir string, stdin io.Reader, ieee bool) error {
 
 	refName := "bibliography.bib"
 
+	usesIEEEtran := texscan.HasDocumentClass(chosen, "IEEEtran")
+
 	var entryBibFiles []string
 	if len(bibFiles) > 0 {
-		bibFiles, err = condenseBibFiles(bibFiles, dir, ieee)
+		bibFiles, err = condenseBibFiles(bibFiles, dir, usesIEEEtran)
 		if err != nil {
 			return err
 		}
@@ -87,10 +82,6 @@ func doInit(dir string, stdin io.Reader, ieee bool) error {
 	}
 
 	cfg := Config{Main: chosen, BibFiles: bibFiles}
-	if ieee {
-		t := true
-		cfg.Bib.IEEEFormat = &t
-	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err

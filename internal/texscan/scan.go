@@ -15,6 +15,7 @@ var (
 	reInclude           = regexp.MustCompile(`\\(?:input|include)\{([^}]+)\}`)
 	reFileContentsBegin = regexp.MustCompile(`\\begin\{filecontents\*?\}(?:\[[^\]]*\])?\{([^}]+\.bib)\}`)
 	reFileContentsEnd   = regexp.MustCompile(`\\end\{filecontents\*?\}`)
+	reDocumentClass     = regexp.MustCompile(`\\documentclass(?:\[[^\]]*\])?\{([^}]+)\}`)
 )
 
 // FindBibFiles scans mainTex (and recursively included .tex files) for
@@ -231,6 +232,23 @@ func rewriteBibRefsInFile(path string, newBibFiles []string) error {
 		return nil
 	}
 	return os.WriteFile(path, []byte(strings.Join(outLines, "\n")), 0644)
+}
+
+// HasDocumentClass reports whether mainTex uses the given document class.
+func HasDocumentClass(mainTex, className string) bool {
+	f, err := os.Open(mainTex)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		line := StripComment(s.Text())
+		if m := reDocumentClass.FindStringSubmatch(line); m != nil {
+			return m[1] == className
+		}
+	}
+	return false
 }
 
 // StripComment returns the portion of line before any unescaped % comment marker.

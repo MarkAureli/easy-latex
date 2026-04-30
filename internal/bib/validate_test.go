@@ -1353,7 +1353,7 @@ func TestTransformArxivMiscToUnpublished_NoteContainsHref(t *testing.T) {
 
 // ── IEEE format (processBibFile integration) ──────────────────────────────────
 
-func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
+func TestArxivAsUnpublished_ArxivMiscBecomesUnpublished(t *testing.T) {
 	dir := t.TempDir()
 	bibContent := `@misc{Smith2023MyPaper,
   author       = {Smith, John},
@@ -1390,7 +1390,7 @@ func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
 
 	// WriteBibFromCache must apply the transform: @misc arXiv -> @unpublished.
 	outPath := dir + "/bibliography.bib"
-	if err := WriteBibFromCache(outPath, keys, dir, WriteOptions{IEEEFormat: true}); err != nil {
+	if err := WriteBibFromCache(outPath, keys, dir, WriteOptions{ArxivAsUnpublished: true}); err != nil {
 		t.Fatalf("WriteBibFromCache: %v", err)
 	}
 
@@ -1420,7 +1420,7 @@ func TestIEEEFormat_ArxivMiscBecomesUnpublished(t *testing.T) {
 	}
 }
 
-func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
+func TestBraceTitles_DoubleBracesTitle(t *testing.T) {
 	dir := t.TempDir()
 	saveCache(dir, cache{
 		"Smith2023Test": cacheEntry{
@@ -1438,8 +1438,8 @@ func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
 	}, nil)
 
 	outPath := dir + "/bibliography.bib"
-	// ieee_format=true, brace_titles=false — should still double-brace
-	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, IEEEFormat: true, AbbreviateFirstName: true}); err != nil {
+	// brace_titles=true — should double-brace titles
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1464,7 +1464,7 @@ func TestIEEEFormat_ForcesBraceTitles(t *testing.T) {
 	}
 }
 
-func TestIEEEFormat_NonArxivMiscUnchanged(t *testing.T) {
+func TestArxivAsUnpublished_NonArxivMiscUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	saveCache(dir, cache{
 		"Smith2023Software": cacheEntry{
@@ -1480,7 +1480,7 @@ func TestIEEEFormat_NonArxivMiscUnchanged(t *testing.T) {
 	}, nil)
 
 	outPath := dir + "/bibliography.bib"
-	if err := WriteBibFromCache(outPath, []string{"Smith2023Software"}, dir, WriteOptions{AbbreviateJournals: true, IEEEFormat: true, AbbreviateFirstName: true}); err != nil {
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Software"}, dir, WriteOptions{AbbreviateJournals: true, ArxivAsUnpublished: true, AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

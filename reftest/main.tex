@@ -1,0 +1,867 @@
+\documentclass[10pt,conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage[T1]{fontenc}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{color}
+\definecolor{QCPbeige}{HTML}{E7D5AB}     %231 213 171
+\definecolor{QCPblue}{HTML}{479093}      %71  144 147
+\definecolor{QCPdarkblue}{HTML}{2C6071}  %44  96  113
+\definecolor{QCPgray}{HTML}{333743}      %51  55  67
+\definecolor{QCPlightblue}{HTML}{A6CBB9} %166 203 185
+\definecolor{QCPred}{HTML}{E08B8A}       %224 139 138
+
+\usepackage{pgfplots}
+\pgfplotsset{compat = newest}
+\usepackage{adjustbox}
+\usepackage[utf8]{inputenc}
+\usepackage{physics}
+\usepackage{bm} % bold math
+\usepackage{bbm} % black board math
+\usepackage{braket}
+\usepackage{dsfont}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{thmtools} % for correct autoref naming
+\usepackage{mathtools}
+\usepackage{tikz}
+\usetikzlibrary{
+    shapes.geometric,
+    backgrounds,
+    positioning,
+    shapes.geometric,
+    decorations.markings,
+    decorations.pathreplacing,
+    arrows,
+    knots,
+    hobby,
+    angles,
+    quotes
+}
+\makeatletter
+\newcommand{\gettikzxy}[3]{%
+    \tikz@scan@one@point\pgfutil@firstofone#1\relax
+    \edef#2{\the\pgf@x}%
+    \edef#3{\the\pgf@y}%
+}
+\makeatother
+\usepackage{graphics}
+\usepackage{float}
+\usepackage[linesnumbered,ruled]{algorithm2e}
+\SetArgSty{textnormal}
+\SetAlgorithmName{Protocol}{Protocol}{Lists of protocols}
+
+\usepackage[colorlinks]{hyperref}
+\hypersetup{
+    colorlinks  = true,
+    citecolor   = PineGreen,
+    linkcolor   = PineGreen,
+    urlcolor    = PineGreen
+}
+
+\usepackage{etoolbox}
+\apptocmd{\sloppy}{\hbadness 10000\relax}{}{}
+
+\renewcommand{\sectionautorefname}{Section}
+\renewcommand{\subsectionautorefname}{Subsection}
+
+%%% AMSTHM OPTIONS
+
+\declaretheorem[style=plain]{theorem}
+\declaretheorem[style=plain,sibling=theorem]{claim}
+\declaretheorem[style=plain,sibling=theorem]{corollary}
+\declaretheorem[style=plain,sibling=theorem]{lemma}
+\declaretheorem[style=plain,sibling=theorem]{proposition}
+\declaretheorem[style=definition,sibling=theorem]{definition}
+\declaretheorem[numbered=no,name=Assumption]{assumption}
+
+%%% MACROS
+% MATH OPERATORS
+\DeclareMathOperator{\ancilla}{a}     % ancilla system
+\DeclareMathOperator{\diag}{diag}     % diagonal matrix
+\DeclareMathOperator{\diff}{diff}     % differential, difference
+\DeclareMathOperator{\Herm}{Herm}     % hermitian matrices
+\DeclareMathOperator{\PSD}{PSD}       % positive semidefinite marices
+\DeclareMathOperator{\id}{id}         % identity
+\DeclareMathOperator{\im}{im}         % image
+\DeclareMathOperator{\Sym}{Sym}       % real symmetric matrices
+\DeclareMathOperator{\lin}{lin}       % linear
+\DeclareMathOperator{\Ob}{Ob}         % object
+\DeclareMathOperator{\opt}{opt}       % optimal
+\DeclareMathOperator{\out}{out}       % out
+\DeclareMathOperator{\supp}{supp}     % support
+\DeclareMathOperator{\spn}{span}      % linear span
+\DeclareMathOperator{\Mat}{Mat}       % matrix space
+
+% BASIC
+\newcommand*{\N}{\mathbb{N}}          % natural numbers
+\newcommand*{\Z}{\mathbb{Z}}          % integers
+\newcommand*{\Q}{\mathbb{Q}}          % rationals
+\newcommand*{\R}{\mathbb{R}}          % reals
+\newcommand*{\C}{\mathbb{C}}          % complex numbers
+\newcommand*{\hil}{\mathcal{H}}       % Hilbert space
+\newcommand*{\defdot}{\,\cdot\,}      % dot for definitions
+\newcommand*{\defcolon}{\,:\,}        % colon for, e.g., definition in sets
+\newcommand*{\transpose}{T}           % linear transpose
+
+% SPECIAL
+\newcommand*{\bit}{\mathbbmss{b}}     % classical bit
+\newcommand*{\qubit}{\mathbbmss{q}}   % quantum bit
+\newcommand*{\solset}{S}              % solution set
+\newcommand*{\solspace}{\mathcal{S}}  % solution space
+\newcommand*{\one}{\mathds{1}}        % identity operator
+\newcommand*{\projection}{\mathds{P}} % projection
+\newcommand*{\lo}{\mathcal{L}}        % linear bounded operators
+\newcommand*{\mixeru}{U_{\text{M}}}   % mixer unitary
+\newcommand*{\phaseu}{U_{\text{P}}}   % phase separaor unitary
+
+% FORMATTING
+\newcommand*{\scriptin}{\raisebox{0.15ex}{$\scriptscriptstyle \in$}}
+\newcommand*{\deepscriptin}{\raisebox{0.1ex}{$\scriptscriptstyle \in$}}
+\newcommand*{\mathhphantomdisplay}[2]{\mathmakebox[\widthof{$\displaystyle #1$}][l]{#2}}
+
+\makeatletter
+\newenvironment{taggedsubequations}[1]{
+    \addtocounter{equation}{-1}
+    \edef\taggedsubeq@anchor{taggedsubequations.\detokenize{#1}}
+    \renewcommand{\theHequation}{\taggedsubeq@anchor.parent}
+    \begin{subequations}
+        \def\@currentlabel{#1}
+        \renewcommand{\theequation}{#1.\arabic{equation}}
+        \renewcommand{\theHequation}{\taggedsubeq@anchor.\arabic{equation}}
+    }
+{\end{subequations}}
+\makeatother
+
+
+\begin{document}
+
+\title{
+    One for All: A Universal Quantum Conic Programming Framework for Hard-Constrained Combinatorial Optimisation Problems
+    \thanks{This work was supported by the DFG through SFB 1227 (DQ-mat), Quantum Frontiers, the Quantum Valley Lower Saxony, the BMBF projects ATIQ and QuBRA.}
+}
+
+\author{
+    \IEEEauthorblockN{
+        Lennart~Binkowski\IEEEauthorrefmark{1},
+        Tobias~J.~Osborne\IEEEauthorrefmark{1},
+        Marvin~Schwiering\IEEEauthorrefmark{1},
+        Ren\'{e}~Schwonnek\IEEEauthorrefmark{1},
+        Timo~Ziegler\IEEEauthorrefmark{1}
+    }
+    \IEEEauthorblockA{
+        \IEEEauthorrefmark{1}Institut f\"{u}r Theoretische Physik\\
+        Leibniz Universit\"{a}t Hannover, Hannover, Germany\\
+        Email: $\{$lennart.binkowski, tobias.osborne, marvin.schwiering, rene.schwonnek, timo.ziegler$\}$@itp.uni-hannover.de
+    }
+}
+
+\maketitle
+
+\begin{abstract}
+    We present a unified quantum-classical framework for addressing NP-complete constrained combinatorial optimisation problems, generalising the recently proposed Quantum Conic Programming (QCP) approach.
+    Accordingly, it inherits many favourable properties of the original proposal such as mitigation of the effects of barren plateaus and avoidance of NP-hard parameter optimisation.
+    By collecting the entire classical feasibility structure in a single constraint, we enlarge QCP's scope to arbitrary hard-constrained problems.
+    Yet, we prove that the additional restriction is mild enough to still allow for an efficient parameter optimisation via the formulation of a generalised eigenvalue problem (GEP) of adaptable dimension.
+    Our rigorous proof further fills some apparent gaps in prior derivations of GEPs from parameter optimisation problems.
+    We further detail a measurement protocol for formulating the classical parameter optimisation that does not require us to implement any (time evolution with a) problem-specific objective Hamiltonian or a quantum feasibility oracle.
+    Lastly, we prove that, even under the influence of noise, QCP's parametrised ansatz class always captures the optimum attainable within its generated subcone.
+    All of our results hold true for arbitrarily-constrained combinatorial optimisation problems.
+\end{abstract}
+
+\begin{IEEEkeywords}
+    combinatorial optimisation,
+    generalised eigenvalue problem,
+    hard constraints,
+    quantum conic programming
+\end{IEEEkeywords}
+
+
+\section{\label{section:Introduction}Introduction}
+
+Optimisation is a ubiquitous aspect of various disciplines, arising naturally in economics, society, and science.
+Decades of advancements in electrical engineering and algorithmic design have pushed the frontier of what is feasible to compute and solve, to the point where even minute improvements often lead to meaningful gains.
+One promising candidate for significant advancement is the development of quantum computers, where recent experimental milestones in hardware manufacturing~\cite{PsiquantumTeam2025AManufacturablePlatformForPhotonicQuantumComputing} and error correction~\cite{GoogleQuantumAi2023SuppressingQuantumErrorsByScalingASurfaceCodeLogicalQubit} are expected to ultimately pave the way from the current noisy intermediate-scale quantum (NISQ)~\cite{Preskill2018QuantumComputingInTheNisqEraAndBeyond} devices to fault-tolerant, large-scale quantum processing units (QPUs).
+Seminal works by Grover~\cite{Grover1997QuantumMechanicsHelpsInSearchingForANeedleInAHaystack}, Kadowaki and Nishimori~\cite{Kadowaki1998QuantumAnnealingInTheTransverseIsingModel}, and Farhi \textit{et al.}~\cite{Farhi2000QuantumComputationByAdiabaticEvolution} have sparked lasting interest in quantum search and quantum optimisation~\cite{Abbas2024ChallengesAndOpportunitiesInQuantumOptimization}, leading to the proposal of frameworks like quantum branch-and-bound~\cite{Montanaro2020QuantumSpeedupOfBranchAndBoundAlgorithms}, quantum dynamic programming~\cite{Ambainis2019QuantumSpeedupsForExponentialTimeDynamicProgrammingAlgorithms}, and quantum solvers for semidefinite programs (SDPs)~\cite{VanApeldoorn2020QuantumSdpSolversBetterUpperAndLowerBounds}.
+The framework most suited for the NISQ era is often deemed to be variational quantum algorithms (VQAs)~\cite{Cerezo2021VariationalQuantumAlgorithms}, consisting of a parameterised quantum circuit (PQC) $V_{L}(\theta_{L}) \cdots V_{1}(\theta_{1})$ dependent on a series of parameters $\theta_{j}$ to be optimised by a classical optimisation algorithm.
+The parameters are optimised in order to yield a high-quality approximation of a given target state, typically the ground state of a target Hamiltonian.
+However, significant hurdles remain for the widespread application to classical optimisation problems:
+The design of PQCs that respect an optimisation problem's constraints is highly non-trivial and problem-specific~\cite{Hadfield2019FromTheQuantumApproximateOptimizationAlgorithmToAQuantumAlternatingOperatorAnsatz}, the parameter optimisation problem handed to the classical optimiser is often at least as hard as the original problem~\cite{Bittel2021TrainingVariationalQuantumAlgorithmsIsNpHard}, and VQAs often suffer from the barren plateau phenomenon~\cite{Larocca2025BarrenPlateausInVariationalQuantumComputing}, where vanishing gradients slow or hinder convergence to an (even local) optimum.
+
+In order to address these and other issues, we propose a natural generalisation of Quantum Conic Programming~(QCP), as introduced in~\cite{Binkowski2025FromBarrenPlateausThroughFertileValleysConicExtensionsOfParameterisedQuantumCircuits}, by expanding QCP from a VQA subroutine for unconstrained optimisation problems into a general framework for constrained combinatorial optimisation problems.
+QCP and similar frameworks, such as McClean \textit{et al.}'s method for determining exited states~\cite{Mcclean2017HybridQuantumClassicalHierarchyForMitigationOfDecoherenceAndDeterminationOfExcitedStates}, Huggings \textit{et al.}'s non-orthogonal variational quantum eigensolver~\cite{Huggins2020ANonOrthogonalVariationalQuantumEigensolver} and Bharti \textit{et al.}'s NISQ algorithm for SDPs~\cite{Bharti2022NoisyIntermediateScaleQuantumAlgorithmForSemidefiniteProgramming}, mitigate the effect of barren plateaus and avoid the overly complex parameter optimisation tasks by utilising non-unitary parameterised gates.
+These gates are implemented via linear combinations of unitaries (LCU)~\cite{Childs2012HamiltonianSimulationUsingLinearCombinationsOfUnitaryOperations},
+the classical optimisation task involves solving a generalised eigenvalue problem (GEP) or, more generally, an SDP\@.
+In our generalisation, we keep the fundamental design principles of QCP while extending its scope to constrained problems:
+We enforce feasibility preservation of an LCU step by introducing an additional constraint to the associated parameter optimisation problem; yet, under minimal assumptions, we ensure that the resulting optimisation problem can again be reduced to a GEP without incurring additional sampling overhead for the QPU.
+Moreover, we obtain a feasibility-preserving LCU operation even if the individual unitaries are not guaranteed to fully preserve feasibility, thus eliminating the need to handcraft problem-specific PQCs.
+
+After reviewing fundamental notions of constrained combinatorial optimisation problems, VQAs---in particular, the Quantum Approximate Optimisation Algorithm~\cite{Farhi2014AQuantumApproximateOptimizationAlgorithm} and the Quantum Alternating Operator Ansatz (QAOA)~\cite{Hadfield2019FromTheQuantumApproximateOptimizationAlgorithmToAQuantumAlternatingOperatorAnsatz}---and QCP in \autoref{section:Preliminaries}, we present our general framework in \autoref{section:Framework} Here, we first discuss the incorporation of hard-constraints into the parameter optimisation problem of QCP before detailing how to formulate the optimisation task for a classical computer with the aid of sample matrices.
+For the latter, we provide a specialised measurement protocol that fully utilises the underlying classical structure manifested through, e.g., commutativity among all relevant observables.
+Subsequently, we rigorously reduce the original doubly-constrained parameter optimisation problem to a GEP.
+Our detailed proof of \autoref{theorem:GeneralisedEigenvalueProblem} not only extends, but also completes earlier derivations of the singly-constrained case in terms of mathematical rigour and proper handling of degenerate cases.
+We further comment on the LCU implementation and its success probability, once the optimal parameters have been obtained, and we later re-establish the connection between QCP and QAOA with its well-established theory for feasibility-preserving PQCs.
+We conclude this section by revisiting the aforementioned steps from a density-operator perspective.
+In this framework, we show that even noisy input states require only a pure state preparation for LCU implementation.
+In \autoref{section:DiscussionAndConclusion}, we discuss the implications and open questions raised by our work.
+We highlight our framework's interplay with QAOA, as well as its conceptual independence from it.
+In particular, we conclude that generalised QCP restores out-of-the-box applicability for hard-constrained problems, a feature unfortunately missing in the extended QAOA framework.
+
+
+\section{\label{section:Preliminaries}Preliminaries}
+
+\subsection{\label{subsection:ConstrainedCombinatorialOptimisationProblems}Constrained combinatorial optimisation problems}
+
+Let $\bit \coloneqq \{0, 1\}$.
+A \emph{constrained combinatorial optimisation problem} (CCOP) is formally defined as a triple $(n, c, \solset)$, where $n \in \N$ is the problem size, $c : \bit^{n} \rightarrow \R$ is the objective function, and $\solset \subseteq \bit^{n}$ is the feasible set.
+Given a CCOP, the task is to minimise $c$ over all $\bm{b} \in \solset$.
+Prominent examples of CCOPs are the Job-Shop Scheduling problem~\cite{Zhang2017ReviewOfJobShopSchedulingResearchAndItsNewPerspectivesUnderIndustry40}, the Knapsack problem~\cite{Kellerer2004KnapsackProblems}, the Maximum Independent Set problem~\cite{Tarjan1977FindingAMaximumIndependentSet}, and the Traveling Salesperson Problem~\cite{Applegate2009CertificationOfAnOptimalTspTourThrough85900Cities}, for many of which the corresponding decision problem is NP-complete~\cite{Karp1972ReducibilityAmongCombinatorialProblems}.\footnote{
+    The decision problem associated to a given optimisation problem is to determine whether there exists a feasible solution with objective above/below a given threshold.
+    The complexity class NP is, in the narrow sense, only defined for decision problems.
+}
+Throughout this article, we will only consider CCOPs that lie in NP as this implies that, for any given $\bm{b} \in \bit^{n}$, calculating $c(\bm{b})$ and verifying whether $\bm{b} \in \solset$ can be done in time polynomial in $n$.
+
+In order to study CCOPs with the aid of a quantum computer, we first need to quantise the problem:
+For each classical bit, we introduce a representing qubit $\qubit \cong \C^{2}$, yielding an $n$-qubit register $\hil \coloneqq \qubit^{\otimes n}$.
+The classical bit strings now form the \emph{computational basis} (CB) $\{\ket{\bm{b}} \defcolon \bm{b} \in \bit^{n}\}$ of $\hil$.
+The solution space $\solspace$ is the subspace spanned by all the feasible CB states, i.e., $\solspace \coloneqq \spn(\ket{\bm{b}} \defcolon \bm{b} \in \solset)$.
+More generally, we consider all states $\ket{\psi} \in \solspace$, i.e. arbitrary superpositions of feasible CB states, to be feasible states.
+The classical objective function $c$ is translated to an $n$-qubit objective Hamiltonian $C \in \lo(\hil)$, whose action on the CB is defined by $C \ket{\bm{b}} \coloneqq c(\bm{b}) \ket{\bm{b}}$.
+That is, $C$ is diagonal in the CB.
+The minimisation task readily translates to finding an eigenstate of $C$ with minimal eigenvalue within the solution space $\solspace$, i.e., to finding a ground state of $C\vert_{\solspace}$.
+By the Rayleigh-Ritz inequality, the ground state search, in turn, is equivalent to finding a minimiser of $\braket{\psi | C | \psi}$ among all feasible states $\ket{\psi}$.
+
+The class of \emph{variational quantum algorithms} (VQAs)~\cite{Cerezo2021VariationalQuantumAlgorithms} constitutes a promising family of hybrid heuristics to approximate such a ground state on a quantum computer.
+In a nutshell, a VQA introduces a parametrised manifold of easily preparable states $\ket{\bm{\theta}} = V(\bm{\theta}) \ket{\iota}$ by specifying an initial state $\ket{\iota}$ as well as a unitary \emph{parametrised quantum circuit} (PQC) $V(\bm{\theta}) \coloneqq V_{L}(\theta_{L}) \cdots V_{2}(\theta_{2}) V_{1}(\theta_{1})$.
+The $L$ components of the PQC are assumed to be easy to implement quantum gates $V_{j}(\theta_{j})$ which depend on a single parameter $\theta_{j}$.
+The actual parameter optimisation is carried out by a CPU which can query the QPU to yield an estimate of the energy expectation value $E(\bm{\theta}) \coloneqq \braket{\bm{\theta} | C | \bm{\theta}}$ via repeated state preparation and subsequent measurement.
+By making measurements at low circuit depth, VQAs thereby actively mitigate the severe effects of quantum decoherence~\cite{Brandt1999QubitDevicesAndTheIssueOfQuantumDecoherence}.
+Most of the optimisation methods used, although sophisticated and varied~\cite{Kuebler2020AnAdaptiveOptimizerForMeasurementFrugalVariationalAlgorithms}, are based on gradient optimisation strategies or (quasi-)Newton methods to perform line search on $E(\bm{\theta})$~\cite{BonetMonroig2023PerformanceComparisonOfOptimizationMethodsOnVariationalQuantumAlgorithms}.
+For convex optimisation problems these methods are guaranteed to find the optimum up to an arbitrary precision in a finite number of steps, but $E(\bm{\theta})$ is a convex function only for very special cases.
+
+
+\subsection{\label{subsection:QuantumApproximateOptimisationAlgorithm}Quantum approximate optimisation algorithm/quantum alternating operator ansatz}
+
+The pioneering VQA for unconstrained combinatorial optimisation problems is the \emph{Quantum Approximate Optimisation Algorithm} (QAOA)~\cite{Farhi2014AQuantumApproximateOptimizationAlgorithm} which prescribes the uniform superposition $\ket{+}$ of all CB states as initial state.
+Specifying a depth $p \in \N$, its PQC is build from the alternating $p$-fold application of phase separator gates $\exp(-i \gamma C)$ and mixer gates $\exp(-i \beta B)$, where
+\begin{align}\label{equation:QAOAMixerHamiltonian}
+    B \coloneqq \sum_{i = 1}^{n} \sigma_{x}^{(i)}
+\end{align}
+is the QAOA-mixer Hamiltonian.
+Initial state, mixer, and phase separator are chosen in such a way that one is guaranteed to approximate a ground state arbitrarily well for sufficiently high values of $p$ \cite{Binkowski2024ElementaryProofOfQaoaConvergence}.
+
+Although originally formulated for unconstrained problems, the QAOA's scope can be extended to general CCOPs by introducing soft-constraints:
+The objective function $c$ is altered to penalise infeasible bit strings, e.g., by choosing a penalty $\alpha > 0$ and redefining
+\begin{align}\label{equation:SoftConstraints}
+    \tilde{c}(\bm{b}) \coloneqq \begin{cases}
+        c(\bm{b}),& \text{if } \bm{b} \in \solset \\
+        c(\bm{b}) + \alpha,& \text{else}.
+    \end{cases}
+\end{align}
+If the value for $\alpha$ is chosen sufficiently high, the optima of $\tilde{c}$ will again coincide with the optima of $c$, so applying QAOA to the soft-constrained problem could potentially yield a good approximation of those optima.
+However, empirical studies show that the hyperparameter $\alpha$ has to be carefully fine-tuned to sufficiently suppress infeasibility on the one hand, but to not dominate the optimisation landscape on the other~\cite{GrandRive2019KnapsackProblemVariantsOfQaoaForBatteryRevenueOptimisation}.
+
+As an alternative to employing soft-constraints, Hadfield \textit{et al.}~\cite{Hadfield2019FromTheQuantumApproximateOptimizationAlgorithmToAQuantumAlternatingOperatorAnsatz} developed a more general framework, the \emph{Quantum Alternating Operator Ansatz} (same acronym: QAOA), which considers feasible initial states and feasibility-preserving mixers to strictly ensure fulfilment of the constraints throughout the entire routine, rendering additional soft-constraints obsolete.
+In this settings, the constraints are thus hard-constraints which are never to be violated.
+Formally, an $n$-qubit operator $A \in \lo(\hil)$ is called feasibility-preserving if it maps feasible states to feasible states, i.e., if $A(\solspace) \subseteq \solspace$.
+Provided that we start with a feasible initial state $\ket{\iota} \in \solspace$ and only make use of feasibility-preserving operations, we have effectively restricted the entire problem to the subspace $\solspace$.
+Note that since the objective Hamiltonian $C$ is diagonal in the CB, so is the phase separator $\exp(-i \gamma C)$ for all parameter values $\gamma$;
+hence it is especially feasibility-preserving.
+Therefore, it suffices to choose a feasible initial state and a feasibility-preserving mixer to restrict the entire QAOA to the feasible subspace $\solspace$.
+
+A proper QAOA-mixer $\mixeru$ not only has to preserve feasibility, but also has to fulfil certain mixing properties.
+In~\cite{Hadfield2019FromTheQuantumApproximateOptimizationAlgorithmToAQuantumAlternatingOperatorAnsatz}, the relevant mixing property is to provide transitions between all feasible CB states, that is for every pair $\bm{b}, \bm{y} \in \solset$ there should exist some parameter value $\beta^{*} \in \R$ and some power $r \in \N$ such that $\braket{\bm{b} | \mixeru^{r}(\beta^{*}) | \bm{y}} \neq 0$.
+Strengthening this condition to irreducibility and element-wise non-negativity of the reduced mixer Hamiltonian $B_{\text{M}}\vert_{\solspace}$, reintroducing the two crucial properties of \eqref{equation:QAOAMixerHamiltonian}, such that $\mixeru(\beta) = \exp(-i \beta B_{\text{M}})$ allows to deduce the same convergence result as for the original QAOA~\cite{Binkowski2024ElementaryProofOfQaoaConvergence}.
+
+The generalisation to the quantum alternating operator ansatz has undoubtedly advanced the variational toolbox for CCOPs and has influenced numerous problem-specific improvements of the QAOA.
+However, it is lacking the charm of the original QAOA proposal regarding out-of-the-box applicability:
+In the original proposal, initial state and mixer are problem-independent and are therefore always the same.
+The problem's structure entirely enters via the phase separator and how the expectation value is calculated, and both are uniquely determined by the classical objective function (modulo soft-constraints).
+In contrast, the construction of a problem-specific mixer does not follow a universal pattern.
+Mixer have to be handcrafted individually for every CCOP and typically require deep insights into the problem's feasibility structure and symmetries.
+For example,~\cite{Hadfield2019FromTheQuantumApproximateOptimizationAlgorithmToAQuantumAlternatingOperatorAnsatz} already gives constructions for several important CCOPs such as MaxIndependentSet, MinGraphColoring, or the Traveling Salesperson Problem which do not follow a clear unique engineering rule.
+The recent proposal of Grover-mixer QAOA~\cite{Bartschi2020GroverMixersForQaoaShiftingComplexityFromMixerDesignToStatePreparation} gives a somewhat unified approach to constructing feasibility-preserving mixers:
+For a given CCOP, let $\ket{\solset} \coloneqq \lvert \solset\rvert^{-1 / 2} \sum_{\bm{b} \in \solset} \ket{\bm{b}}$ be the uniform superposition of all feasible CB states and $U_{\solset} \in \lo(\hil)$ be the unitary circuit generating that superposition, i.e., $U_{\solset} \ket{\bm{0}} = \ket{\solset}$.
+Then, $\exp(- i \beta \ketbra{\solset}{\solset})$ constitutes a valid QAOA-mixer in the sense of~\cite{Hadfield2019FromTheQuantumApproximateOptimizationAlgorithmToAQuantumAlternatingOperatorAnsatz}.
+Note that this mixer can be constructed from $U_{\solset}$ via $\exp(-i \beta \ketbra{\solset}{\solset}) = U_{\solset}^{\vphantom{\dagger}} (\one - (1 - e^{-i \beta}) \ketbra{\bm{0}}{\bm{0}}) U_{\solset}^{\dagger}$.
+Formally, this ansatz introduces a unique mixer design and specific constructions for Max $k$-VertexCover, the Travelling Salesperson Problem, and discrete portfolio rebalancing were discussed in~\cite{Bartschi2020GroverMixersForQaoaShiftingComplexityFromMixerDesignToStatePreparation}.
+However, there is no general recipe how to construct the crucial state preparation circuit $U_{\solset}$ for a given problem.
+
+Lastly, an issue shared by all discussed variants of QAOA as well as of many other VQAs is the phenomenon of \emph{barren plateaus} (BPs)~\cite{Mcclean2018BarrenPlateausInQuantumNeuralNetworkTrainingLandscapes}.
+They describe the (mathematical and numerical) observation that for PQCs that can produce all states sufficiently uniformly, the expectation values of the gradients of $E(\bm{\theta})$ are zero while the variance decreases exponentially with the number of qubits.
+This implies that starting from random initial parameters, the slope has to be resolved using exponentially many measurements.
+The parameter landscape becomes practically flat almost everywhere which not only effects gradient-based methods, but also gradient-free optimisation routines~\cite{Arrasmith2021EffectOfBarrenPlateausOnGradientFreeOptimization}.
+BPs also emerge from quantum device noise for PQCs growing linearly with the number of qubits~\cite{Wang2021NoiseInducedBarrenPlateausInVariationalQuantumAlgorithms} and from quantum entanglement itself~\cite{OrtizMarrero2021EntanglementInducedBarrenPlateaus}.
+They further exist even in shallow circuits, provided that $E(\bm{\theta})$ constitutes the expectation value of global observables~\cite{Cerezo2021CostFunctionDependentBarrenPlateausInShallowParametrizedQuantumCircuits}.
+
+
+\subsection{\label{subsection:QuantumConicProgramming}Quantum conic programming}
+
+All versions of the QAOA have in common that the parameter optimisation to be carried out by the CPU takes place in a multi-dimensional, non-convex setting.
+These optimisation tasks are notoriously hard, in a certain sense even harder than the ground state search they are derived from~\cite{Bittel2021TrainingVariationalQuantumAlgorithmsIsNpHard}.
+This is why some recent proposals suggest PQCs which formulate parameter optimisation problems with \emph{convex} objective functions for the classical computer.
+The proposed algorithms are very similar in how they formulate the parameter optimisation as a \emph{generalised eigenvalue problem} (GEP) or, more generally, as a \emph{semidefinite program} (SDP), and how they implement the update of the quantum state via \emph{Linear Combinations of Unitaries} (LCU)~\cite{Childs2012HamiltonianSimulationUsingLinearCombinationsOfUnitaryOperations}.
+In the following, we provide a more detailed recap of \emph{Quantum Conic Programming} (QCP) as introduced in~\cite{Binkowski2025FromBarrenPlateausThroughFertileValleysConicExtensionsOfParameterisedQuantumCircuits} which is already specifically tailored to (unconstrained) combinatorial optimisation problems and, similar to other proposals, designed in such a way that the effect of BPs are mitigated.
+
+Starting from some state $\ket{\phi}$ which is the result of applying an already optimised QAOA-PQC to the initial state $\ket{+}$, we introduce the set of unitaries $\{U_{i}\}_{i = 1}^{3}$ with $U_{1} = \exp(-i \delta_{1} B)$, $U_{2} = \exp(-i \delta_{2} C)$, and $U_{3} = \one$ with fixed (random) angles $\delta_{1}$ and $\delta_{2}$.\footnote{
+    The construction is actually formulated for an arbitrary number $\ell \in \N$ of unitaries, but we restrict this recap to the QAOA-specific case for which $\ell = 3$.
+}
+Using these unitaries, we define the parametrised ansatz class
+\begin{align}\label{equation:AnsatzClass}
+    \mathcal{M}_{\bm{\alpha}} \ket{\phi} \coloneqq \frac{M_{\bm{\alpha}} \ket{\phi}}{\norm{M_{\bm{\alpha}} \ket{\phi}}}\ \text{with}\ M_{\bm{\alpha}} \coloneqq \sum_{j = 1}^{3} \alpha_{j} U_{j},\ \bm{\alpha} \in \C^{3}.
+\end{align}
+The $\mathcal{M}_{\bm{\alpha}}$ are therefore non-unitary LCU-circuits, parametrised by three complex numbers $\bm{\alpha}$.
+Note that since $U_{3} = \one$, choosing $\bm{\alpha} = (0, 0, 1)$ always reproduces the initial state $\ket{\phi}$;
+hence minimising over the ansatz class \eqref{equation:AnsatzClass} cannot worsen the result.
+The parameter optimisation for the proposed ansatz class translates into
+\begin{taggedsubequations}{QCP-OPT}\label{equation:QCPParameterOptimisation}
+    \begin{alignat}{2}
+        &\min_{\bm{\alpha} \in \C^{3}} &&\braket{\phi | M_{\bm{\alpha}}^{\dagger} C M_{\bm{\alpha}}^{\vphantom{\dagger}} | \phi} \label{equation:QCPParameterOptimisation1} \\
+        &\text{ s.t. } &&\braket{\phi | M_{\bm{\alpha}}^{\dagger} M_{\bm{\alpha}}^{\vphantom{\dagger}} | \phi} = 1. \label{equation:QCPParameterOptimisation2}
+    \end{alignat}
+\end{taggedsubequations}
+
+In order to obtain a tangible version of the abstract problem \eqref{equation:QCPParameterOptimisation} to be handed to a CPU, we introduce the sample matrices $\mathbf{E}, \mathbf{H} \in \C^{3 \times 3}$ defined via
+\begin{align}\label{equation:SampleMatrices}
+    \mathbf{E}_{j k} \coloneqq \braket{\phi | U_{j}^{\dagger} U_{k}^{\vphantom{\dagger}} | \phi}\ \text{and}\ \mathbf{H}_{j k} \coloneqq \braket{\phi | U_{j}^{\dagger} C U_{k}^{\vphantom{\dagger}} | \phi}
+\end{align}
+so that we can compactly write
+\begin{align}
+    \braket{\phi | M_{\bm{\alpha}}^{\dagger} M_{\bm{\alpha}}^{\vphantom{\dagger}} | \phi} = \sum_{j, k = 1}^{3} \overline{\alpha_{j}} \braket{\phi | U_{j}^{\dagger} U_{k}^{\vphantom{\dagger}} | \phi} \alpha_{k} = \bm{\alpha}^{\dagger} \mathbf{E} \bm{\alpha}, \label{equation:SampleMatricesIdentity1}\ \text{and}\\
+    \braket{\phi | M_{\bm{\alpha}}^{\dagger} C M_{\bm{\alpha}}^{\vphantom{\dagger}} | \phi} = \sum_{j, k = 1}^{3} \overline{\alpha_{j}} \braket{\phi | U_{j}^{\dagger} C U_{k}^{\vphantom{\dagger}} | \phi} \alpha_{k} = \bm{\alpha}^{\dagger} \mathbf{H} \bm{\alpha}. \label{equation:SampleMatricesIdentity2}
+\end{align}
+Therefore, \eqref{equation:QCPParameterOptimisation} has been transformed into
+\begin{align}\label{equation:QCPMatrixParameterOptimisation}
+    \begin{split}
+        &\min_{\bm{\alpha} \in \C^{3}} \bm{\alpha}^{\dagger} \mathbf{H} \bm{\alpha} \\
+        &\text{s.t. } \bm{\alpha}^{\dagger} \mathbf{E} \bm{\alpha} = 1
+    \end{split}
+\end{align}
+which may, in turn, be reformulated as a three-dimensional GEP $\mathbf{H} \bm{\alpha} = \lambda \mathbf{E} \bm{\alpha}$, where the minimal generalised eigenvalue of $\mathbf{H}$ and $\mathbf{E}$ and the corresponding generalised eigenvector coincide with the optimum and optimiser of \eqref{equation:QCPParameterOptimisation}.
+We defer the discussion on how to obtain the matrix elements of $\mathbf{E}$ and $\mathbf{H}$ as well as the detailed problem derivations to the \hyperref[section:Framework]{next section}.
+
+Lastly, we wish to implement the LCU with parameters corresponding to the optimiser of \eqref{equation:QCPParameterOptimisation}.
+This generally non-unitary and thus inherently non-deterministic step comes with a certain failure probability which can be suppressed, although never eliminated, by more involved state preparation and measurement protocols on a two-qubit ancilla register.
+The best strategy found in~\cite{Binkowski2025FromBarrenPlateausThroughFertileValleysConicExtensionsOfParameterisedQuantumCircuits} is to prepare the state
+\begin{align}\label{equation:StatePreparation}
+    \ket{\psi}_{\ancilla} \coloneqq \frac{(\sqrt{\bm{\alpha}}, 0)}{\norm{\sqrt{\bm{\alpha}}}_{2}} = \frac{(\sqrt{\bm{\alpha}}, 0)}{\sqrt{\norm{\bm{\alpha}}_{1}}}
+\end{align}
+in the ancilla register, where $\sqrt{\bm{\alpha}}$ is the vector obtained by taking the entry-wise (principle) square root of $\bm{\alpha}$, and $(\sqrt{\bm{\alpha}}, 0)$ means to pad this vector with a zero in order to obtain a vector of length $4 = 2^{2}$.
+Subsequently, we apply the compound unitary
+\begin{align*}
+    \mathcal{U} &\coloneqq C_{01}(U_{2}) C_{00}(U_{1}) \\
+    &= U_{1} \otimes \ketbra{00}{00} + U_{2} \otimes \ketbra{01}{01} \\
+    &\quad + U_{3} \otimes (\ketbra{10}{10} + \ketbra{11}{11})
+\end{align*}
+to the product state $\ket{\phi} \otimes \ket{\psi}_{\ancilla}$, where, e.g., $C_{00}(U_{1})$ denotes the unitary $U_{1}$ applied to the main register, controlled on the $\ket{00}$-state in the ancilla register.
+Finally, we apply the inverse state preparation circuit of the state
+\begin{align}\label{equation:InverseStatePreparation}
+    \ket{\xi}_{\ancilla} \coloneqq \frac{\big(\overline{\sqrt{\bm{\alpha}}}, 0\big)}{\norm{\sqrt{\bm{\alpha}}}_{2}} = \frac{\big(\overline{\sqrt{\bm{\alpha}}}, 0\big)}{\sqrt{\norm{\bm{\alpha}}_{1}}}
+\end{align}
+to the ancilla register and conduct a binary measurement in the CB, distinguishing between the all-zero bit string and all other bit strings.
+The failure probability corresponds exactly to the probability of not measuring all-zero and is precisely given by $\norm{\bm{\alpha}}_{1}^{-2}$.
+Classical post-processing on whether the measurement outcome is all-zero then implements the entire LCU which updates the quantum state according to the chosen parameter vector $\bm{\alpha}$.
+
+
+\section{\label{section:Framework}Framework}
+
+As a first step, we conceptually decouple QCP from the QAOA.
+This allows for formulating the former in a more compact way, highlighting its essential building blocks and their properties.
+From this cleansed point of view, we generalise QCP from unconstrained combinatorial optimisation problems to general CCOPs without introducing soft-constraints, lifting the many favourable features of QCP such as mapping the ground state search to an easy to solve classical problem as well as mitigation of BPs to a more general class of problems.
+Unlike the generalisation of the QAOA as discussed in the \autoref{section:Preliminaries}, our generalisation of QCP is again constructive in the sense that knowledge of the classical objective function and some classical feasibility oracle suffices to directly construct the entire QCP routine.
+Finally, we reconnect the generalised QCP to the QAOA and discuss how problem-specific mixers can further improve the execution of QCP.
+
+
+\subsection{\label{subsection:ParameterisedAnsatzClass}Parametrised ansatz class}
+
+Let $(n, c, \solset)$ be a generic CCOP in NP.
+First, we require the initial state $\ket{\iota}$ of the QCP routine to be feasible, i.e., $\ket{\iota} \in \solspace$.
+It may correspond to a feasible bit string, obtained from some classical approximation algorithm and implemented in a depth-one layer of $X$-gates on all qubits to be set to one, or, more generally, a superposition of feasible CB states, obtained by some more sophisticated state preparation routine.
+
+Second, let $\{U_{j}\}_{j = 1}^{\ell} \subset \lo(\hil)$ be set of unitaries such that $U_{\ell} = \one$.
+We call such a set a collection of search unitaries.
+The unitaries do not have to fulfil any additional requirements (in contrast to QAOA mixers), but we discuss favourable properties later.
+The parametrised ansatz class is the same as proposed in~\cite{Binkowski2025FromBarrenPlateausThroughFertileValleysConicExtensionsOfParameterisedQuantumCircuits}, i.e., \eqref{equation:AnsatzClass} with summation over $\ell$ unitaries instead of three unitaries.
+An approach utilising soft-constraints, as described in the \autoref{section:Preliminaries}, would involve altering the cost function and thus the objective Hamiltonian.
+As a soft-constraint-free alternative, we propose to leave them both unchanged, but to directly introduce hard-constraints to the optimisation task:
+Let $\projection_{\solspace}$ denote the orthogonal projection onto the feasible subspace $\solspace$, then $\one - \projection_{\solspace}$ is the orthogonal projection onto its orthogonal complement $\solspace^{\perp}$.
+In addition to the normalisation constraint \eqref{equation:QCPParameterOptimisation2}, we also require that $(\one - \projection_{\solspace}) \mathcal{M}_{\bm{\alpha}} \ket{\iota} = 0$, i.e.\ that parametrised candidate states are orthogonal to $\solspace^{\perp}$.
+In summary, we arrive at the generalised optimisation problem
+\begin{taggedsubequations}{GenQCP-OPT}\label{equation:GenQCPParameterOptimisation}
+    \begin{alignat}{2}
+        &\min_{\bm{\alpha} \in \C^{\ell}} &&\braket{\iota | M_{\bm{\alpha}}^{\dagger} C M_{\bm{\alpha}}^{\vphantom{\dagger}} | \iota} \label{equation:GenQCPParameterOptimisation1} \\
+        &\text{ s.t. } &&\braket{\iota | M_{\bm{\alpha}}^{\dagger} M_{\bm{\alpha}}^{\vphantom{\dagger}} | \iota} = 1 \label{equation:GenQCPParameterOptimisation2} \\
+        &\hphantom{\text{ s.t. }} &&\braket{\iota | M_{\bm{\alpha}}^{\dagger} (\one - \projection_{\solspace}) M_{\bm{\alpha}}^{\vphantom{\dagger}} | \iota} = 0. \label{equation:GenQCPParameterOptimisation3}
+    \end{alignat}
+\end{taggedsubequations}
+
+
+\subsection{\label{subsection:SampleMatrices}Sample matrices}
+
+The two sample matrices introduced in the original QCP proposal encapsulate the correct normalisation ($\mathbf{E}$) as well as the expectation value which is to be minimised ($\mathbf{H}$), but do not contain any information regarding feasibility.
+Since we do not make any modifications to the objective function or Hamiltonian, the $\mathbf{H}$-matrix stays the same.
+Furthermore, we keep the definition of the $\mathbf{E}$-matrix, but rename it to $\mathbf{F}$.
+Lastly, we have to introduce an additional matrix $\mathbf{G}$ which incorporates orthogonality to $\solspace^{\perp}$.
+We start by formalising the process of constructing general sample matrices.
+\begin{lemma}\label{lemma:ConstructingSampleMatricesIsCompletelyPositive}
+    For every state $\ket{\psi} \in \hil$ and every collection of unitary operators $\{U_{j}\}_{j = 1}^{\ell} \subset \lo(\hil)$, the map
+    \begin{align}
+        \begin{split}
+            T : \lo(\hil) &\rightarrow \C^{\ell \times \ell}, \\
+            A &\mapsto \big(\hspace*{-3pt}\braket{\psi | U_{j}^{\dagger} A U_{k}^{\vphantom{\dagger}} | \psi}\hspace*{-3pt}\big)_{j, k = 1}^{\ell}
+        \end{split}
+    \end{align}
+    is positive.
+    If the family of states $\{U_{j} \ket{\psi} \defcolon j = 1, \ldots, \ell\}$ is linearly independent and $B \in \lo(\hil)$ is positive-definite, so is $T(B)$ in $\C^{\ell \times \ell}$.
+\end{lemma}
+
+\begin{proof}
+    For a given, arbitrary choice of $\ket{\psi}$ and $\{U_{j}\}_{j = 1}^{\ell}$, let $\ket{j} \coloneqq U_{j} \ket{\psi}$, i.e.\ $\big(T(A)\big)_{j k} = \braket{j | A | k}$.
+    Let $W$ denote the up to $\ell$-dimensional subspace of $\hil$ spanned by the states $\ket{j}$, $j = 1, \ldots, \ell$, and let $\projection_{W}$ denote the orthogonal projection onto $W$.
+    It is then evident that $T$ is the composition of $[A \mapsto (\projection_{W} A \projection_{W})\vert_{W}]$ with a subsequent matrix representation in the basis $\{\ket{j} \defcolon j = 1, \ldots, \ell\}$.
+    Since sandwiching with an orthogonal projection and subsequent restriction to the range of that projection as well as choosing any spanning set for a matrix representation of a linear operator are positive maps, so is their composition $T$.
+
+    Let $B \in \lo(\hil)$ be positive-definite.
+    Then its restriction $(\projection_{W} B \projection_{W})\vert_{W}$ to $W$ is also positive-definite, since for every $\ket{\phi} \in W$ it holds that
+    $\braket{\phi | \projection_{W} B \projection_{W} | \phi} = \braket{\phi | B | \phi} > 0$ by the positive-definiteness of $B$.
+    In addition, let the family $\{\ket{j} \defcolon j = 1, \ldots, \ell\}$ be linearly independent, i.e., let it be a basis of $W$, then the matrix representation of the positive-semidefinite operator $(\projection_{W} B \projection_{W})\vert_{W}$ in that basis yields a positive-definite matrix.
+\end{proof}
+
+Our three sample matrices will therefore be the images under $T$ of the positive operators $\one$, $\one - \projection_{\solspace}$, and $C$, respectively.
+That is, we define
+\begin{alignat*}{3}
+    &\mathbf{F}_{j k} &&\coloneqq T(\one)_{j k} &&= \braket{\iota | U_{j}^{\dagger} \one U_{k}^{\vphantom{\dagger}} | \iota}, \\
+    &\mathbf{G}_{j k} &&\coloneqq T(\one - \projection_{\solspace})_{j k} &&= \braket{\iota | U_{j}^{\dagger} (\one - \projection_{\solspace}) U_{k}^{\vphantom{\dagger}} | \iota}, \\
+    &\mathbf{H}_{j k} &&\coloneqq T(C)_{j k} &&= \braket{\iota | U_{j}^{\dagger} C U_{k}^{\vphantom{\dagger}} | \iota}.
+\end{alignat*}
+Since $T$ is positive according to \autoref{lemma:ConstructingSampleMatricesIsCompletelyPositive}, $\mathbf{F}$, $\mathbf{G}$, and $\mathbf{H}$ are positive-semidefinite matrices.
+In addition, choosing the unitaries $U_{i}$ such that $\{U_{i} \ket{\iota} \defcolon j = 1, \ldots, \ell\}$ is linearly independent, \autoref{lemma:ConstructingSampleMatricesIsCompletelyPositive} further guarantees that $\mathbf{F}$ is also positive-definite.
+We may further assume without loss of generality that $C$ is positive-definite (this can be simply achieved by adding a sufficiently large offset to the classical objective function).
+Then, again by \autoref{lemma:ConstructingSampleMatricesIsCompletelyPositive}, also $\mathbf{H}$ will be positive-definite.
+For $\mathbf{G}$, we cannot make such a claim in full generality.
+A calculation analogous to \eqref{equation:SampleMatricesIdentity1} and \eqref{equation:SampleMatricesIdentity2} shows that \eqref{equation:GenQCPParameterOptimisation} is equivalent to the more tangible problem
+\begin{align}\label{equation:GenQCPMatrixParameterOptimisation}
+    \begin{split}
+        &\min_{\bm{\alpha} \in \C^{\ell}} \bm{\alpha}^{\dagger} \mathbf{H} \bm{\alpha} \\
+        &\mathhphantomdisplay{\min_{\bm{\alpha} \in \C^{\ell}}}{\ \,\text{s.t.}}\ \mathhphantomdisplay{\bm{\alpha}^{\dagger} \mathbf{G} \bm{\alpha}}{\bm{\alpha}^{\dagger} \mathbf{F} \bm{\alpha}} = 1 \\
+        &\hphantom{\min_{\bm{\alpha} \in \C^{\ell}}}\ \bm{\alpha}^{\dagger} \mathbf{G} \bm{\alpha} = 0.
+    \end{split}
+\end{align}
+
+Typically, the sample matrices' off-diagonal entries are calculated with the aid of the Hadamard test~\cite{Ekert2002DirectEstimationsOfLinearAndNonlinearFunctionalsOfAQuantumState} and Pauli measurements~\cite{Bharti2021IterativeQuantumAssistedEigensolver} for all the Pauli terms in the respective observables.
+However, note that we do not have direct access to the infeasible projection $\one - \projection_{\solspace}$.
+Additionally, all three operators $\one$, $\one - \projection_{\solspace}$, and $C$ mutually commute as they are all diagonal in the CB, meaning that they can be simultaneously measured.
+In fact, we propose to implement neither of these operators directly on the QPU, but to approximate the matrix entries solely via sampling bit strings from the states $U_{i} \ket{\iota}$ via measurements in the CB, and to apply the classical objective function and feasibility oracle, respectively.
+
+The entries $\braket{\iota | U_{j}^{\dagger} A U_{j}^{\vphantom{\dagger}} | \iota} = \braket{j | A | j}$, $A \in \{\one, \one - \projection_{\solspace}, C\}$ are the usual expectation value of $A$ in the states $\ket{j} \coloneqq U_{j} \ket{\iota}$.
+We jointly estimate them via sampling $m \in \N$ bit strings from $\ket{j}$ and calculating the empirical average of the classical objective function (for $A = C$) and the frequency of infeasible states (for $A = \one - \projection_{\solspace}$), respectively.
+For the off-diagonal entries, we make use of the fact that
+\begin{align}\label{equation:PolarisationIdentity}
+    \begin{split}
+        \braket{\iota | U_{j}^{\dagger} A U_{k}^{\vphantom{\dagger}} | \iota} &= \frac{1}{2} \big(\braket{\iota | (U_{j}^{\dagger} + U_{k}^{\dagger}) A (U_{j}^{\vphantom{\dagger}} + U_{k}^{\vphantom{\dagger}}) | \iota} \\
+        &\quad\quad - \braket{\iota | U_{j}^{\dagger} A U_{j}^{\vphantom{\dagger}} | \iota} - \braket{\iota | U_{k}^{\dagger} A U_{k}^{\vphantom{\dagger}} | \iota}\big) \\
+        &\quad - \frac{i}{2} \big(\braket{\iota | (U_{j}^{\dagger} - i U_{k}^{\dagger}) A (U_{j}^{\vphantom{\dagger}} + i U_{k}^{\vphantom{\dagger}}) | \iota} \\
+        &\quad\quad - \braket{\iota | U_{j}^{\dagger} A U_{j}^{\vphantom{\dagger}} | \iota} - \braket{\iota | U_{k}^{\dagger} A U_{k}^{\vphantom{\dagger}} | \iota}\big),
+    \end{split}
+\end{align}
+which follows from the polarisation identity.
+We already covered how to obtain the expectation values/diagonal entries $\braket{\iota | U_{j}^{\dagger} A U_{j}^{\vphantom{\dagger}} | \iota}$.
+In order to get an estimate for the off-diagonal entries via \eqref{equation:PolarisationIdentity}, the remaining quantities to estimate are therefore the expectation values of $A$ in the unnormalised states $(U_{j}^{\dagger} + U_{k}^{\dagger}) \ket{\iota}$ and $(U_{j}^{\dagger} + i U_{k}^{\dagger}) \ket{\iota}$, for all combinations of $j, k = 1, \ldots, \ell$ such that $j \neq k$.
+Since all sample matrices are themselves hermitian, it suffices to restrict the calculation to $k < j$.
+We introduce an additional ancilla qubit and use a binary LCU operation of the form
+\begin{align*}
+    \Lambda_{\Re}^{(j k)} &\coloneqq (\one \otimes H) C_{1}(U_{k}) C_{0}(U_{j}) (\one \otimes H),
+\end{align*}
+mapping the initial state $\ket{\iota} \otimes \ket{0}$ to
+\begin{align*}
+    (\one \otimes H) \big(U_{j} \otimes \ketbra{0}{0} + U_{k} \otimes \ketbra{1}{1}\big) (\one \otimes H) \ket{\iota} \otimes \ket{0} \\
+    = \frac{1}{2} \big(U_{j} + U_{k}\big) \ket{\iota} \otimes \ket{0} + \frac{1}{2} \big(U_{j} - U_{k}\big) \ket{\iota} \otimes \ket{1}.
+\end{align*}
+This is very similar to the Hadamard test for calculating (the real part of) inner products of states.
+After obtaining this state, a measurement of the ancilla qubit in the CB with outcome zero readily prepares the normalised version of $(U_{j} + U_{k}) \ket{\iota}$ in the main register.
+The inverse of the normalisation factor is given by
+\begin{align}\label{equation:NormalisationReal}
+    \begin{split}
+        \big\lVert(U_{j}^{\vphantom{\dagger}} + U_{k}^{\vphantom{\dagger}}) \ket{\iota}\big\rVert &= \sqrt{\braket{\iota | (U_{j}^{\dagger} + U_{k}^{\dagger}) (U_{j}^{\vphantom{\dagger}} + U_{k}^{\vphantom{\dagger}}) | \iota}} \\
+        &= \sqrt{2 + 2 \Re(\braket{\iota | U_{j}^{\dagger} U_{k}^{\vphantom{\dagger}} | \iota})}.
+    \end{split}
+\end{align}
+Similarly, the probability of obtaining zero as the measurement result on the ancilla qubit is given by
+\begin{align}\label{equation:ProbabilityReal}
+    p_{j k}(0) = \frac{1}{4} \big\lVert(U_{j}^{\vphantom{\dagger}}\hspace*{-2pt} +\hspace*{-1pt} U_{k}^{\vphantom{\dagger}})\hspace*{-1pt} \ket{\iota}\hspace*{-2pt}\big\rVert^{2} = \frac{1}{2} \big(1\hspace*{-1pt} +\hspace*{-1pt} \Re(\braket{\iota | U_{j}^{\dagger} U_{k}^{\vphantom{\dagger}} | \iota})\big).
+\end{align}
+By inserting an additional $S$-gate into the LCU operation, we obtain
+\begin{align*}
+    \Lambda_{\Im}^{(j k)} &\coloneqq (\one \otimes H) C_{1}(U_{k}) C_{0}(U_{j}) (\one \otimes S) (\one \otimes H),
+\end{align*}
+mapping $\ket{\iota} \otimes \ket{0}$ to
+\begin{align*}
+    (\one \otimes H) \big(U_{j} \otimes \ketbra{0}{0} + U_{k} \otimes \ketbra{1}{1}\big) (\one \otimes (S H)) \ket{\iota} \otimes \ket{0} \\
+    = \frac{1}{2} \big(U_{j} + i U_{k}\big) \ket{\iota} \otimes \ket{0} + \frac{1}{2} \big(U_{j} - i U_{k}\big) \ket{\iota} \otimes \ket{1}.
+\end{align*}
+Measuring zero on the ancilla qubit then implements the normalised version of $(U_{j} + i U_{k}) \ket{\iota}$ in the main register with inverse normalisation factor
+\begin{align}\label{equation:NormalisationImaginary}
+    \begin{split}
+        \big\lVert(U_{j}^{\vphantom{\dagger}} + i U_{k}^{\vphantom{\dagger}}) \ket{\iota}\big\rVert &= \sqrt{\braket{\iota | (U_{j}^{\dagger} - i U_{k}^{\dagger}) (U_{j}^{\vphantom{\dagger}} + i U_{k}^{\vphantom{\dagger}}) | \iota}} \\
+        &= \sqrt{2 - 2 \Im(\braket{\iota | U_{j}^{\dagger} U_{k}^{\vphantom{\dagger}} | \iota})}.
+    \end{split}
+\end{align}
+The probability of measuring zero is
+\begin{align}\label{equation:ProbabilityImaginary}
+    q_{j k}(0) =\hspace*{-1pt} \frac{1}{4} \big\lVert(U_{j}^{\vphantom{\dagger}}\hspace*{-2pt} +\hspace*{-1pt} i U_{k}^{\vphantom{\dagger}})\hspace*{-1pt} \ket{\iota}\hspace*{-2pt}\big\rVert^{2}\hspace*{-2pt} = \frac{1}{2} \big(1\hspace*{-1pt} -\hspace*{-1pt} \Im(\braket{\iota | U_{j}^{\dagger} U_{k}^{\vphantom{\dagger}} | \iota})\big).
+\end{align}
+In order to obtain the remaining expectation values, we execute the respective LCU operations plus subsequent measurement of the ancilla qubit.
+If we measure zero on the ancilla, we continue with measuring the qubits of the main register in the CB, yielding a bit string as output.
+We use the obtained bit string samples to estimate the expectation values within the normalised versions of $(U_{j} + U_{k}) \ket{\iota}$ and $(U_{j} + i U_{k}) \ket{\iota}$ in the same manner as for the diagonal matrix entries.
+To obtain the final expectation value of the unnormalised states, we have to divide by the respective squared normalisation factor.
+Note that when forming the respective empirical averages, we have to divide by the number of zero measurements which is given by $p_{j k}(0) \cdot m$ and $q_{j k}(0) \cdot m$, respectively, where $m$ is the number of total repetitions of the LCU operation.
+According to \eqref{equation:ProbabilityReal} and \eqref{equation:ProbabilityImaginary}, the probabilities are proportional to the squared inverse normalisation factors such that those cancel each other out, leaving a pre-factor of $4 / m$ for the empirical averages.
+The entire protocol is summarised in \autoref{protocol:EstimateSampleMatrices} as \texttt{samplemat} which inputs a collection of search unitaries $\{U_{j}\}_{j = 1}^{\ell}$, an initial state $\ket{\iota}$, the classical objective function $c$, a classical feasibility oracle $d$ which maps $\bm{b} \in \solset$ to one and $\bm{b} \in \bit^{n} \setminus \solset$ to zero, as well as the number of samples $m$ that are used for each matrix entry.
+\begin{algorithm}
+    \caption{\label{protocol:EstimateSampleMatrices}\texttt{samplemat}($\{U_{j}\}_{j = 1}^{\ell},\, \ket{\iota},\, c,\, d,\, m$)}
+    Initialise $\mathbf{F}$, $\mathbf{G}$, and $\mathbf{H}$ as complex $\ell \times \ell$ matrices\;
+    \For{$j = 1, \ldots, \ell$}{
+        $\mathbb{X}_{j}$ $\coloneqq$ list of $m$ bit string samples from $U_{j} \ket{\iota}$\;
+        $\mathbf{F}_{j j}\hspace*{-1pt} \coloneqq\hspace*{-1pt} 1$\;
+        $\mathbf{G}_{j j}\hspace*{-1pt} \coloneqq\hspace*{-1pt} \frac{1}{m} \sum_{\bm{b} \scriptin \mathbb{X}_{j}} (1 - d(\bm{b}))$\;
+        $\mathbf{H}_{j j}\hspace*{-1pt} \coloneqq\hspace*{-1pt} \frac{1}{m} \sum_{\bm{b} \scriptin \mathbb{X}_{j}} c(\bm{b})$\;
+        \For{$k = 1, \ldots, j - 1$}{
+            $\mathbb{X}_{j k}\hspace*{-1pt} \coloneqq\hspace*{-1pt}$ list of $m$ samples from $\Lambda_{\Re}^{(j k)} \ket{\iota} \otimes \ket{0}$\;
+            $\mathbb{Y}_{j k}\hspace*{-1pt} \coloneqq\hspace*{-1pt}$ list of $m$ samples from $\Lambda_{\Im}^{(j k)} \ket{\iota} \otimes \ket{0}$\;
+            $\mathbf{F}_{j k}\hspace*{-1pt} \coloneqq\hspace*{-1pt} \frac{1}{2} \Big(\hspace*{-1pt}\frac{4}{m}\hspace*{-1pt} \big(\hspace*{-1pt}\sum_{(\bm{b}, b) \scriptin \mathbb{X}_{j k}}\hspace*{-4pt} (1\hspace*{-1pt} -\hspace*{-1pt} b)\big)\hspace*{-1pt} -\hspace*{-1pt} \mathbf{F}_{j j}\hspace*{-1pt} -\hspace*{-1pt} \mathbf{F}_{k k}\Big)$
+            $\quad\quad - \frac{i}{2}\Big(\hspace*{-1pt}\frac{4}{m}\hspace*{-1pt} \big(\hspace*{-1pt}\sum_{(\bm{b}, b) \scriptin \mathbb{Y}_{j k}}\hspace*{-4pt} (1\hspace*{-1pt} -\hspace*{-1pt} b)\big)\hspace*{-1pt} -\hspace*{-1pt} \mathbf{F}_{j j}\hspace*{-1pt} -\hspace*{-1pt} \mathbf{F}_{k k}\Big)$\;
+            $\mathbf{F}_{k j}\hspace*{-1pt} \coloneqq\hspace*{-1pt} \overline{\mathbf{F}_{j k}}$\;
+            $\mathbf{G}_{j k}\hspace*{-1pt} \coloneqq\hspace*{-1pt} \frac{2}{m} \big(\hspace*{-1pt}\sum_{(\bm{b}, b) \scriptin \mathbb{X}_{j k}}\hspace*{-4pt} (1\hspace*{-1pt} -\hspace*{-1pt} d(\bm{b})) (1\hspace*{-1pt} -\hspace*{-1pt} b)\big)$
+            $\quad\quad - \frac{2 i}{m} \big(\hspace*{-1pt}\sum_{(\bm{b}, b) \scriptin \mathbb{Y}_{j k}}\hspace*{-4pt} (1\hspace*{-1pt} -\hspace*{-1pt} d(\bm{b})) (1\hspace*{-1pt} -\hspace*{-1pt} b)\big)$
+            $\quad\quad + \Big(\frac{i}{2}\hspace*{-1pt} -\hspace*{-1pt} \frac{1}{2}\Big) (\mathbf{G}_{j j}\hspace*{-1pt} +\hspace*{-1pt} \mathbf{G}_{k k})$\;
+            $\mathbf{G}_{k j}\hspace*{-1pt} \coloneqq\hspace*{-1pt} \overline{\mathbf{G}_{j k}}$\;
+            $\mathbf{H}_{j k}\hspace*{-1pt} \coloneqq\hspace*{-1pt} \frac{1}{2} \Big(\hspace*{-1pt}\frac{4}{m}\hspace*{-1pt} \big(\hspace*{-1pt}\sum_{(\bm{b}, b) \scriptin \mathbb{X}_{j k}}\hspace*{-4pt} c(\bm{b}) (1\hspace*{-1pt} -\hspace*{-1pt} b)\big)\hspace*{-1pt} -\hspace*{-1pt} \mathbf{H}_{j j}\hspace*{-1pt} -\hspace*{-1pt} \mathbf{H}_{k k}\hspace*{-1pt}\Big)$
+            $\quad\ \ - \frac{i}{2}\Big(\hspace*{-1pt}\frac{4}{m}\hspace*{-1pt} \big(\hspace*{-1pt}\sum_{(\bm{b}, b) \scriptin \mathbb{Y}_{j k}}\hspace*{-4pt} c(\bm{b}) (1\hspace*{-1pt} -\hspace*{-1pt} b)\big)\hspace*{-1pt} -\hspace*{-1pt} \mathbf{H}_{j j}\hspace*{-1pt} -\hspace*{-1pt} \mathbf{H}_{k k}\hspace*{-1pt}\Big)$\;
+            $\mathbf{H}_{k j}\hspace*{-1pt} \coloneqq\hspace*{-1pt} \overline{\mathbf{H}_{j k}}$\;
+        }
+    }
+    \Return{($\mathbf{F}, \mathbf{G}, \mathbf{H}$)}\;
+\end{algorithm}
+
+
+\subsection{\label{subsection:GeneralisedEigenvalueProblem}Generalised eigenvalue problem}
+
+We proceed by translating \eqref{equation:GenQCPMatrixParameterOptimisation} into a solver-friendlier form: a \emph{generalised eigenvalue problem} (GEP).
+This transformation has already been discussed for the singly-constrained case such as \eqref{equation:QCPMatrixParameterOptimisation}.
+In this work, we extend the transformation to the doubly-constrained case and fill some gaps present in the mathematical literature on GEP derivations~\cite{Ghojogh2019EigenvalueAndGeneralizedEigenvalueProblemsTutorial} with mathematical rigour, that persisted in the proposals by McClean \textit{et al.}~\cite{Mcclean2017HybridQuantumClassicalHierarchyForMitigationOfDecoherenceAndDeterminationOfExcitedStates}, Huggings \textit{et al.}~\cite{Huggins2020ANonOrthogonalVariationalQuantumEigensolver}, and Binkowski \textit{et al.}~\cite{Binkowski2025FromBarrenPlateausThroughFertileValleysConicExtensionsOfParameterisedQuantumCircuits}.
+The following assumption will be central for further derivations.
+\begin{assumption}\label{assumption:LinearIndependence}
+    The state $\ket{\iota} \in \hil$ and unitaries $\{U_{j}\}_{j = 1}^{\ell}$ are chosen in such a way that $\{U_{j} \ket{\iota} \defcolon j = 1, \ldots, \ell\}$ constitutes a linearly independent set of states.
+\end{assumption}
+Note that, as discussed after \autoref{lemma:ConstructingSampleMatricesIsCompletelyPositive}, this \hyperref[assumption:LinearIndependence]{Assumption} implies that $\mathbf{F}$ and $\mathbf{H}$ will be positive-definite, i.e., positive-semidefinite and invertible.
+This, in turn, constitutes a crucial assumption for the derivation of the GEP.
+
+Quadratic optimisation problems such as \eqref{equation:GenQCPMatrixParameterOptimisation} are well-studied objects in the optimisation theory literature with many results on solvability conditions and duality structure~\cite{Thoai2000DualityBoundMethodForTheGeneralQuadraticProgrammingProblemWithQuadraticConstraints}.
+In particular,~\cite{Nguyen2022StrongDualityForGeneralQuadraticProgramsWithQuadraticEqualityConstraints} provides a rich collection of tools for investigating strong duality of quadratic problems of which we merely require a small subset.
+
+The first step is to formulate the complex problem \eqref{equation:GenQCPMatrixParameterOptimisation} over a real vector space by canonically identifying $\C^{\ell}$ with $\R^{2 \ell}$ via $\C \ni \bm{\alpha} = \Re(\bm{\alpha}) + i \Im(\bm{\alpha})\, \widehat{=}\, (\Re(\bm{\alpha}), \Im(\bm{\alpha})) \in \R^{2 \ell}$.
+Additionally, we introduce the real $2 \ell \times 2 \ell$ symmetric block matrices
+\begin{align}\label{equation:RealSymmetricMatrices}
+    \bm{F} \coloneqq \begin{pmatrix}
+        \Re(\mathbf{F})& -\Im(\mathbf{F}) \\
+        \Im(\mathbf{F})& \hphantom{-}\Re(\mathbf{F})
+    \end{pmatrix},
+\end{align}
+as well as $\bm{G}$ and $\bm{H}$ analogously constructed from $\mathbf{G}$ and $\mathbf{H}$, respectively.
+Note that $\bm{F}$ and $\bm{H}$ are again positive-definite while $\bm{G}$ is guaranteed to be positive-semidefinite.
+We can then readily rewrite \eqref{equation:GenQCPMatrixParameterOptimisation} as
+\begin{align}\label{equation:GenQCPParameterOptimisationReal}
+    \begin{split}
+        &\min_{\bm{x} \deepscriptin \R^{2 \ell}} \bm{x}^{\transpose} \bm{H} \bm{x} \\
+        &\mathhphantomdisplay{\min_{\bm{x} \deepscriptin \R^{2 \ell}}}{\ \, \text{s.t.}}\ \mathhphantomdisplay{\bm{x}^{\transpose} \bm{G} \bm{x}}{\bm{x}^{\transpose} \bm{F} \bm{x}} = 1 \\
+        &\hphantom{\min_{\bm{x} \deepscriptin \R^{2 \ell}}}\ \bm{x}^{\transpose} \bm{G} \bm{x} = 0.
+    \end{split}
+\end{align}
+Since $\bm{G}$ is positive-semidefinite, it holds, given an $\bm{x} \in \R^{2 \ell}$, that $\bm{x}^{\transpose} \bm{G} \bm{x} = 0$ if and only if $\bm{G} \bm{x} = \bm{0}$.
+Therefore, we effectively optimise over $\ker(\bm{G})$ which we can absorb as an implicit constraint into the problem's domain.
+In practice, to formulate the problem again in a concrete coordinate space $\R^{m}$ where $m$ is the dimension of $\ker(\bm{G})$, we may conjugate both $\bm{F}$ and $\bm{H}$ with the basis transform $\bm{B}_{\bm{G}}$ into the eigenbasis of $\bm{G}$ and then execute the sandwiching with the projection onto $\ker(\bm{G})$ by deleting all rows/columns that correspond to non-kernel eigenvectors of $\bm{G}$.
+$\bm{F}$ and $\bm{H}$ both being positive-definite readily implies that also $\bm{B}_{\bm{G}}^{\vphantom{-1}} \bm{F} \bm{B}_{\bm{G}}^{-1}$ and $\bm{B}_{\bm{G}}^{\vphantom{-1}} \bm{H} \bm{B}_{\bm{G}}^{-1}$ are positive definite.
+By the same argument as in the proof of \autoref{lemma:ConstructingSampleMatricesIsCompletelyPositive}, also their restrictions to the $\R^{m}$-subspace $\tilde{\bm{F}} \coloneqq (\projection_{\R^{m}} \bm{B}_{\bm{G}}^{\vphantom{-1}}\bm{F} \bm{B}_{\bm{G}}^{-1} \projection_{\R^{m}})\vert_{\R^{m}}$ and analogously defined $\tilde{\bm{H}}$ are positive-definite.
+It then holds that \eqref{equation:GenQCPParameterOptimisationReal} is equivalent to
+\begin{align}\label{equation:GenQCPParameterOptimisationRealImplicit}
+    \begin{split}
+        &\min_{\bm{x} \scriptin \R^{m}} \bm{x}^{\transpose} \tilde{\bm{H}} \bm{x} \\
+        &\mathhphantomdisplay{\min_{\bm{x} \deepscriptin \R^{m}}}{\ \, \text{s.t.}}\ \bm{x}^{\transpose} \tilde{\bm{F}} \bm{x} = 1.
+    \end{split}
+\end{align}
+
+The Lagrange function for \eqref{equation:GenQCPParameterOptimisationRealImplicit} is
+\begin{align}\label{equation:LagrangeFunction}
+    \begin{split}
+        g : \R^{m} \times \R &\rightarrow \R \\
+        (\bm{x}, \lambda) &\mapsto \bm{x}^{\transpose} \tilde{\bm{H}} \bm{x} + \lambda (1 - \bm{x}^{\transpose} \tilde{\bm{F}} \bm{x}).
+    \end{split}
+\end{align}
+and, after rearranging the terms of \eqref{equation:LagrangeFunction}, we find that the Lagrangian dual problem has the form
+\begin{align}\label{equation:LagrangianDualProblem}
+    \max_{\lambda \scriptin \R} \min_{\bm{x} \deepscriptin \R^{m}} g(\bm{x}, \lambda) = \max_{\lambda \scriptin \R} \bigg(\hspace*{-2pt}\lambda + \min_{\bm{x} \deepscriptin \R^{m}}\hspace*{-1pt} \bm{x}^{\transpose}\hspace*{-1pt} \Big(\hspace*{-1pt}\tilde{\bm{H}}\hspace*{-1pt} -\hspace*{-1pt} \lambda \tilde{\bm{F}}\hspace*{-1pt}\Big) \bm{x}\hspace*{-1pt}\bigg).
+\end{align}
+Note that for all $\lambda \in \R$ for which the symmetric matrix $\tilde{\bm{H}} - \lambda \tilde{\bm{F}}$ is not positive-semidefinite, we can find a direction $\hat{\bm{x}} \in \R^{m}$ with $\hat{\bm{x}}^{\transpose} (\bm{H} - \lambda \bm{F}) \hat{\bm{x}} < 0$ such that minimising over all $\bm{x} \in \R^{m}$ is unbounded below.
+In contrast, in case of positive-semidefiniteness, the minimal possible value is zero which is attained by choosing, e.g., $\bm{x} = \bm{0}$.
+This shows that the Lagrangian dual problem \eqref{equation:LagrangianDualProblem} has the equivalent form
+\begin{align}\label{equation:ConstrainedLagrangianDualProblem}
+    \begin{split}
+        &\max_{\lambda \scriptin \R} \lambda \\
+        &\mathhphantomdisplay{\max_{\lambda \scriptin \R}}{\ \text{s.t. }}\ \tilde{\bm{H}} - \lambda \tilde{\bm{F}} \succeq 0.
+    \end{split}
+\end{align}
+We further an adapted version of~\cite[Lemma 2.1]{Nguyen2022StrongDualityForGeneralQuadraticProgramsWithQuadraticEqualityConstraints} to express the positive-semidefiniteness constraint with a more convenient system of inequalities.
+\begin{lemma}\label{lemma:InequalitySystem}
+    Let $\bm{A} \in \R^{d \times d}$ be symmetric and $\bm{B} \in \R^{d \times d}$ be positive-semidefinite.
+    Then $\bm{A} \succeq 0$ is equivalent to the inequality system
+    \begin{align}
+        &\bm{x}^{\transpose} \bm{A} \bm{x} \geq 0 \text{ for all } \bm{x} \in \R^{d} \text{ satisfying } \bm{x}^{\transpose} \bm{B} \bm{x} = 1, \label{equation:InequalitySystem1} \\
+        &\bm{x}^{\transpose} \bm{A} \bm{x} \geq 0 \text{ for all } \bm{x} \in \R^{d} \text{ satisfying } \bm{x}^{\transpose} \bm{B} \bm{x} = 0. \label{equation:InequalitySystem2}
+    \end{align}
+\end{lemma}
+
+\begin{proof}
+    That $\bm{A} \succeq 0$ implies both \eqref{equation:InequalitySystem1} and \eqref{equation:InequalitySystem2} is trivial.
+    In order to show the opposite direction, let $\bm{A} \not\succeq 0$, i.e., there exists $\bm{y} \in \R^{d}$ such that $\bm{y}^{\transpose} \bm{A} \bm{y} < 0$.
+    If either $\bm{y}^{\transpose} \bm{B} \bm{y} = 1$ or $\bm{y}^{\transpose} \bm{B} \bm{y} = 0$, we are already done.
+    If neither of these conditions are fulfilled, consider $\bm{x} \coloneqq \bm{y} / \sqrt{\bm{y}^{\transpose} \bm{B} \bm{y}}$ which, by construction, fulfils $\bm{x}^{\transpose} \bm{B} \bm{x} = 1$, but also $\bm{x}^{\transpose} \bm{A} \bm{x} < 0$, i.e., \eqref{equation:InequalitySystem1} is violated.
+\end{proof}
+
+Applying \autoref{lemma:InequalitySystem} to the family $\tilde{\bm{H}} - \lambda \tilde{\bm{F}}$ of symmetric matrices, $\tilde{\bm{F}} \succ 0$ translates the positive-semidefiniteness constraint into two conditions:
+For all $\bm{x} \in \R^{m}$, satisfying $\bm{x}^{\transpose} \tilde{\bm{F}} \bm{x} = 1$, it must hold that
+\begin{align}\label{equation:InequalitySystemApplied1}
+    \bm{x}^{\transpose} (\tilde{\bm{H}} - \lambda \tilde{\bm{F}}) \bm{x} \geq 0 \iff \bm{x}^{\transpose} \tilde{\bm{H}} \bm{x} \geq \lambda.
+\end{align}
+For all $\bm{x} \in \R^{m}$, satisfying $\bm{x}^{\transpose} \tilde{\bm{F}} \bm{x} = 0$, it must instead hold that
+\begin{align}\label{equation:InequalitySystemApplied2}
+    \bm{x}^{\transpose} (\tilde{\bm{H}} - \lambda \tilde{\bm{F}}) \bm{x} \geq 0 \Leftrightarrow \bm{x}^{\transpose} \tilde{\bm{H}} \bm{x} \geq 0.
+\end{align}
+Clearly, \eqref{equation:InequalitySystemApplied2} is trivially satisfied since $\tilde{\bm{H}} \succ 0$.
+This leaves us with the equivalent problem
+\begin{align*}
+    \max\{\lambda \in \R\, \colon \lambda \leq \bm{x}^{\transpose} \tilde{\bm{H}} \bm{x}\, \forall\, \bm{x} \in \R^{m} \text{ satisfying } \bm{x}^{\transpose} \tilde{\bm{F}} \bm{x} = 1\},
+\end{align*}
+which clearly has the same optimal value as \eqref{equation:GenQCPParameterOptimisationRealImplicit} and hence as \eqref{equation:GenQCPMatrixParameterOptimisation}.
+This shows strong duality for the primal-dual pair \eqref{equation:GenQCPParameterOptimisationRealImplicit}--\eqref{equation:LagrangianDualProblem}, provided that the primal problem is solvable.
+The latter, however, follows from the fact that the original problem \eqref{equation:GenQCPParameterOptimisation} is always solvable with $\bm{\alpha} = (0, \ldots, 0, 1)$.
+
+After having established strong duality, it remains to show that the Lagrangian dual problem admits an equivalent formulation as a GEP.
+For this final derivation, we start with the form \eqref{equation:ConstrainedLagrangianDualProblem} of the dual problem.
+First note that the linear function $l \coloneqq [\lambda \mapsto \tilde{\bm{H}} - \lambda \tilde{\bm{F}}]$ is analytic and monotonically decreasing since $(\tilde{\bm{H}} - \lambda \tilde{\bm{F}}) - (\tilde{\bm{H}} - \mu \tilde{\bm{F}}) = (\mu - \lambda) \tilde{\bm{F}} \succeq 0$ for $\mu \ge \lambda$.
+Thus, if $l(\lambda_{0}) = \tilde{\bm{H}} - \lambda_{0} \tilde{\bm{F}} \succeq 0$ for a given $\lambda_{0} \in \R$, then also $l(\lambda) \succeq 0$ for all $\lambda \leq \lambda_{0}$.
+Consider further the set $D \coloneqq \{\lambda \in \R \defcolon l(\lambda) \succeq 0 \text{ and } l(\lambda) \not\succ 0\}$, i.e.\ the set of all real numbers $\lambda$ for which $l(\lambda)$ is positive-semidefinite, but not positive-definite.
+Since \eqref{equation:ConstrainedLagrangianDualProblem} is feasible we know that $\{l(\lambda) \defcolon l(\lambda) \succeq 0\}$ is non-empty, and from the fact that \eqref{equation:ConstrainedLagrangianDualProblem} is bounded above, we deduce that for high enough $\lambda$, $l(\lambda)$ will fail to be positive-semidefinite, that is the complement $\{l(\lambda) \defcolon l(\lambda) \not\succeq 0\}$ is also non-empty.
+The continuity of $l$ and the inherited continuity of $l$'s eigenvalue curves~\cite{Kato1995PerturbationTheoryForLinearOperators} then implies that $\{l(\lambda) \defcolon l(\lambda) \succeq 0 \text{ and } l(\lambda) \not\succ 0\}$ is non-empty as well, hence so is its preimage $D$.
+Therefore, we can choose $\lambda_{0} \in D$.
+Since both $\tilde{\bm{F}}$ and $\tilde{\bm{H}}$ are positive-definite, $l(\lambda)$ will be positive-definite for all $\lambda \leq 0$, i.e.\ it holds that $D \cap (-\infty, 0] = \emptyset$ and therefore that $\lambda_{0} > 0$.
+Moreover, by~\cite[Problem 6.2]{Kato1995PerturbationTheoryForLinearOperators}, the function
+\begin{align*}
+    \gamma_{\min} \coloneqq [\lambda \mapsto \min\{\gamma \in \R \defcolon \gamma \text{ is an eigenvalue of } l(\lambda)\}]
+\end{align*}
+is concave.
+For our chosen $\lambda_{0}$ it holds that $\gamma_{\min}(\lambda_{0}) = 0$;
+positive definiteness of $\tilde{\bm{H}}$ especially implies that $\gamma_{\min}(0) > 0$.
+For all $\lambda_{1}, \lambda_{2} \in [0, \infty)$ with $\lambda_{2} > \lambda_{1}$ it holds that there exists an $\alpha \in (0, 1)$ such that $\lambda_{1} = \alpha \lambda_{2}$, and therefore, since $\gamma_{\min}$ is concave, that
+\begin{align}\label{equation:StrictConcaveInequality}
+    \begin{split}
+        \gamma_{\min}(\lambda_{1}) &= \gamma_{\min}(\alpha \lambda_{2} + (1 - \alpha) 0) \\
+        & \geq \alpha \gamma_{\min}(\lambda_{2})\hspace*{-1pt} +\hspace*{-1pt} (1\hspace*{-1pt} -\hspace*{-1pt} \alpha) \gamma_{\min}(0) > \alpha \gamma_{\min}(\lambda_{2}).
+    \end{split}
+\end{align}
+Applied to $\lambda_{1} = \lambda_{0}$ and an arbitrary $\lambda_{2} > \lambda_{0}$, this shows that indeed $\gamma_{\min}(\lambda_{2}) < 0$ since \eqref{equation:StrictConcaveInequality} would otherwise imply that $0 = \gamma_{\min}(\lambda_{0}) > 0$, raising a contradiction.
+This result, in turn, shows that $D$ only consists of the single point $\lambda_{0}$ since all values larger than $\lambda_{0}$ give rise to an operator $l(\lambda)$ with at least one negative eigenvalue.
+In summary, we have shown that the feasible set of \eqref{equation:ConstrainedLagrangianDualProblem} consists only of a single point $\lambda_{0}$ which fulfils that $l(\lambda_{0})$ is positive-semidefinite with at least one eigenvalue being zero.
+Hence there exists a vector $\bm{x} \in \R^{m} \setminus \{\bm{0}\}$ such that
+\begin{align}\label{equation:GeneralisedEigenvalueProblem}
+    (\tilde{\bm{H}} - \lambda_{0} \tilde{\bm{F}}) \bm{x} = \bm{0}\, \Leftrightarrow\, \tilde{\bm{H}} \bm{x} = \lambda_{0} \tilde{\bm{F}} \bm{x}.
+\end{align}
+which is precisely the formulation of a GEP.
+A GEP-solver applied to the tuple $(\tilde{\bm{H}}, \tilde{\bm{F}})$ will generally output several generalised eigenvalues and eigenvectors.
+By the above arguments, $\lambda_{0}$ will be the smallest eigenvalue among them, as for every larger generalised eigenvalue $\tilde{\lambda} > \lambda_{0}$, the operator $l(\tilde{\lambda})$ is not positive-semidefinite.
+The generalised eigenvector $\bm{x}_{0}$ associated to $\lambda_{0}$ returned by the GEP-solver is typically already normalised such that $\bm{x}_{0}^{\transpose} \tilde{\bm{F}} \bm{x}_{0}^{\vphantom{\transpose}} = 1$.
+If not, we may normalise it by multiplying it with $(\bm{x}_{0}^{\transpose} \tilde{\bm{F}} \bm{x}_{0}^{\vphantom{\transpose}})^{-1 / 2}$.
+By the definition of a generalised eigenvector, we find that $\bm{x}_{0}$ is indeed the optimiser of \eqref{equation:ConstrainedLagrangianDualProblem}:
+\begin{align}\label{equation:OptimalityCheck}
+    \bm{x}_{0}^{\transpose} \tilde{\bm{H}} \bm{x}_{0}^{\vphantom{\transpose}} = \bm{x}_{0}^{\transpose} (\lambda_{0} \tilde{\bm{F}} \bm{x}_{0}^{\vphantom{\transpose}}) = \lambda_{0} \bm{x}_{0}^{\transpose} \tilde{\bm{F}} \bm{x}_{0}^{\vphantom{\transpose}} = \lambda_{0}.
+\end{align}
+
+Following the previously established strong duality, undoing the basis change into $\bm{G}$'s eigenbasis, inverting the complex-to-real transformation \eqref{equation:RealSymmetricMatrices}, and utilising the definitions of the sample matrices, we have thus concluded the following theorem.
+\begin{theorem}\label{theorem:GeneralisedEigenvalueProblem}
+    The minimiser $\bm{\alpha}_{0}$ and the minimum $\epsilon_{0}$ of \eqref{equation:GenQCPParameterOptimisation} are given by
+    \begin{align}\label{equation:Minimiser}
+        \begin{split}
+            \bm{\alpha_{0}} &= \big[\bm{B}_{\bm{G}}^{-1}(\bm{x}_{0}, 0, \ldots, 0)\big]_{1, \ldots, \ell} \\
+            &\quad + i \big[\bm{B}_{\bm{G}}^{-1}(\bm{x}_{0}, 0, \ldots, 0)\big]_{\ell + 1, \ldots, 2 \ell}
+        \end{split}
+    \end{align}
+    and the minimal generalised eigenvalue $\lambda_{0}$ of the generalised eigenvalue problem \eqref{equation:GeneralisedEigenvalueProblem}, where $\bm{x}_{0}$ is the generalised eigenvector associated to $\lambda_{0}$.
+\end{theorem}
+
+Most importantly, \autoref{theorem:GeneralisedEigenvalueProblem} rigorously reduces the complex quadratic optimisation problem \eqref{equation:GenQCPParameterOptimisation} to an efficiently constructible and solvable, real-valued GEP.
+
+\subsection{\label{subsection:LCUImplementation}LCU implementation}
+
+Solving \eqref{equation:GeneralisedEigenvalueProblem} and applying the transformation \eqref{equation:Minimiser}, we find the parameter vector $\bm{\alpha}$ such that $\mathcal{M}_{\bm{\alpha}} \ket{\iota}$ constitutes a state minimising the expectation value of $C$ among the parametrised ansatz class.
+What remains to show is how to prepare the given states on a QPU.
+The procedure was already explained in~\cite{Binkowski2025FromBarrenPlateausThroughFertileValleysConicExtensionsOfParameterisedQuantumCircuits} and applies analogously to our generalisation.
+In this subsection, we merely provide some additional details of the LCU construction.
+
+For $\ell$ search unitaries, we have to introduce a $\lceil\log_{2}(\ell)\rceil$-qubit ancilla register $\hil_{\ancilla}$ on which we prepare the quantum state
+\begin{align}\label{equation:GenStatePreparation}
+    \ket{\psi}_{\ancilla} \coloneqq \frac{(\sqrt{\bm{\alpha}}, \bm{0})}{\sqrt{\lVert\bm{\alpha}\rVert_{1}}}
+\end{align}
+where the padding with $2^{\lceil \log_{2}(\ell)\rceil} - \ell$ many zeros is necessary in order to obtain a valid $\lceil \log_{2}(\ell)\rceil$-qubit state vector.
+The state preparation of $\ket{\psi}_{\ancilla}$ may be executed via, e.g., the Grover-Rudolph algorithm~\cite{Ramacciotti2024SimpleQuantumAlgorithmToEfficientlyPrepareSparseStates} with $\mathcal{O}(\ell \log_{2} \ell)$-many gates.
+Following the state preparation of $\ket{\psi}_{\ancilla}$, we apply the unitary
+\begin{align}\label{equation:GenCompoundUnitary}
+    \mathcal{U} \coloneqq \sum_{j = 1}^{\ell} U_{j} \otimes \ketbra{j}{j}_{\ancilla} + \one \otimes \Bigg(\sum_{j = \ell + 1}^{2^{\lceil \log_{2}(\ell)\rceil}} \ketbra{j}{j}_{\ancilla}\Bigg)
+\end{align}
+to the product state $\ket{\iota} \otimes \ket{\psi}_{\ancilla}$, where we label the ancilla register's CB states with integers $j$ rather than bit strings.
+Note that since $\ket{\psi}_{\ancilla}$ does not have any components in the CB states with index larger than $\ell$, the second term does not contribute when applying $\mathcal{U}$ to $\ket{\iota} \otimes \ket{\psi}_{\ancilla}$.
+Subsequently, we conduct a binary measurement in direction of
+\begin{align}\label{equation:GenInverseStatePreparation}
+    \ket{\xi}_{\ancilla} \coloneqq \frac{\big(\overline{\sqrt{\bm{\alpha}}}, \bm{0}\big)}{\sqrt{\lVert\bm{\alpha}\rVert_{1}}}
+\end{align}
+by first applying its inverse state preparation and then conducting a measurement in the CB on the ancilla register, distinguishing between $\ket{\bm{0}}_{\ancilla}$ and all other states.
+All these steps taken together have the following action
+\begin{align*}
+    &\big(\one \otimes \bra{\xi}_{\ancilla}\big) \mathcal{U} \big(\ket{\iota} \otimes \ket{\psi}_{\ancilla}\big) \\
+    &= \lVert\bm{\alpha}\rVert_{1}^{-1}\hspace*{-5pt} \sum_{i, j, k = 1}^{\ell}\hspace*{-5pt} \big(\one \otimes \sqrt{\alpha_{i}} \bra{i}_{\ancilla}\hspace*{-1pt}\big) \big(U_{j} \otimes \ketbra{j}{j}_{\ancilla}\hspace*{-1pt}\big) \big(\hspace*{-1pt}\ket{\iota} \otimes \sqrt{\alpha_{k}} \ket{k}_{\ancilla}\hspace*{-1pt}\big) \\
+    &= \lVert\bm{\alpha}\rVert_{1}^{-1}\hspace*{-2pt} \sum_{i, j = 1}^{\ell}\hspace*{-2pt} \big(\one \otimes \sqrt{\alpha_{k}} \bra{i}_{\ancilla}\big) \big(U_{j} \ket{\iota} \otimes \sqrt{\alpha_{j}} \ket{j}_{\ancilla}\big) \\
+    &= \lVert\bm{\alpha}\rVert_{1}^{-1} \sum_{j = 1}^{\ell} \alpha_{j} U_{j} \ket{\iota} = \lVert\alpha\rVert_{1}^{-1} \mathcal{M}_{\bm{\alpha}} \ket{\iota}.
+\end{align*}
+The factor $\lVert\bm{\alpha}\rVert_{1}^{-1}$ constitutes the probability of measuring the all-zero bit string upon measurement on the ancilla register, that is, the success probability of implementing the LCU correctly.
+A single successful application of the LCU update therefore implements the $\mathcal{M}_{\bm{\alpha}} \ket{\iota}$ on the main register.
+
+
+\subsection{\label{subsection:FeasibilityPreservingUnitaries}Feasibility-preserving unitaries}
+
+While a key advantage of our construction is the ability to ensure that a successful LCU step is feasibility-preserving even if the comprising search unitaries $U_j$ are not, we briefly discuss simplifications arising in the case when a set of such feasibility-preserving unitaries \emph{is} available for the considered CCOP.
+Recall that $U_j$ is feasibility-preserving if $U_j(\solspace) \subset \solspace$, which, by $\ket{\iota} \in \solspace$, implies $\{U_{j} \ket{\iota} \defcolon j = 1, \ldots, \ell\} \subset \solspace$.
+Since $\ker(\one - \projection_{\solspace}) = \solspace$, the sample matrix $\mathbf{G}$ (and therefore $\bm{G}$) is the null matrix and the constraint $\bm{\alpha}^\dagger \mathbf{G} \bm{\alpha} = 0$ (and $\bm{x}^\dagger \bm{G} \bm{x} = 0$) is invariably satisfied for all $\bm{\alpha}$ (and $\bm{x}$).
+The problem \eqref{equation:GenQCPParameterOptimisation} is reduced to a higher-dimensional variant of the original problem \eqref{equation:QCPParameterOptimisation}.
+The subsequent derivation of strong duality in \autoref{subsection:GeneralisedEigenvalueProblem} still holds for the then trivial case of $m = 2 \ell$ and $\bm{B}_{\bm{G}} = \one_m$, and \autoref{theorem:GeneralisedEigenvalueProblem} implies that the minimiser and minimum of \eqref{equation:GenQCPParameterOptimisation} are found by determining the minimal generalised eigenvalue and associated generalised eigenvector of the $2 \ell$-dimensional problem
+\begin{align}
+    \bm{H} \bm{x} = \lambda \bm{F} \bm{x}.
+\end{align}
+
+We further note that for many CCOPs the feasible subspace $\solspace$ is much smaller dimension than the entire quantum Hilbert space $\hil$.
+Therefore, choosing search unitaries at random will result in mostly fully infeasible directions $U_{j} \ket{\iota}$.
+In this case, the only feasible, and therefore optimal, solution will be the initial state.
+Therefore, it is ultimately desired to transfer knowledge gained from constructing feasibility-preserving QAOA-mixers to our framework.
+However, in addition to strictly feasibility-preserving operations, also unitaries are well-suited which trade in strict feasibility-preservation for reduced circuit depth or cheaper gates.
+A prototypical example is to replace costly controlled-swap gates in some permutation-based mixer constructions~\cite{Binkowski2025SymmetryBasedQuantumAlgorithmsForOpenShopSchedulingWithHardConstraints} with CNOT gates as the latter are typically easier to implement while still offering valuable state transitions.
+
+
+\subsection{\label{subsection:RobustnessOfPurityAgainstNoise}Robustness of purity against noise}
+
+The above scheme is formulated for any device that solely operates on pure quantum states, representable by a state vector $\ket{\phi} \in \hil$.
+In reality however, we are often confronted with the situation where we intentionally or inevitably operate on \emph{mixed} quantum states, described by the set of density operators $\mathfrak{S} \coloneqq \{ \rho \in \lo(\hil): \rho \succeq 0\ \text{and}\ \tr[\rho] = 1 \}$, where the pure states are exactly the rank-one projections $\rho = \ketbra{\phi}{\phi} \in \mathfrak{S}(\hil)$.
+Naturally, this situation arises when we deploy a quantum computer with access to only imperfect gate operations, e.g., a NISQ device, to solve the optimisation task \eqref{equation:GenQCPParameterOptimisation}.
+This section will prove a certain level of noise resistance to our framework alleviating the effects of noise to the classical optimisation problem one has to solve in order to optimise the quantum state.
+Namely, we prove that the suitably reformulated \eqref{equation:GenQCPParameterOptimisation} remains feasible and that its solution remains vector-valued (rather than matrix-valued) even if the pure initial state $\ket{\iota}$ is replaced with a \emph{feasible} mixed state $\rho_{\text{in}} \in \mathfrak{S}(\hil)$, $\supp(\rho) \subseteq \solspace$.
+That is, even under the influence of noise in the feasible subspace, it suffices to prepare a pure state in the ancilla register in order to update the main register's mixed state to the optimal solution found in the parametrised ansatz class.
+
+Note that by switching to the density operator formalism, the task of minimising the objective Hamiltonian's expectation value becomes a constrained semidefinite program over the cone of linear, positive-semidefinite operators on the main register's Hilbert space $\PSD(\hil) \supset \mathfrak{S}(\hil)$.
+The normalisation condition is now to be expressed in terms of having a unit trace.
+Similarly, orthogonality to the infeasible subspace $\solspace^{\perp}$ is expressed by a vanishing trace condition:
+\begin{align}\label{equation:CCOPSDP}
+    \begin{split}
+        &\min_{\rho \in \PSD(\hil)} \tr[\rho C] \\
+        &\mathhphantomdisplay{\min_{\rho \in \PSD(\hil)}}{\quad \ \text{s.t.}}\, \tr[\rho] = 1 \\
+        &\hphantom{\min_{\rho \in \PSD(\hil)}}\, \tr[\rho (\one - \projection_{\solspace})] = 0.
+    \end{split}
+\end{align}
+
+The initial state is $\rho_{\text{in}} \in \mathfrak{S}(\hil)$ and can be expressed as a convex combination of pure states; i.e., $\rho_{\text{in}} = \sum_{i} p_{i} \ketbra{i}{i}$.
+In the context of a statistical ensemble, $p_{i}$ is the probability of the system to be prepared in the pure state $\ket{i} \in \hil$.
+Recording the sample matrices for a given pure state $\ket{i} \in \hil$ is a positive map due to \autoref{lemma:ConstructingSampleMatricesIsCompletelyPositive}.
+Since conic combinations of positive maps are again positive and any convex combination is notably also a conic combination, this further ensures that also
+\begin{align}
+    \begin{split}
+        T : \lo(\hil) &\rightarrow \C^{\ell \times \ell}, \\
+        A &\mapsto \Big(\tr[\rho_{\text{in}} U_{j}^{\dagger} A U_{k}^{\vphantom{\dagger}}]\Big)_{j, k = 1}^{\ell}
+    \end{split}
+\end{align}
+is a positive map.
+Therefore,
+\begin{alignat*}{3}
+    &\mathbf{F}_{j k} &&\coloneqq T(\one)_{j k} &&= \tr[\rho_{\text{in}} U_{j}^{\dag} U_{k}^{\vphantom{\dagger}}] \\
+    &\mathbf{G}_{j k} &&\coloneqq T(\one - \projection_{\solspace})_{j k} &&= \tr[\rho_{\text{in}} U_{j}^{\dag} (\one - \projection_{\solspace}) U_{k}^{\vphantom{\dagger}}], \\
+    &\mathbf{H}_{j k} &&\coloneqq T(C)_{j k} &&= \tr[\rho_{\text{in}} U_{j}^{\dag} C U_{k}^{\vphantom{\dagger}}]
+\end{alignat*}
+are entries of $\ell \times \ell$ positive-semidefinite matrices $\mathbf{F}, \mathbf{G}, \mathbf{H}$.
+We have thus transformed the original problem to a potentially smaller SDP formulated over $\PSD_{\ell}$, whose solution gives an upper bound on the original problem:
+\begin{equation}\label{equation:CCOPMomMatSDP}
+    \begin{alignedat}{3}
+        &\min_{\mathbf{X} \in \PSD_\ell} &&\tr[\mathbf{H} \mathbf{X}]
+        \\
+        & \quad \text{s.t.} &&\,\mathhphantomdisplay{\tr[\mathbf{G} \mathbf{X}]}{\tr[\mathbf{F} \mathbf{X}]} = 1,
+        \\
+        & &&\tr[\mathbf{G} \mathbf{X}] = 0.
+    \end{alignedat}
+\end{equation}
+
+As a special case of the complex Bavinok-Pataki rank bound~\cite{Huang2007ComplexMatrixDecompositionAndQuadraticProgramming}, the optimal solution to \eqref{equation:CCOPMomMatSDP} will be attained especially at a rank-one matrix $\mathbf{X}_{\text{opt}}$.
+The latter may then be translated into a parameter vector $\bm{\alpha} \in \C^{\ell}$ to reproduce the solution on the quantum device.
+More generally, the optimum for \eqref{equation:CCOPSDP} is attained at a pure state.
+
+For the unlikely case that \hyperref[assumption:LinearIndependence]{Assumption} cannot be guaranteed, we conclude with a scenario which does not require $\mathbf{F}$ to be non-singular for bringing \eqref{equation:CCOPMomMatSDP} into the form \eqref{equation:GenQCPParameterOptimisationRealImplicit} by first principles.
+Consider a rank-one solution $\mathbf{X} = \bm{x} \bm{x}^{\dag}$, and let $\bm{x} = \bm{x}^{\parallel} + \bm{x}^{\perp}$, where $\bm{x}^{\parallel}$ and $\bm{x}^{\perp}$ are the projections of $\bm{x}$ onto $\ker \mathbf{F}$ and its orthogonal complement, respectively.
+
+\begin{proposition}\label{proposition:SDPtoQCQP}
+    If $0 \preceq \mathbf{H} \preceq \mathbf{F}$, \eqref{equation:CCOPMomMatSDP} is equivalent to the quadratic optimisation task \eqref{equation:GenQCPParameterOptimisationRealImplicit} with $\bm{x} \in (\ker \mathbf{F})^{\perp}$.
+\end{proposition}
+
+\begin{proof}
+    For any $\bm{x} \in \ker \mathbf{F}$, $0 \preceq \mathbf{H} \preceq \mathbf{F}$ implies
+    \begin{equation}
+        0 \leq \bm{x}^{\dag} (\mathbf{F} - \mathbf{H}) \bm{x} = - \bm{x}^{\dag} \mathbf{H} \bm{x} \leq 0
+    \end{equation}
+    and thus, $\ker \mathbf{F} \subseteq \ker \mathbf{H}$.
+    It therefore holds that
+    \begin{align*}
+        \tr[\mathbf{H} \mathbf{X}] &= (\bm{x}^{\perp})^{\dag} \mathbf{H} \bm{x}^{\perp} +(\bm{x}^{\parallel})^{\dag} \mathbf{H} \bm{x}^{\parallel} + 2 (\bm{x}^{\perp})^{\dag} \mathbf{H} \bm{x}^{\parallel} \\
+        &= (\bm{x}^{\perp})^{\dag} \mathbf{H} \bm{x}^{\perp},
+    \end{align*}
+    since $\bm{x}^{\parallel} \in \ker \mathbf{F} \subseteq \ker \mathbf{H}$.
+    If $\mathbf{X} = \bm{x} \bm{x}^{\dag}$ is an optimal solution to \eqref{equation:CCOPMomMatSDP}, then so is $\bm{x}^{\perp} (\bm{x}^{\perp})^{\dag}$, whereby $\bm{x}^{\perp} \in (\ker \mathbf{F})^{\perp}$.
+\end{proof}
+
+For the SDP \eqref{equation:CCOPSDP}, \autoref{proposition:SDPtoQCQP} suggests to rescale the objective Hamiltonian such that $C \preceq \one$.
+This can be achieved, e.g., by considering any upper-bound on the CCOP's objective function\footnote{
+    Trivial upper bounds are readily available even for most NP problems.
+    For example, for the Travelling Salesperson Problem, one may sum up the $n$ largest weights,
+    and for the knapsack problem, one can sum up all item profits.
+} to divide all objective values by.
+To understand that this already suffices for \eqref{equation:CCOPMomMatSDP} to satisfy the prerequisites of \autoref{proposition:SDPtoQCQP} as well, we note that $T(F) - T(C) \succeq 0$ if $F - C \succeq 0$ since $T$ is linear.
+
+
+\section{\label{section:DiscussionAndConclusion}Discussion and Conclusions}
+
+In this article, we have introduced a natural extension of recent proposals for non-unitary parametrised quantum circuits (PQCs) for unconstrained/soft-constrained to general hard-constrained combinatorial optimisation problems.
+With this we are aiming at a unified framework for addressing arbitrarily-constrained combinatorial optimisation problems already on quantum devices with short to medium coherence times.
+However, our approach also finds applicability on far-term devices which may still outsource suitable subroutines to CPUs.
+Like its predecessors, our hybrid framework introduces an ansatz class reachable by (non-unitary) linear combinations of unitaries, parametrised by a complex coefficient vector, an ansatz that naturally mitigates the effect of barren plateaus and local minima.
+It also formulates the task of minimising the objective Hamiltonian's expectation value over this ansatz class as a classical optimisation over a vector space much smaller than the underlying Hilbert space of the quantum system.
+Previous methods formulated a generalised eigenvalue problem (GEP) for the unconstrained case or, more generally, a semidefinite program.
+Within this article, we extend the derivation of a GEP for the constrained case and also fill some gaps in prior derivations with mathematical rigour.
+This problem transformation requires recording several expectation values and state overlaps, for which we introduce a specialised measurement protocol, solely based on sampling bit strings from the main register and applying the classical objective function and a classical feasibility oracle.
+In fact, the objective Hamiltonian does not even have to be implemented on the quantum computer.
+
+Our framework draws inspiration not only from preceding non-unitary methods, but also from the Quantum Alternating Operator Ansatz (QAOA) which first gave a formal treatment of ensuring hard-constraints with PQCs.
+One of the QAOA's biggest strengths---its general formalism---is also its major drawback:
+There is no universal design pattern for constructing feasibility-preserving and well-mixing PQCs.
+With this work, we restore out-of-the-box applicability by integrating the classical objective function and feasibility oracle into the framework;
+yet, our approach is universally applicable, sharing this utmost important feature with the QAOA.
+
+With this article, we have laid the foundation for a unified framework.
+Further theoretical strengthening as well as extensive numerical experiments are crucial.
+We are currently preparing a high-performant simulator, specifically tailored to applying linear combinations of unitaries to arbitrary input states, with which we will further gauge the performance of our framework on prominent examples such as the Travelling Salesperson Problem.
+
+\IEEEtriggeratref{26}
+\bibliographystyle{IEEEtran}
+\bibliography{IEEEabrv,bibliography}
+
+\end{document}

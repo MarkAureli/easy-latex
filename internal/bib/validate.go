@@ -206,7 +206,7 @@ func buildCacheEntry(e Entry, raw cacheEntry, source, rawURL string) cacheEntry 
 type WriteOptions struct {
 	AbbreviateJournals  bool
 	BraceTitles         bool
-	IEEEFormat          bool
+	ArxivAsUnpublished  bool
 	MaxAuthors          int
 	AbbreviateFirstName bool
 	UrlFromDOI          bool
@@ -240,7 +240,7 @@ func WriteBibFromCache(path string, citeKeys []string, auxDir string, opts Write
 
 		normalizeEntryFields(&e, opts.UrlFromDOI)
 
-		if opts.IEEEFormat && e.Type == "misc" && findArxivID(e) != "" {
+		if opts.ArxivAsUnpublished && e.Type == "misc" && findArxivID(e) != "" {
 			transformArxivMiscToUnpublished(&e)
 		}
 
@@ -254,7 +254,7 @@ func WriteBibFromCache(path string, citeKeys []string, auxDir string, opts Write
 			}
 		}
 
-		if opts.BraceTitles || opts.IEEEFormat {
+		if opts.BraceTitles {
 			if title := FieldValue(e, "title"); title != "" {
 				SetField(&e, "title", "{{"+title+"}}")
 			}
