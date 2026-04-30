@@ -151,6 +151,21 @@ func LoadCacheKeys(auxDir string) []string {
 	return keys
 }
 
+// RemoveEntryFromCache deletes the entry with the given key from the bib cache.
+// Returns true if the key existed and was removed, false if not found.
+func RemoveEntryFromCache(key, auxDir string) (bool, error) {
+	c, err := loadCacheStrict(auxDir)
+	if err != nil {
+		return false, err
+	}
+	if _, ok := c[key]; !ok {
+		return false, nil
+	}
+	delete(c, key)
+	saveCache(auxDir, c, nil)
+	return true, nil
+}
+
 // CacheEntryInfo holds summary information about a cached bib entry.
 type CacheEntryInfo struct {
 	Key    string

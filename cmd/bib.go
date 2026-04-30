@@ -38,12 +38,21 @@ var bibParseCmd = &cobra.Command{
 	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
+var bibRemoveCmd = &cobra.Command{
+	Use:               "remove <key>",
+	Short:             "Remove an entry from the bib cache",
+	Args:              cobra.ExactArgs(1),
+	RunE:              runBibRemove,
+	ValidArgsFunction: bibKeyCompletion,
+}
+
 func init() {
 	bibListCmd.Flags().Bool("cited", false, "Show only entries referenced in .tex files")
 	bibListCmd.Flags().Bool("uncited", false, "Show only entries not referenced in .tex files")
 	bibCmd.AddCommand(bibListCmd)
 	bibCmd.AddCommand(bibAddCmd)
 	bibCmd.AddCommand(bibParseCmd)
+	bibCmd.AddCommand(bibRemoveCmd)
 }
 
 func runBibList(cmd *cobra.Command, args []string) error {
@@ -166,6 +175,27 @@ func runBibAdd(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Added %q to bib cache.\n", key)
 	return nil
+}
+
+func runBibRemove(cmd *cobra.Command, args []string) error {
+	key := args[0]
+	removed, err := bib.RemoveEntryFromCache(key, auxDir)
+	if err != nil {
+		return err
+	}
+	if !removed {
+		fmt.Fprintf(cmd.ErrOrStderr(), "[bib] warning: %q not found in bib cache\n", key)
+		return nil
+	}
+	fmt.Printf("Removed %q from bib cache.\n", key)
+	return nil
+}
+
+func bibKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) >= 1 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return bib.LoadCacheKeys(auxDir), cobra.ShellCompDirectiveNoFileComp
 }
 
 func runBibParse(cmd *cobra.Command, args []string) error {
