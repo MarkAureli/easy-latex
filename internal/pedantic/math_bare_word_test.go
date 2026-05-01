@@ -55,6 +55,12 @@ func TestCheckMathBareWord(t *testing.T) {
 		// begin/end env names exempt
 		{"begin env name", `\begin{equation}x = 5\end{equation}`, 0},
 		{"begin cases inside math", `\begin{align}\begin{cases}x\end{cases}\end{align}`, 0},
+		// hspace/vspace length args exempt
+		{"hspace cm", `$x \hspace{2cm} y$`, 0},
+		{"hspace em", `$x \hspace{1em} y$`, 0},
+		{"hspace star", `$x \hspace*{2cm} y$`, 0},
+		{"vspace cm", `$x \vspace{2cm} y$`, 0},
+		{"vspace star", `$x \vspace*{1ex} y$`, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

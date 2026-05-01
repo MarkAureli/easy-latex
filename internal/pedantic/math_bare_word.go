@@ -19,11 +19,13 @@ func init() {
 //   - explicit text boxes: \mbox, \hbox, \intertext
 //   - upright / sans / typewriter math fonts: \mathrm, \mathsf, \mathtt, \mathit
 //   - identifier arguments: \label{…}, \begin{…}, \end{…}
+//   - spacing lengths: \hspace{…}, \hspace*{…}, \vspace{…}, \vspace*{…}
 func isArgSkipCmd(name string) bool {
 	switch name {
 	case "mbox", "hbox", "intertext",
 		"mathrm", "mathsf", "mathtt", "mathit",
-		"label", "begin", "end":
+		"label", "begin", "end",
+		"hspace", "vspace":
 		return true
 	}
 	return strings.HasPrefix(name, "text")
@@ -57,7 +59,11 @@ func checkMathBareWord(path string, lines []string) []Diagnostic {
 				for i < len(line) && isASCIILetter(line[i]) {
 					i++
 				}
-				if isArgSkipCmd(line[cmdStart:i]) && i < len(line) && line[i] == '{' {
+				cmdName := line[cmdStart:i]
+				if i < len(line) && line[i] == '*' {
+					i++
+				}
+				if isArgSkipCmd(cmdName) && i < len(line) && line[i] == '{' {
 					depth := 1
 					i++ // consume opening {
 					for i < len(line) && depth > 0 {
