@@ -330,6 +330,18 @@ func escapeUnderscore(v string) string {
 	return b.String()
 }
 
+// unescapeFieldValue reverses the LaTeX escaping applied by formatEntry,
+// converting escaped sequences back to their raw Unicode/ASCII forms.
+// Used when reading field values from .bib files into the cache.
+func unescapeFieldValue(v string) string {
+	v = strings.ReplaceAll(v, `\textasciitilde{}`, "~")
+	v = strings.ReplaceAll(v, `\_`, "_")
+	v = strings.ReplaceAll(v, `\&`, "&")
+	v = strings.ReplaceAll(v, `\%`, "%")
+	v = strings.ReplaceAll(v, `\#`, "#")
+	return v
+}
+
 // sortedFields returns fields in canonical order for the given entry type,
 // with any unrecognized fields appended in their original order.
 func sortedFields(entryType string, fields []Field) []Field {

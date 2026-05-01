@@ -94,7 +94,7 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 			continue
 		}
 		e := item.Entry
-		rawURL := FieldValue(e, "url")
+		rawURL := unescapeFieldValue(FieldValue(e, "url"))
 		doi := findDOI(e)
 		arxivID := findArxivID(e)
 
@@ -143,7 +143,7 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 			fields := make(map[string]string, len(e.Fields))
 			for _, f := range e.Fields {
 				if v := FieldValue(e, f.Name); v != "" {
-					fields[f.Name] = v
+					fields[f.Name] = unescapeFieldValue(v)
 				}
 			}
 			delete(fields, "url")

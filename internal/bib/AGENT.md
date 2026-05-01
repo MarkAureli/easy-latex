@@ -91,6 +91,8 @@ Produced by `AllocateCacheEntries` when canonical key differs from bib file key.
 
 `escapeTilde(s)` replaces unescaped `~` with `\textasciitilde{}` so LaTeX does not treat it as a non-breaking space.
 
+`unescapeFieldValue(s)` reverses all the above escaping — used by `allocateBibFile` when reading field values from `.bib` files into the cache so raw values are stored (escaping only on output).
+
 ## Key generation (`key.go`)
 
 Canonical key: `{LastName}{Year}{Title}` — CamelCase, LaTeX accents→ASCII, math stripped.
@@ -147,7 +149,7 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 |---|---|
 | `parse.go` | `ParseFile`, `Entry`, `Field`, `Item`, `FieldValue`, `SetField` |
 | `key.go` | `GenerateKey`, `assignCanonicalKeys`, `latexToASCII`, accent maps |
-| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand`, `escapeHash`, `escapePercent`, `escapeTilde`, `escapeUnicode`, `escapeUnderscore`, `unicodeToLaTeX` |
+| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand`, `escapeHash`, `escapePercent`, `escapeTilde`, `escapeUnicode`, `escapeUnderscore`, `unescapeFieldValue`, `unicodeToLaTeX` |
 | `author.go` | `formatAuthorField`, `formatSingleAuthor`, `abbreviateGivenNames`, `normalizeAllCapsName`, `initialOf`, `splitByAnd` |
 | `validate.go` | `Version`, `WriteOptions`, `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation |
 | `logger.go` | `Logger` interface, `nopLogger`, `logOrNop`, `stderrLogger` |

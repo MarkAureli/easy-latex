@@ -277,6 +277,26 @@ func TestEscapePercent(t *testing.T) {
 	}
 }
 
+// ── unescapeFieldValue ────────────────────────────────────────────────────────
+
+func TestUnescapeFieldValue(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{`foo\_bar`, "foo_bar"},
+		{`50\% yield`, "50% yield"},
+		{`AT\&T`, "AT&T"},
+		{`page\#section`, "page#section"},
+		{`example.com/\textasciitilde{}user`, "example.com/~user"},
+		{`multi\_and\%mixed`, "multi_and%mixed"},
+		{"no escapes", "no escapes"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := unescapeFieldValue(c.in); got != c.want {
+			t.Errorf("unescapeFieldValue(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // ── stripNonEscapedBraces ─────────────────────────────────────────────────────
 
 func TestStripNonEscapedBraces(t *testing.T) {
