@@ -93,7 +93,7 @@ func formatEntry(e Entry) string {
 
 	for _, f := range fields {
 		pad := strings.Repeat(" ", maxLen-len(f.Name))
-		fmt.Fprintf(&buf, "  %s%s = %s,\n", f.Name, pad, escapePercent(escapeUnderscore(escapeAmpersand(escapeUnicode(f.Value)))))
+		fmt.Fprintf(&buf, "  %s%s = %s,\n", f.Name, pad, escapeTilde(escapeHash(escapePercent(escapeUnderscore(escapeAmpersand(escapeUnicode(f.Value)))))))
 	}
 
 	buf.WriteString("}\n")
@@ -269,6 +269,42 @@ func escapePercent(v string) string {
 	for i := 0; i < len(v); i++ {
 		if v[i] == '%' && (i == 0 || v[i-1] != '\\') {
 			b.WriteString(`\%`)
+		} else {
+			b.WriteByte(v[i])
+		}
+	}
+	return b.String()
+}
+
+// escapeHash replaces unescaped # with \# in a bib field value so that
+// LaTeX does not interpret them as macro parameter delimiters.
+func escapeHash(v string) string {
+	if !strings.Contains(v, "#") {
+		return v
+	}
+	var b strings.Builder
+	b.Grow(len(v) + 4)
+	for i := 0; i < len(v); i++ {
+		if v[i] == '#' && (i == 0 || v[i-1] != '\\') {
+			b.WriteString(`\#`)
+		} else {
+			b.WriteByte(v[i])
+		}
+	}
+	return b.String()
+}
+
+// escapeTilde replaces unescaped ~ with \textasciitilde{} in a bib field value
+// so that LaTeX does not interpret it as a non-breaking space.
+func escapeTilde(v string) string {
+	if !strings.Contains(v, "~") {
+		return v
+	}
+	var b strings.Builder
+	b.Grow(len(v) + 16)
+	for i := 0; i < len(v); i++ {
+		if v[i] == '~' && (i == 0 || v[i-1] != '\\') {
+			b.WriteString(`\textasciitilde{}`)
 		} else {
 			b.WriteByte(v[i])
 		}

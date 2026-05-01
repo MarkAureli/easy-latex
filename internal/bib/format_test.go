@@ -223,6 +223,42 @@ func TestEscapeUnderscore(t *testing.T) {
 	}
 }
 
+// ── escapeHash ────────────────────────────────────────────────────────────────
+
+func TestEscapeHash(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"no hash", "no hash"},
+		{"example.com/page#section", `example.com/page\#section`},
+		{"a#b#c", `a\#b\#c`},
+		{`already\#escaped`, `already\#escaped`},
+		{`mixed#and\#escaped`, `mixed\#and\#escaped`},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := escapeHash(c.in); got != c.want {
+			t.Errorf("escapeHash(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// ── escapeTilde ───────────────────────────────────────────────────────────────
+
+func TestEscapeTilde(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"no tilde", "no tilde"},
+		{"example.com/~user", `example.com/\textasciitilde{}user`},
+		{"a~b~c", `a\textasciitilde{}b\textasciitilde{}c`},
+		{`already\~escaped`, `already\~escaped`},
+		{`mixed~and\~escaped`, `mixed\textasciitilde{}and\~escaped`},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := escapeTilde(c.in); got != c.want {
+			t.Errorf("escapeTilde(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // ── escapePercent ─────────────────────────────────────────────────────────────
 
 func TestEscapePercent(t *testing.T) {

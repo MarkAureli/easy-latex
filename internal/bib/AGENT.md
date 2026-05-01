@@ -87,6 +87,10 @@ Produced by `AllocateCacheEntries` when canonical key differs from bib file key.
 
 `escapePercent(s)` replaces unescaped `%` with `\%` in bib field values so BibTeX does not treat rest of line as comment. Applied only on `.bib` output; cache stores raw values.
 
+`escapeHash(s)` replaces unescaped `#` with `\#` so LaTeX does not treat it as a macro parameter delimiter.
+
+`escapeTilde(s)` replaces unescaped `~` with `\textasciitilde{}` so LaTeX does not treat it as a non-breaking space.
+
 ## Key generation (`key.go`)
 
 Canonical key: `{LastName}{Year}{Title}` — CamelCase, LaTeX accents→ASCII, math stripped.
@@ -143,7 +147,7 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 |---|---|
 | `parse.go` | `ParseFile`, `Entry`, `Field`, `Item`, `FieldValue`, `SetField` |
 | `key.go` | `GenerateKey`, `assignCanonicalKeys`, `latexToASCII`, accent maps |
-| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand`, `escapePercent`, `escapeUnicode`, `escapeUnderscore`, `unicodeToLaTeX` |
+| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand`, `escapeHash`, `escapePercent`, `escapeTilde`, `escapeUnicode`, `escapeUnderscore`, `unicodeToLaTeX` |
 | `author.go` | `formatAuthorField`, `formatSingleAuthor`, `abbreviateGivenNames`, `normalizeAllCapsName`, `initialOf`, `splitByAnd` |
 | `validate.go` | `Version`, `WriteOptions`, `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation |
 | `logger.go` | `Logger` interface, `nopLogger`, `logOrNop`, `stderrLogger` |
