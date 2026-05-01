@@ -85,6 +85,8 @@ Produced by `AllocateCacheEntries` when canonical key differs from bib file key.
 
 `escapeUnderscore(s)` replaces unescaped `_` with `\_` in bib field values. Applied only on `.bib` output (`formatEntry`); cache (`bib.json`) stores raw values.
 
+`escapePercent(s)` replaces unescaped `%` with `\%` in bib field values so BibTeX does not treat rest of line as comment. Applied only on `.bib` output; cache stores raw values.
+
 ## Key generation (`key.go`)
 
 Canonical key: `{LastName}{Year}{Title}` — CamelCase, LaTeX accents→ASCII, math stripped.
@@ -141,7 +143,7 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 |---|---|
 | `parse.go` | `ParseFile`, `Entry`, `Field`, `Item`, `FieldValue`, `SetField` |
 | `key.go` | `GenerateKey`, `assignCanonicalKeys`, `latexToASCII`, accent maps |
-| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand`, `escapeUnicode`, `escapeUnderscore`, `unicodeToLaTeX` |
+| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand`, `escapePercent`, `escapeUnicode`, `escapeUnderscore`, `unicodeToLaTeX` |
 | `author.go` | `formatAuthorField`, `formatSingleAuthor`, `abbreviateGivenNames`, `normalizeAllCapsName`, `initialOf`, `splitByAnd` |
 | `validate.go` | `Version`, `WriteOptions`, `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation |
 | `logger.go` | `Logger` interface, `nopLogger`, `logOrNop`, `stderrLogger` |

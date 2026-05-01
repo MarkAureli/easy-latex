@@ -223,6 +223,24 @@ func TestEscapeUnderscore(t *testing.T) {
 	}
 }
 
+// ── escapePercent ─────────────────────────────────────────────────────────────
+
+func TestEscapePercent(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"no percent", "no percent"},
+		{"50% yield", `50\% yield`},
+		{"a%b%c", `a\%b\%c`},
+		{`already\%escaped`, `already\%escaped`},
+		{`mixed%and\%escaped`, `mixed\%and\%escaped`},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := escapePercent(c.in); got != c.want {
+			t.Errorf("escapePercent(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // ── stripNonEscapedBraces ─────────────────────────────────────────────────────
 
 func TestStripNonEscapedBraces(t *testing.T) {
