@@ -49,6 +49,12 @@ func TestCheckMathBareWord(t *testing.T) {
 		{"text nested braces", `$\text{a{b}c} = 5$`, 0},
 		// intertext exempt
 		{"intertext", `\intertext{some text here}`, 0},
+		// label argument exempt
+		{"label", `$x = 5 \label{eq:pauli}$`, 0},
+		{"label bare name", `$x = 5 \label{myeq}$`, 0},
+		// begin/end env names exempt
+		{"begin env name", `\begin{equation}x = 5\end{equation}`, 0},
+		{"begin cases inside math", `\begin{align}\begin{cases}x\end{cases}\end{align}`, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
