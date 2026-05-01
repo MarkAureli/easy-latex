@@ -83,7 +83,7 @@ func checkMathBareWord(path string, lines []string) []Diagnostic {
 					diags = append(diags, Diagnostic{
 						File:    path,
 						Line:    li + 1,
-						Message: fmt.Sprintf("bare word %q in math mode; use \\text{...} or a macro", line[start:i]),
+						Message: fmt.Sprintf("bare word %q in math mode", line[start:i]),
 					})
 				}
 				continue
