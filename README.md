@@ -184,7 +184,11 @@ Each pedantic check is a top-level bool key. Enable to enforce style rules durin
 ```
 $ el config set no-block-citations          # enable a check
 $ el config unset no-block-citations        # disable (sets to false)
+$ el config set pedantic                    # enable every check at once
+$ el config unset pedantic                  # disable every check at once
 ```
+
+`pedantic` is a convenience alias only — it expands to `set`/`unset` on every registered check and is not stored under its own name.
 
 Static (source-phase) checks can also be run standalone, without compiling, via `el check`:
 

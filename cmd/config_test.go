@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/MarkAureli/easy-latex/internal/pedantic"
 	"github.com/spf13/cobra"
 )
 
@@ -497,6 +498,69 @@ func TestConfigSet_GlobalNoFile(t *testing.T) {
 	cfg := readGlobalConfig(t, home)
 	if cfg.Bib.RetryTimeout == nil || *cfg.Bib.RetryTimeout != false {
 		t.Errorf("RetryTimeout = %v, want &false", cfg.Bib.RetryTimeout)
+	}
+}
+
+// ── pedantic alias ───────────────────────────────────────────────────────────
+
+func TestConfigSet_PedanticAlias_EnablesAllChecks(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"pedantic"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readConfig(t, dir)
+	for _, name := range pedantic.AllNames() {
+		v, ok := cfg.Pedantic.Checks[name]
+		if !ok || v == nil || *v != true {
+			t.Errorf("check %q = %v, want &true", name, v)
+		}
+	}
+	if _, ok := cfg.Pedantic.Checks["pedantic"]; ok {
+		t.Error("pedantic alias must not be persisted under its own name")
+	}
+}
+
+func TestConfigSet_PedanticAlias_ExplicitFalse(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	if err := invokeConfigSet(t, []string{"pedantic", "false"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readConfig(t, dir)
+	for _, name := range pedantic.AllNames() {
+		v, ok := cfg.Pedantic.Checks[name]
+		if !ok || v == nil || *v != false {
+			t.Errorf("check %q = %v, want &false", name, v)
+		}
+	}
+}
+
+func TestConfigUnset_PedanticAlias(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "main.tex")
+	chdir(t, dir)
+
+	invokeConfigSet(t, []string{"pedantic"})
+	if err := invokeConfigUnset(t, []string{"pedantic"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cfg := readConfig(t, dir)
+	for _, name := range pedantic.AllNames() {
+		v, ok := cfg.Pedantic.Checks[name]
+		if !ok || v == nil || *v != false {
+			t.Errorf("check %q after unset = %v, want &false", name, v)
+		}
+	}
+}
+
+func TestFindField_PedanticAliasNotAField(t *testing.T) {
+	if findField("pedantic") != nil {
+		t.Error("pedantic alias must not appear in configFields")
 	}
 }
 

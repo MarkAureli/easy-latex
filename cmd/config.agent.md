@@ -44,6 +44,17 @@ Pedantic checks (stored under `pedantic.checks`, one bool per name):
 
 Pedantic check keys are generated dynamically from the pedantic registry (`pedantic.AllNames()`). No naming collisions with bib keys.
 
+### `pedantic` (alias)
+
+`el config set pedantic [value]` and `el config unset pedantic` apply the
+operation to every registered pedantic check at once. Equivalent to running
+`el config set <check> [value]` (or `unset`) for each `<check>` in
+`pedantic.AllNames()`. The alias is not itself a `configField`: it has no
+display row in `el config list` and is not persisted under its own name —
+only the underlying per-check entries in `pedantic.checks` are written.
+Recognised by string match against `pedanticAliasKey` in `runConfigSet` /
+`runConfigUnset` before the normal `findField` lookup.
+
 ## Config resolution order
 
 local `.el/config.json` > global `~/.elconfig.json` > built-in default.

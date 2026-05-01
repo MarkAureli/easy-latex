@@ -232,12 +232,18 @@ func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, c
 	if len(args) >= 1 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	keys := make([]string, len(configFields))
-	for i, f := range configFields {
-		keys[i] = f.key
+	keys := make([]string, 0, len(configFields)+1)
+	for _, f := range configFields {
+		keys = append(keys, f.key)
 	}
+	keys = append(keys, pedanticAliasKey)
 	return keys, cobra.ShellCompDirectiveNoFileComp
 }
+
+// pedanticAliasKey is a convenience alias that toggles every registered
+// pedantic check at once. It is not a configField — it has no display entry
+// and is not stored in the config file under its own name.
+const pedanticAliasKey = "pedantic"
 
 // ── Display ──────────────────────────────────────────────────────────────────
 
@@ -322,14 +328,27 @@ func loadTargetConfig(cmd *cobra.Command) (*Config, func(*Config) error, error) 
 
 func runConfigSet(cmd *cobra.Command, args []string) error {
 	key := args[0]
-	f := findField(key)
-	if f == nil {
-		return fmt.Errorf("unknown config key: %q\nValid keys: %s", key, validKeys())
-	}
-
 	val := ""
 	if len(args) > 1 {
 		val = args[1]
+	}
+
+	if key == pedanticAliasKey {
+		cfg, save, err := loadTargetConfig(cmd)
+		if err != nil {
+			return err
+		}
+		for _, pf := range pedanticConfigFields() {
+			if err := pf.setVal(cfg, val); err != nil {
+				return err
+			}
+		}
+		return save(cfg)
+	}
+
+	f := findField(key)
+	if f == nil {
+		return fmt.Errorf("unknown config key: %q\nValid keys: %s", key, validKeys())
 	}
 	if !f.isBool && val == "" {
 		return fmt.Errorf("key %q requires a value", key)
@@ -347,6 +366,18 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 
 func runConfigUnset(cmd *cobra.Command, args []string) error {
 	key := args[0]
+
+	if key == pedanticAliasKey {
+		cfg, save, err := loadTargetConfig(cmd)
+		if err != nil {
+			return err
+		}
+		for _, pf := range pedanticConfigFields() {
+			pf.unset(cfg)
+		}
+		return save(cfg)
+	}
+
 	f := findField(key)
 	if f == nil {
 		return fmt.Errorf("unknown config key: %q\nValid keys: %s", key, validKeys())
