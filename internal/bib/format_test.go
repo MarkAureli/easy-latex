@@ -205,6 +205,24 @@ func TestFormatEntry_EscapesUnicode(t *testing.T) {
 	}
 }
 
+// ── escapeUnderscore ─────────────────────────────────────────────────────────
+
+func TestEscapeUnderscore(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"no underscores", "no underscores"},
+		{"foo_bar", `foo\_bar`},
+		{"multi_word_url", `multi\_word\_url`},
+		{`already\_escaped`, `already\_escaped`},
+		{`mixed_and\_escaped`, `mixed\_and\_escaped`},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := escapeUnderscore(c.in); got != c.want {
+			t.Errorf("escapeUnderscore(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // ── stripNonEscapedBraces ─────────────────────────────────────────────────────
 
 func TestStripNonEscapedBraces(t *testing.T) {

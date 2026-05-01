@@ -93,7 +93,7 @@ func formatEntry(e Entry) string {
 
 	for _, f := range fields {
 		pad := strings.Repeat(" ", maxLen-len(f.Name))
-		fmt.Fprintf(&buf, "  %s%s = %s,\n", f.Name, pad, escapeAmpersand(escapeUnicode(f.Value)))
+		fmt.Fprintf(&buf, "  %s%s = %s,\n", f.Name, pad, escapeUnderscore(escapeAmpersand(escapeUnicode(f.Value))))
 	}
 
 	buf.WriteString("}\n")
@@ -251,6 +251,24 @@ func escapeAmpersand(v string) string {
 	for i := 0; i < len(v); i++ {
 		if v[i] == '&' && (i == 0 || v[i-1] != '\\') {
 			b.WriteString(`\&`)
+		} else {
+			b.WriteByte(v[i])
+		}
+	}
+	return b.String()
+}
+
+// escapeUnderscore replaces unescaped _ with \_ in a bib field value so that
+// LaTeX does not interpret them as subscript operators in text mode.
+func escapeUnderscore(v string) string {
+	if !strings.Contains(v, "_") {
+		return v
+	}
+	var b strings.Builder
+	b.Grow(len(v) + 4)
+	for i := 0; i < len(v); i++ {
+		if v[i] == '_' && (i == 0 || v[i-1] != '\\') {
+			b.WriteString(`\_`)
 		} else {
 			b.WriteByte(v[i])
 		}

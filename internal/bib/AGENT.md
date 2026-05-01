@@ -81,7 +81,9 @@ Produced by `AllocateCacheEntries` when canonical key differs from bib file key.
 
 ## Unicode→LaTeX escaping (`format.go`)
 
-`escapeUnicode(s)` replaces Unicode accented characters with LaTeX escape sequences at render time (inside `formatEntry`). Applied to all field values alongside `escapeAmpersand`. Map covers: acute, grave, circumflex, tilde, umlaut, macron, dot, caron, breve, ring, double acute, cedilla, ogonek, and standalone commands (ß, æ, œ, å, ø, ł, ð, þ, ŋ). Cache stores Unicode; escaping happens only on output.
+`escapeUnicode(s)` replaces Unicode accented characters with LaTeX escape sequences at render time (inside `formatEntry`). Applied to all field values alongside `escapeAmpersand` and `escapeUnderscore`. Map covers: acute, grave, circumflex, tilde, umlaut, macron, dot, caron, breve, ring, double acute, cedilla, ogonek, and standalone commands (ß, æ, œ, å, ø, ł, ð, þ, ŋ). Cache stores Unicode; escaping happens only on output.
+
+`escapeUnderscore(s)` replaces unescaped `_` with `\_` in bib field values. Applied only on `.bib` output (`formatEntry`); cache (`bib.json`) stores raw values.
 
 ## Key generation (`key.go`)
 
@@ -139,7 +141,7 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 |---|---|
 | `parse.go` | `ParseFile`, `Entry`, `Field`, `Item`, `FieldValue`, `SetField` |
 | `key.go` | `GenerateKey`, `assignCanonicalKeys`, `latexToASCII`, accent maps |
-| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand`, `escapeUnicode`, `unicodeToLaTeX` |
+| `format.go` | `canonicalOrder`, `RenderEntries`, `renderItems`, `formatEntry`, `sortedFields`, `stripNonEscapedBraces`, `escapeAmpersand`, `escapeUnicode`, `escapeUnderscore`, `unicodeToLaTeX` |
 | `author.go` | `formatAuthorField`, `formatSingleAuthor`, `abbreviateGivenNames`, `normalizeAllCapsName`, `initialOf`, `splitByAnd` |
 | `validate.go` | `Version`, `WriteOptions`, `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation |
 | `logger.go` | `Logger` interface, `nopLogger`, `logOrNop`, `stderrLogger` |
