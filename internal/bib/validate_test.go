@@ -308,6 +308,36 @@ func TestQueryCrossref_CorrectsMismatchedFields(t *testing.T) {
 	}
 }
 
+func TestQueryCrossref_UnescapesHTMLEntities(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(makeCrossrefJSON(
+			"Foo &amp; Bar &#8212; Baz", "O&amp;Brien", "John", "AT&amp;T Tech. J.",
+			"2023", "", "", "", "10.1/x",
+		))
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{Key: "X", Fields: []Field{{Name: "doi", Value: "{10.1/x}"}}}
+	_, raw, _, err := queryCrossref(e, "10.1/x", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := raw.Fields["title"]; got != "Foo & Bar — Baz" {
+		t.Errorf("title = %q, want %q", got, "Foo & Bar — Baz")
+	}
+	if got := raw.Fields["author"]; got != "O&Brien, John" {
+		t.Errorf("author = %q, want %q", got, "O&Brien, John")
+	}
+	if got := raw.Fields["journal"]; got != "AT&T Tech. J." {
+		t.Errorf("journal = %q, want %q", got, "AT&T Tech. J.")
+	}
+}
+
 func TestQueryCrossref_NoChangeWhenFieldsMatch(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -3,6 +3,7 @@ package bib
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -115,7 +116,7 @@ func queryCrossref(e Entry, doi string, log Logger) (*Entry, cacheEntry, string,
 		// cached title is already in its final pre-transformation state.
 		// cleanCrossrefTitle runs after brace stripping to convert MathML and
 		// Crossref face markup (e.g. <i>, <sub>) to LaTeX equivalents.
-		raw.Fields["title"] = cleanCrossrefTitle(stripNonEscapedBraces(m.Title[0]))
+		raw.Fields["title"] = cleanCrossrefTitle(stripNonEscapedBraces(html.UnescapeString(m.Title[0])))
 		if applyField(&updated, "title", raw.Fields["title"]) {
 			corrections = append(corrections, "title")
 		}
@@ -129,7 +130,7 @@ func queryCrossref(e Entry, doi string, log Logger) (*Entry, cacheEntry, string,
 	if len(m.ContainerTitle) > 0 {
 		// Map container-title to journal or booktitle based on entry type.
 		ctField := containerTitleField(bibType)
-		raw.Fields[ctField] = m.ContainerTitle[0]
+		raw.Fields[ctField] = html.UnescapeString(m.ContainerTitle[0])
 		if applyField(&updated, ctField, raw.Fields[ctField]) {
 			corrections = append(corrections, ctField)
 		}
@@ -141,25 +142,28 @@ func queryCrossref(e Entry, doi string, log Logger) (*Entry, cacheEntry, string,
 		}
 	}
 	if m.Volume != "" {
-		raw.Fields["volume"] = m.Volume
-		if applyField(&updated, "volume", m.Volume) {
+		v := html.UnescapeString(m.Volume)
+		raw.Fields["volume"] = v
+		if applyField(&updated, "volume", v) {
 			corrections = append(corrections, "volume")
 		}
 	}
 	if m.Issue != "" {
-		raw.Fields["number"] = m.Issue
-		if applyField(&updated, "number", m.Issue) {
+		v := html.UnescapeString(m.Issue)
+		raw.Fields["number"] = v
+		if applyField(&updated, "number", v) {
 			corrections = append(corrections, "number")
 		}
 	}
 	if m.Page != "" {
-		raw.Fields["pages"] = m.Page
-		if applyField(&updated, "pages", m.Page) {
+		v := html.UnescapeString(m.Page)
+		raw.Fields["pages"] = v
+		if applyField(&updated, "pages", v) {
 			corrections = append(corrections, "pages")
 		}
 	}
 	if m.DOI != "" {
-		raw.Fields["doi"] = strings.ToLower(m.DOI)
+		raw.Fields["doi"] = strings.ToLower(html.UnescapeString(m.DOI))
 		if applyField(&updated, "doi", raw.Fields["doi"]) {
 			corrections = append(corrections, "doi")
 		}
@@ -186,12 +190,12 @@ func formatCrossrefAuthors(authors []crossrefAuthor) string {
 	for _, a := range authors {
 		if hasGroup {
 			if a.Name != "" {
-				parts = append(parts, "{"+a.Name+"}")
+				parts = append(parts, "{"+html.UnescapeString(a.Name)+"}")
 			}
 			continue
 		}
-		family := normalizeAllCapsName(a.Family)
-		given := normalizeAllCapsName(a.Given)
+		family := normalizeAllCapsName(html.UnescapeString(a.Family))
+		given := normalizeAllCapsName(html.UnescapeString(a.Given))
 		switch {
 		case family != "" && given != "":
 			parts = append(parts, family+", "+given)
