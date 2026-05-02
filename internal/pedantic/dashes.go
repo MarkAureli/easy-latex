@@ -116,9 +116,111 @@ var (
 	reWordHy   = regexp.MustCompile(`(\w) - (\w)`)        // spaced hyphen between words
 )
 
+// argSkipMacros names macros whose first brace argument should be left
+// untouched by every dash rule. Class and package names commonly contain
+// digit-hyphen-digit (e.g. `revtex4-2`) which would otherwise be rewritten
+// by rule 4. File-inclusion macros take paths.
+var argSkipMacros = map[string]bool{
+	"documentclass":        true,
+	"usepackage":           true,
+	"RequirePackage":       true,
+	"LoadClass":            true,
+	"LoadClassWithOptions": true,
+	"WarningFilter":        true,
+	"PassOptionsToClass":   true,
+	"PassOptionsToPackage": true,
+	"input":                true,
+	"include":              true,
+	"includeonly":          true,
+	"InputIfFileExists":    true,
+	"IfFileExists":         true,
+}
+
+// findSkipRanges returns half-open byte ranges of macro-argument bodies
+// (between matching `{` and `}`) for macros listed in argSkipMacros.
+// Optional `[...]` option blocks between macro name and `{` are tolerated.
+func findSkipRanges(s string) [][2]int {
+	var out [][2]int
+	i := 0
+	for i < len(s) {
+		if s[i] != '\\' {
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(s) && isASCIILetter(s[j]) {
+			j++
+		}
+		if j == i+1 {
+			i++
+			continue
+		}
+		name := s[i+1 : j]
+		k := j
+		for k < len(s) && s[k] == '[' {
+			depth := 1
+			k++
+			for k < len(s) && depth > 0 {
+				switch s[k] {
+				case '[':
+					depth++
+				case ']':
+					depth--
+				}
+				k++
+			}
+		}
+		if k >= len(s) || s[k] != '{' {
+			i = j
+			continue
+		}
+		start := k + 1
+		end := start
+		depth := 1
+		for end < len(s) {
+			if s[end] == '{' {
+				depth++
+			} else if s[end] == '}' {
+				depth--
+				if depth == 0 {
+					break
+				}
+			}
+			end++
+		}
+		if argSkipMacros[name] {
+			out = append(out, [2]int{start, end})
+		}
+		if end >= len(s) {
+			i = end
+		} else {
+			i = end + 1
+		}
+	}
+	return out
+}
+
 // rewriteTextSpan applies rules 1,2,3b,4,5,6,7,8,9 with a fixpoint loop so
-// chained dashes (e.g. `1-2-3`, `a -- b -- c`) all collapse.
+// chained dashes (e.g. `1-2-3`, `a -- b -- c`) all collapse. Bodies of
+// argSkipMacros are passed through unchanged.
 func rewriteTextSpan(s string) string {
+	skips := findSkipRanges(s)
+	if len(skips) == 0 {
+		return rewriteTextChunk(s)
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	last := 0
+	for _, sk := range skips {
+		b.WriteString(rewriteTextChunk(s[last:sk[0]]))
+		b.WriteString(s[sk[0]:sk[1]])
+		last = sk[1]
+	}
+	b.WriteString(rewriteTextChunk(s[last:]))
+	return b.String()
+}
+
+func rewriteTextChunk(s string) string {
 	for range 8 {
 		prev := s
 		s = strings.ReplaceAll(s, uEnDash, "--")

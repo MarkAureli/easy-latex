@@ -159,6 +159,24 @@ func TestDashes_Detector(t *testing.T) {
 	}
 }
 
+func TestDashes_Fixer_SkipMacroArgs(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"\\documentclass{revtex4-2}", "\\documentclass{revtex4-2}"},
+		{"\\documentclass[10pt]{revtex4-2}", "\\documentclass[10pt]{revtex4-2}"},
+		{"\\usepackage{foo-bar2-3}", "\\usepackage{foo-bar2-3}"},
+		{"\\WarningFilter{revtex4-2}{Repeated}", "\\WarningFilter{revtex4-2}{Repeated}"},
+		{"\\input{chap1-2/intro}", "\\input{chap1-2/intro}"},
+		// rule still fires outside the skip range
+		{"\\documentclass{revtex4-2} pp. 10-20", "\\documentclass{revtex4-2} pp. 10--20"},
+	}
+	for _, c := range cases {
+		out, _ := fixDashes("t.tex", []string{c.in})
+		if out[0] != c.want {
+			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
+		}
+	}
+}
+
 func TestDashes_NoOpClean(t *testing.T) {
 	in := []string{
 		"well-known compound",
