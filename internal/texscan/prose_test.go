@@ -1,0 +1,120 @@
+package texscan
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestProseRuns_KeepsTextDropsCommentsMacrosBraces(t *testing.T) {
+	src := `Hello world. % a comment
+This \textbf{bold} text.`
+	runs := ProseRuns("f.tex", src, nil)
+	if len(runs) != 2 {
+		t.Fatalf("want 2 runs, got %d: %#v", len(runs), runs)
+	}
+	if !strings.Contains(runs[0].Text, "Hello world.") {
+		t.Errorf("run0 missing prose: %q", runs[0].Text)
+	}
+	if strings.Contains(runs[0].Text, "comment") {
+		t.Errorf("run0 leaked comment: %q", runs[0].Text)
+	}
+	if strings.Contains(runs[1].Text, "textbf") {
+		t.Errorf("run1 leaked macro name: %q", runs[1].Text)
+	}
+	if !strings.Contains(runs[1].Text, "bold") {
+		t.Errorf("run1 dropped arg text: %q", runs[1].Text)
+	}
+	// Column preservation: "world" in run0 starts at col 7 in source.
+	if idx := strings.Index(runs[0].Text, "world"); idx != 6 {
+		t.Errorf("col preservation broken: want offset 6, got %d in %q", idx, runs[0].Text)
+	}
+}
+
+func TestProseRuns_BlanksMath(t *testing.T) {
+	src := `Let $x = y$ be the root.`
+	runs := ProseRuns("f.tex", src, nil)
+	if len(runs) != 1 {
+		t.Fatalf("want 1 run, got %d", len(runs))
+	}
+	if strings.Contains(runs[0].Text, "x = y") {
+		t.Errorf("math content leaked: %q", runs[0].Text)
+	}
+	if !strings.Contains(runs[0].Text, "Let") || !strings.Contains(runs[0].Text, "root") {
+		t.Errorf("prose dropped: %q", runs[0].Text)
+	}
+}
+
+func TestProseRuns_BlanksDisplayMathEnv(t *testing.T) {
+	src := `Before.
+\begin{equation}
+  E = mc^2
+\end{equation}
+After.`
+	runs := ProseRuns("f.tex", src, nil)
+	// Lines 1 and 5 carry prose; lines 2-4 are math env (no prose bytes).
+	var prose []string
+	for _, r := range runs {
+		if s := strings.TrimSpace(r.Text); s != "" {
+			prose = append(prose, s)
+		}
+	}
+	if len(prose) != 2 || prose[0] != "Before." || prose[1] != "After." {
+		t.Errorf("unexpected prose: %#v", prose)
+	}
+}
+
+func TestProseRuns_IgnoreMacroArg(t *testing.T) {
+	src := `See \cite{Smith2020} for details.`
+	ign := map[string]bool{"cite": true}
+	runs := ProseRuns("f.tex", src, ign)
+	if len(runs) != 1 {
+		t.Fatalf("want 1 run, got %d", len(runs))
+	}
+	if strings.Contains(runs[0].Text, "Smith2020") {
+		t.Errorf("ignored macro arg leaked: %q", runs[0].Text)
+	}
+	if !strings.Contains(runs[0].Text, "details") {
+		t.Errorf("trailing prose dropped: %q", runs[0].Text)
+	}
+}
+
+func TestProseRuns_IgnoreMacroArgMultiline(t *testing.T) {
+	src := `Pre.
+\bibliography{
+  refs1,
+  refs2
+}
+Post.`
+	ign := map[string]bool{"bibliography": true}
+	runs := ProseRuns("f.tex", src, ign)
+	for _, r := range runs {
+		if strings.Contains(r.Text, "refs1") || strings.Contains(r.Text, "refs2") {
+			t.Errorf("multiline arg leaked on line %d: %q", r.Line, r.Text)
+		}
+	}
+}
+
+func TestProseRuns_VerbatimEnv(t *testing.T) {
+	src := `Outside.
+\begin{verbatim}
+recieve teh
+\end{verbatim}
+Done.`
+	runs := ProseRuns("f.tex", src, nil)
+	for _, r := range runs {
+		if strings.Contains(r.Text, "recieve") || strings.Contains(r.Text, "teh") {
+			t.Errorf("verbatim leaked on line %d: %q", r.Line, r.Text)
+		}
+	}
+}
+
+func TestProseRuns_LineLengthPreserved(t *testing.T) {
+	src := `Hello \emph{world} here.`
+	runs := ProseRuns("f.tex", src, nil)
+	if len(runs) != 1 {
+		t.Fatalf("want 1 run")
+	}
+	if len(runs[0].Text) != len(src) {
+		t.Errorf("line length not preserved: src=%d run=%d", len(src), len(runs[0].Text))
+	}
+}

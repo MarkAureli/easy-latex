@@ -159,7 +159,7 @@ $ el config set arxiv-as-unpublished     # bool without value → true
 $ el config set max-authors 3
 $ el config unset max-authors            # non-bool: removes from config
 $ el config unset brace-titles           # bool: sets to false
-$ el config set --global arxiv-as-unpublished  # writes to ~/.elconfig.json
+$ el config set --global arxiv-as-unpublished  # writes to ~/.config/easy-latex/config.json
 ```
 
 | Key | Type | Default | Effect |
@@ -212,6 +212,56 @@ $ el check --fix    # apply autofixes for fixable checks (see table below)
 | `math-bare-word` | no | Sequences of 2+ consecutive letters in inline or display math that are not a command and not inside a text/font wrapper (`\text{...}`, `\textbf{...}`, `\mathrm{...}`, `\mbox{...}`, …). Flags things like `$pauli = 5$`; `$\pauli = 5$` and `$\text{Pauli} = 5$` are fine. |
 | `dashes` | yes | Normalises hyphens, en-dashes, and em-dashes in text regions. Unicode dashes (`–`, `—`) are converted to their LaTeX equivalents (`--`, `---`); a Unicode minus (`−`) becomes `-` inside math and `$-$` in text. Numeric ranges (`pp. 10-20`, `pp. 10 --- 20`) are normalised to en-dashes (`pp. 10--20`). Runs of 4+ hyphens collapse to `---`. Spaces around an em-dash are stripped (`foo --- bar` → `foo---bar`). En-dashes between two non-digit words become tight em-dashes (`foo--bar` → `foo---bar`), unless both words start with an uppercase letter (so name pairs like `Bose--Einstein` are preserved). Spaced single hyphens between two non-digit words also become tight em-dashes (`foo - bar` → `foo---bar`), regardless of capitalisation. Math, verbatim environments, and comment tails are skipped. Brace arguments of class/package/file macros (`\documentclass`, `\usepackage`, `\RequirePackage`, `\LoadClass`, `\WarningFilter`, `\PassOptionsToClass`, `\PassOptionsToPackage`, `\input`, `\include`, `\includeonly`, `\InputIfFileExists`, `\IfFileExists`) are also left untouched so identifiers like `revtex4-2` are preserved. |
 | `no-math-linebreak` | no | Inline math (`$...$` or `\(...\)`) that spans multiple lines in the final PDF |
+| `spelling` | no | Words not in the hunspell dictionary for the configured language. Driven by the top-level `spelling` config key, **not** a per-check toggle (see below). |
+
+#### Spell-check
+
+Spell-check is opt-in via the top-level `spelling` config key:
+
+```
+$ el config set spelling en_GB        # British English
+$ el config set spelling en_US        # American English
+$ el config unset spelling            # off (default)
+$ el config set --global spelling en_US   # set the default for all projects
+```
+
+Local config wins over global, so a single project can override the global default by setting its own `spelling` value.
+
+Requires `hunspell` and the corresponding language dictionary to be installed on the host:
+
+- macOS: `brew install hunspell` (the formula installs the binary only — fetch dict files from the [LibreOffice dictionaries repo](https://github.com/LibreOffice/dictionaries) or the [hunspell-dictionaries](https://github.com/wooorm/dictionaries) project, and drop `en_GB.aff`/`en_GB.dic` (or `en_US.*`) into one of the directories listed by `hunspell -D`, e.g. `~/Library/Spelling/`).
+- Linux (Debian/Ubuntu): `sudo apt install hunspell hunspell-en-gb hunspell-en-us`.
+- Linux (Fedora): `sudo dnf install hunspell hunspell-en-GB hunspell-en-US`.
+
+If the binary or dictionary is missing, `el` prints a one-time warning and skips the spell-check (compile and other checks still run).
+
+##### Custom dictionaries
+
+User-maintained word lists are layered (all lists are merged at runtime):
+
+```
+${XDG_CONFIG_HOME:-~/.config}/easy-latex/spell/
+    en_GB.txt        # words accepted only when language is en_GB
+    en_US.txt        # words accepted only when language is en_US
+    common.txt       # words accepted for either language
+<repo>/.el/spell/
+    en_GB.txt        # project-local en_GB additions
+    en_US.txt        # project-local en_US additions
+    common.txt       # project-local language-agnostic additions
+```
+
+One word per line. Blank lines and `#` comments are ignored. Files that do not exist are silently skipped — start with whichever subset you need.
+
+##### Macro-arg ignore list
+
+By default `el` skips spell-checking the first brace argument of common citation, reference, file-include, package, and graphics macros (`\cite`, `\ref`, `\label`, `\input`, `\usepackage`, `\includegraphics`, …). Extend or override the defaults via:
+
+```
+${XDG_CONFIG_HOME:-~/.config}/easy-latex/spell/ignore.txt
+<repo>/.el/spell/ignore.txt
+```
+
+One macro name per line (without the leading `\`). Comments (`#`) and blank lines are ignored. Prefix a name with `!` to remove a default — e.g. `!url` re-enables spell-check inside `\url{…}` arguments.
 
 ### `el bib`
 

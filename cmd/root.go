@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
+	"github.com/MarkAureli/easy-latex/internal/pedantic"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +21,17 @@ type Config struct {
 	BibFiles []string       `json:"bib_files,omitempty"`
 	Bib      BibConfig      `json:"bib,omitzero"`
 	Pedantic PedanticConfig `json:"pedantic,omitzero"`
+	// Spelling selects spell-check language. nil = off. Allowed: "en_GB", "en_US".
+	Spelling *string `json:"spelling,omitempty"`
+}
+
+// spelling returns the active spell-check language ("en_GB", "en_US") or empty
+// when off.
+func (cfg *Config) spelling() string {
+	if cfg.Spelling == nil {
+		return ""
+	}
+	return *cfg.Spelling
 }
 
 // BibConfig groups bibliography processing options.
@@ -124,19 +136,33 @@ func saveLocalConfig(cfg *Config) error {
 	return os.WriteFile(".el/config.json", data, 0644)
 }
 
-// globalConfigDir overrides the home directory for the global config file.
-// Empty means use os.UserHomeDir(). Set in tests for isolation.
+// globalConfigDir overrides the global config directory.
+// Empty means use ${XDG_CONFIG_HOME:-~/.config}/easy-latex. Set in tests for isolation.
 var globalConfigDir string
 
-func globalConfigPath() (string, error) {
+// GlobalConfigDir returns the directory holding the global config and ancillary
+// files (spell dicts, ignore lists, …). Honors globalConfigDir override, then
+// XDG_CONFIG_HOME, then ~/.config.
+func GlobalConfigDir() (string, error) {
 	if globalConfigDir != "" {
-		return filepath.Join(globalConfigDir, ".elconfig.json"), nil
+		return globalConfigDir, nil
+	}
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "easy-latex"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	return filepath.Join(home, ".elconfig.json"), nil
+	return filepath.Join(home, ".config", "easy-latex"), nil
+}
+
+func globalConfigPath() (string, error) {
+	dir, err := GlobalConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.json"), nil
 }
 
 func loadGlobalConfig() (*Config, error) {
@@ -161,6 +187,9 @@ func loadGlobalConfig() (*Config, error) {
 func saveGlobalConfig(cfg *Config) error {
 	path, err := globalConfigPath()
 	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
@@ -193,6 +222,14 @@ func mergeConfig(local, global *Config) *Config {
 	merged.Bib.UrlFromDOI = mergeBool(local.Bib.UrlFromDOI, global.Bib.UrlFromDOI)
 	merged.Bib.RetryTimeout = mergeBool(local.Bib.RetryTimeout, global.Bib.RetryTimeout)
 	merged.Bib.ArxivAsUnpublished = mergeBool(local.Bib.ArxivAsUnpublished, global.Bib.ArxivAsUnpublished)
+
+	mergeStr := func(l, g *string) *string {
+		if l != nil {
+			return l
+		}
+		return g
+	}
+	merged.Spelling = mergeStr(local.Spelling, global.Spelling)
 
 	// Pedantic: per-key pointer merge (local wins for keys it sets).
 	if len(local.Pedantic.Checks) > 0 || len(global.Pedantic.Checks) > 0 {
@@ -283,6 +320,24 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(bibCmd)
 	rootCmd.AddCommand(lspCmd)
+}
+
+// effectiveEnabledChecks returns enabled pedantic check names, appending
+// "spelling" when cfg.Spelling is set. Also wires the spell-check package-level
+// configuration so the registered check has the runtime context it needs.
+func effectiveEnabledChecks(cfg *Config) ([]string, error) {
+	enabled := cfg.Pedantic.EnabledNames()
+	if cfg.Spelling != nil {
+		globalDir, err := GlobalConfigDir()
+		if err != nil {
+			return nil, err
+		}
+		pedantic.ConfigureSpelling(*cfg.Spelling, globalDir, auxDir)
+		enabled = append(enabled, "spelling")
+	} else {
+		pedantic.ConfigureSpelling("", "", "")
+	}
+	return enabled, nil
 }
 
 // entriesBibFile returns the path of the entries bib file (bibliography.bib)

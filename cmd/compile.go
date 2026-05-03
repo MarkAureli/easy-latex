@@ -78,7 +78,10 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	enabledChecks := cfg.Pedantic.EnabledNames()
+	enabledChecks, err := effectiveEnabledChecks(cfg)
+	if err != nil {
+		return err
+	}
 	if !compileNoCheck && len(enabledChecks) > 0 {
 		if err := pedantic.ValidateCheckNames(enabledChecks); err != nil {
 			return err

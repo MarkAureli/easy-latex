@@ -44,7 +44,7 @@ func setGlobalConfigDir(t *testing.T, dir string) {
 
 func readGlobalConfig(t *testing.T, dir string) Config {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dir, ".elconfig.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "config.json"))
 	if err != nil {
 		t.Fatalf("readGlobalConfig: %v", err)
 	}

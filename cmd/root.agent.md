@@ -4,14 +4,15 @@ Config struct + load/save/merge. Shared by all commands that load config.
 
 ## Config (`root.go`)
 
-`Config` struct serialised as `.el/config.json` (local) and `~/.elconfig.json` (global):
+`Config` struct serialised as `.el/config.json` (local) and `${XDG_CONFIG_HOME:-~/.config}/easy-latex/config.json` (global):
 
 ```
 {
   "main": "thesis.tex",
   "bib_files": ["refs.bib"],
   "bib": { ... },
-  "pedantic": { "checks": { "no-block-citations": true } }
+  "pedantic": { "checks": { "no-block-citations": true } },
+  "spelling": "en_US"
 }
 ```
 
@@ -21,6 +22,7 @@ Config struct + load/save/merge. Shared by all commands that load config.
 | `bib_files` | []string | Registered `.bib` paths (local only) |
 | `bib` | `BibConfig` | Bibliography processing options (see below) |
 | `pedantic` | `PedanticConfig` | Per-check enable/disable map |
+| `spelling` | *string | Spell-check language: `en_GB`, `en_US`, or unset (off). Drives the `spelling` pedantic check via `effectiveEnabledChecks` + `pedantic.ConfigureSpelling`. |
 
 ### `BibConfig`
 
@@ -51,12 +53,14 @@ Accessor methods on `*Config` (e.g. `cfg.ieeeFormat()`, `cfg.maxAuthors()`) enco
 | Function | Description |
 |---|---|
 | `loadLocalConfig()` | Read `.el/config.json` |
-| `loadGlobalConfig()` | Read `~/.elconfig.json` (empty Config if missing) |
+| `loadGlobalConfig()` | Read `${XDG_CONFIG_HOME:-~/.config}/easy-latex/config.json` (empty Config if missing) |
 | `loadConfig()` | Merged: local > global > default |
-| `mergeConfig(local, global)` | Per-field pointer merge for bib + per-key map merge for pedantic checks |
+| `mergeConfig(local, global)` | Per-field pointer merge for bib + spelling + per-key map merge for pedantic checks |
 | `saveLocalConfig(cfg)` | Write `.el/config.json` |
-| `saveGlobalConfig(cfg)` | Write `~/.elconfig.json` |
-| `globalConfigPath()` | Returns path; `globalConfigDir` var overrides home in tests |
+| `saveGlobalConfig(cfg)` | Write global config; auto-creates parent dir |
+| `GlobalConfigDir()` | Returns the global dir (honours `globalConfigDir` test override, then `XDG_CONFIG_HOME`, then `~/.config`). Used by `internal/spell` to locate `spell/{lang,common,ignore}.txt`. |
+| `globalConfigPath()` | `GlobalConfigDir()/config.json` |
+| `effectiveEnabledChecks(cfg)` | Returns enabled pedantic check names, appending `"spelling"` when `cfg.Spelling` set; also calls `pedantic.ConfigureSpelling`. Used by `cmd/check.go` and `cmd/compile.go`. |
 
 JSON `omitzero` on `bib` and `pedantic` fields suppresses empty objects (Go 1.24+).
 

@@ -88,6 +88,27 @@ var bibConfigFields = []configField{
 		isSet:   func(c *Config) bool { return c.Bib.RetryTimeout != nil },
 		display: func(c *Config) string { return strconv.FormatBool(c.retryTimeout()) },
 	},
+	{
+		key: "spelling", isBool: false,
+		setVal: func(c *Config, val string) error {
+			switch val {
+			case "en_GB", "en_US":
+				v := val
+				c.Spelling = &v
+				return nil
+			default:
+				return fmt.Errorf("invalid value %q for spelling: must be en_GB or en_US", val)
+			}
+		},
+		unset: func(c *Config) { c.Spelling = nil },
+		isSet: func(c *Config) bool { return c.Spelling != nil },
+		display: func(c *Config) string {
+			if s := c.spelling(); s != "" {
+				return s
+			}
+			return "off"
+		},
+	},
 }
 
 // pedanticConfigFields builds a configField per registered pedantic check.
@@ -218,11 +239,11 @@ var configUnsetCmd = &cobra.Command{
 
 func init() {
 	configListCmd.Flags().Bool("global", false,
-		"Show only global config (~/.elconfig.json)")
+		"Show only global config (~/.config/easy-latex/config.json)")
 	configSetCmd.Flags().Bool("global", false,
-		"Modify the global config (~/.elconfig.json) instead of the local project config")
+		"Modify the global config (~/.config/easy-latex/config.json) instead of the local project config")
 	configUnsetCmd.Flags().Bool("global", false,
-		"Modify the global config (~/.elconfig.json) instead of the local project config")
+		"Modify the global config (~/.config/easy-latex/config.json) instead of the local project config")
 	configCmd.AddCommand(configListCmd)
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configUnsetCmd)

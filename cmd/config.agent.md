@@ -8,19 +8,19 @@ Bare `el config` (no subcommand) prints usage error.
 Displays all settings in a table: name, effective value, source.
 Source is one of `(local)`, `(global)`, `(default)`, or `(ieee default)`.
 Outside a project, shows global config only.
-`--global` shows only global config (`~/.elconfig.json`); works outside projects.
+`--global` shows only global config (`~/.config/easy-latex/config.json`); works outside projects.
 
 ### `el config set <key> [value] [--global]`
 Set a configuration value.
 - Bool keys: value is optional (defaults to "true"). Accepts "true" or "false".
 - Non-bool keys (e.g. `max-authors`): value is required.
-- `--global`: writes to `~/.elconfig.json` instead of `.el/config.json`. Works outside a project.
+- `--global`: writes to `~/.config/easy-latex/config.json` instead of `.el/config.json`. Works outside a project.
 
 ### `el config unset <key> [--global]`
 Unset a configuration value.
 - Bool keys: sets to explicit false.
 - Non-bool keys: removes the value (restores default).
-- `--global`: modifies `~/.elconfig.json`.
+- `--global`: modifies `~/.config/easy-latex/config.json`.
 
 ## Config keys
 
@@ -44,6 +44,14 @@ Pedantic checks (stored under `pedantic.checks`, one bool per name):
 
 Pedantic check keys are generated dynamically from the pedantic registry (`pedantic.AllNames()`). No naming collisions with bib keys.
 
+Spell-check (stored at top level, not under `pedantic.checks`):
+
+| Key | Type | Allowed values | Default |
+|---|---|---|---|
+| `spelling` | string | `en_GB`, `en_US` | unset (off) |
+
+`el config set spelling en_GB` enables British-English spell-check; `el config unset spelling` turns it off. Validation rejects any other value. The `spelling` pedantic check is automatically appended to the enabled list when this key is set (see `effectiveEnabledChecks` in `root.go`).
+
 ### `pedantic` (alias)
 
 `el config set pedantic [value]` and `el config unset pedantic` apply the
@@ -57,7 +65,7 @@ Recognised by string match against `pedanticAliasKey` in `runConfigSet` /
 
 ## Config resolution order
 
-local `.el/config.json` > global `~/.elconfig.json` > built-in default.
+local `.el/config.json` > global `~/.config/easy-latex/config.json` > built-in default.
 
 ## Implementation
 

@@ -14,6 +14,7 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 | `internal/term/` | Shared terminal detection (`IsTerminal`) + ANSI color codes (`Colors` struct, `Detect()`) |
 | `internal/texscan/` | Tex file scanner for bib declarations |
 | `internal/pedantic/` | Pedantic checks: source-level + post-compile (pdfsavepos) |
+| `internal/spell/` | Hunspell-backed spell-check (en_GB / en_US) with layered dicts and ignore lists |
 | `internal/lsp/` | Minimal LSP server (JSON-RPC over stdio, cite-key completions) |
 
 ## Bib processing
@@ -48,4 +49,5 @@ See `internal/bib/AGENT.md` for entry-type specs.
 | `internal/bib/AGENT.md` | Bib pipeline, entry types, validation, ISO 4 |
 | `internal/lsp/AGENT.md` | LSP protocol, completion trigger, JSON-RPC |
 | `internal/pedantic/AGENT.md` | Pedantic check system |
-| `internal/texscan/AGENT.md` | Tex scanner exports |
+| `internal/spell/AGENT.md` | Spell-check engine (hunspell pipe-mode, layered dicts) |
+| `internal/texscan/AGENT.md` | Tex scanner exports (incl. `ProseRuns`) |

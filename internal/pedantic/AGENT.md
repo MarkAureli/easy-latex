@@ -25,6 +25,7 @@ Registry-based: each check registers via `init()` → `Register(Check{...})`.
 | `math-bare-word` | Source | no | 2+ consecutive ASCII letters in math mode not inside a text/font wrapper or forming a command |
 | `dashes` | Source | yes | Dash style normalization in text regions. Rules: (1) `–` → `--`; (2) `—` → `---`; (3) `−` → `-` in math, `$-$` in text; (4) `\d\s*-\s*\d` → `\d--\d`; (5) `\d\s*---\s*\d` → `\d--\d`; (6) `----+` → `---`; (7) strip spaces around `---`; (8) `(\w+)\s*--\s*(\w+)` → `w---w` unless either side is a digit-leading word OR both first chars uppercase; (9) `(\w) - (\w)` → `w---w` unless either side digit. Fixpoint loop handles chains. Region mask skips math (except 3-math), verbatim envs, and comments. Brace bodies of class/package/file macros (`\documentclass`, `\usepackage`, `\RequirePackage`, `\LoadClass`, `\WarningFilter`, `\PassOptionsToClass`, `\PassOptionsToPackage`, `\input`, `\include`, `\includeonly`, `\InputIfFileExists`, `\IfFileExists`) are passed through unchanged so package names like `revtex4-2` are preserved. |
 | `no-math-linebreak` | PostCompile | no | Inline math (`$...$` or `\(...\)`) that spans multiple PDF lines |
+| `spelling` | ProjectSource | no | Words not in hunspell dictionary for the configured lang. Driven by top-level `Config.Spelling` (`en_GB`/`en_US`/unset), **not** the per-check `Pedantic.Checks` map. Disabled when lang is empty even if listed in enabled set. Caller must call `pedantic.ConfigureSpelling(lang, globalDir, auxDir)` before `RunSourceChecks`. Delegates to `internal/spell`. Warn-once-skip when `hunspell` binary or dict unavailable. |
 
 ### `unused-labels` ignore set
 
@@ -67,6 +68,7 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 | `math_bare_word.go` | `math-bare-word` check impl, `isTextMathCmd`, `isASCIILetter` |
 | `dashes.go` | `dashes` check + fix impl, `applyDashRules`, `rewriteTextSpan`, `rewriteMathSpan`, fixpoint loop with regex pipeline |
 | `math_linebreak.go` | `no-math-linebreak` check impl, `parseMathPos`, `MathPosSty` embed |
+| `spelling.go` | `spelling` check impl + `ConfigureSpelling`/`SetSpellingWarn`. Reads pkg-level `spellLang`/`spellGlobalDir`/`spellAuxDir`/`spellWarn`. No-op when lang empty. Delegates to `internal/spell.Run`. |
 | `el-mathpos.sty` | LaTeX package for position tracking (embedded into binary) |
 
 ## Adding a new check

@@ -31,7 +31,10 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	enabled := cfg.Pedantic.EnabledNames()
+	enabled, err := effectiveEnabledChecks(cfg)
+	if err != nil {
+		return err
+	}
 	if len(enabled) == 0 {
 		return fmt.Errorf("no pedantic checks enabled (configure with `el config set <check>`)")
 	}
