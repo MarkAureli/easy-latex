@@ -422,15 +422,16 @@ func accentLetter(seg []byte) byte {
 	return 'a' // unreachable for well-formed input
 }
 
-// readMacroName reads `\<letters>(*?)` starting at i (where line[i]=='\\').
-// Returns name (without backslash, without trailing `*`) and total length
-// consumed including the backslash and any `*`. Returns ("", 0) if no letters.
+// readMacroName reads `\<macroChars>(*?)` starting at i (where line[i]=='\\').
+// macroChars are ASCII letters plus `@` (TeX-internal commands like
+// `\@oddfoot` under `\makeatletter`). Returns name (without backslash, without
+// trailing `*`) and total length consumed. Returns ("", 0) if no macro chars.
 func readMacroName(line string, i int) (string, int) {
 	if i >= len(line) || line[i] != '\\' {
 		return "", 0
 	}
 	j := i + 1
-	for j < len(line) && isLetter(line[j]) {
+	for j < len(line) && isMacroChar(line[j]) {
 		j++
 	}
 	if j == i+1 {
@@ -441,6 +442,11 @@ func readMacroName(line string, i int) (string, int) {
 		j++
 	}
 	return name, j - i
+}
+
+// isMacroChar reports whether c may appear in a TeX macro name.
+func isMacroChar(c byte) bool {
+	return isLetter(c) || c == '@'
 }
 
 // matchBeginEnvName matches `\begin{<name>}` at i and returns (name, length).

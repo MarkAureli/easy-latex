@@ -135,6 +135,22 @@ func TestProseRuns_AccentMacroDoesNotSplitWord(t *testing.T) {
 	}
 }
 
+func TestProseRuns_AtSignInMacroName(t *testing.T) {
+	src := `\@oddfoot{stuff} text \foo@bar baz`
+	runs := ProseRuns("f.tex", src, nil)
+	if len(runs) != 1 {
+		t.Fatalf("want 1 run")
+	}
+	for _, leaked := range []string{"oddfoot", "foo", "bar"} {
+		if strings.Contains(runs[0].Text, leaked) {
+			t.Errorf("@-macro name leaked %q in %q", leaked, runs[0].Text)
+		}
+	}
+	if !strings.Contains(runs[0].Text, "text") || !strings.Contains(runs[0].Text, "baz") {
+		t.Errorf("surrounding prose lost: %q", runs[0].Text)
+	}
+}
+
 func TestProseRuns_LineLengthPreserved(t *testing.T) {
 	src := `Hello \emph{world} here.`
 	runs := ProseRuns("f.tex", src, nil)
