@@ -30,9 +30,10 @@ type crossrefResponse struct {
 		} `json:"published"`
 		Volume string `json:"volume"`
 		Issue  string `json:"issue"`
-		Page   string `json:"page"`
-		DOI    string `json:"DOI"`
-		Type   string `json:"type"`
+		Page      string `json:"page"`
+		DOI       string `json:"DOI"`
+		Type      string `json:"type"`
+		Publisher string `json:"publisher"`
 	} `json:"message"`
 }
 
@@ -166,6 +167,13 @@ func queryCrossref(e Entry, doi string, log Logger) (*Entry, cacheEntry, string,
 		raw.Fields["doi"] = strings.ToLower(html.UnescapeString(m.DOI))
 		if applyField(&updated, "doi", raw.Fields["doi"]) {
 			corrections = append(corrections, "doi")
+		}
+	}
+	if m.Publisher != "" && (bibType == "book" || bibType == "incollection") {
+		v := html.UnescapeString(m.Publisher)
+		raw.Fields["publisher"] = v
+		if applyField(&updated, "publisher", v) {
+			corrections = append(corrections, "publisher")
 		}
 	}
 
