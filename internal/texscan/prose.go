@@ -1,6 +1,24 @@
 package texscan
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+// lengthLiteralRe matches TeX length literals: an optional sign, digits with
+// optional decimal part, immediately followed by a known unit. Word boundary
+// after the unit prevents matching prefixes of longer identifiers (`5cmore`).
+var lengthLiteralRe = regexp.MustCompile(`-?\d+(?:\.\d+)?(?:pt|pc|in|bp|cm|mm|dd|cc|nd|nc|sp|em|ex|px|mu|filll|fill|fil)\b`)
+
+// blankLengthLiterals replaces every length literal in buf with spaces, in
+// place. Length-preserving so column offsets stay aligned.
+func blankLengthLiterals(buf []byte) {
+	for _, m := range lengthLiteralRe.FindAllIndex(buf, -1) {
+		for i := m[0]; i < m[1]; i++ {
+			buf[i] = ' '
+		}
+	}
+}
 
 // ProseRun represents one source line projected to prose-only text. Non-prose
 // bytes (macro names, braces, math content, verbatim content, ignored-macro
@@ -339,6 +357,7 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 			}
 		}
 
+		blankLengthLiterals(buf)
 		text := string(buf)
 		if strings.TrimSpace(text) != "" {
 			out = append(out, ProseRun{File: file, Line: li + 1, Text: text})

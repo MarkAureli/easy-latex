@@ -151,6 +151,41 @@ func TestProseRuns_AtSignInMacroName(t *testing.T) {
 	}
 }
 
+func TestProseRuns_BlanksLengthLiterals(t *testing.T) {
+	cases := []struct {
+		name, src, leak string
+	}{
+		{"cm", `width 8cm here`, "8cm"},
+		{"mm", `5mm spacing`, "5mm"},
+		{"ex", `15ex tall`, "15ex"},
+		{"em", `2em wide`, "2em"},
+		{"pt", `12pt font`, "12pt"},
+		{"decimal", `2.5cm spacing`, "2.5cm"},
+		{"negative", `-3pt offset`, "-3pt"},
+		{"fill", `5fill stretch`, "5fill"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runs := ProseRuns("f.tex", tc.src, nil)
+			if len(runs) != 1 {
+				t.Fatalf("want 1 run")
+			}
+			if strings.Contains(runs[0].Text, tc.leak) {
+				t.Errorf("length literal leaked: %q", runs[0].Text)
+			}
+		})
+	}
+}
+
+func TestProseRuns_PreservesNonLengthIdentifiers(t *testing.T) {
+	// "5cmore" must NOT be blanked; only the boundary-terminated form is a length.
+	src := `keep 5cmore please`
+	runs := ProseRuns("f.tex", src, nil)
+	if len(runs) != 1 || !strings.Contains(runs[0].Text, "5cmore") {
+		t.Errorf("over-blanked: %q", runs[0].Text)
+	}
+}
+
 func TestProseRuns_LineLengthPreserved(t *testing.T) {
 	src := `Hello \emph{world} here.`
 	runs := ProseRuns("f.tex", src, nil)
