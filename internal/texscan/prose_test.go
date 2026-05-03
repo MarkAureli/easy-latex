@@ -108,6 +108,33 @@ Done.`
 	}
 }
 
+func TestProseRuns_AccentMacroDoesNotSplitWord(t *testing.T) {
+	cases := []struct {
+		name, src string
+	}{
+		{"bare", `Universit\"at`},
+		{"bare-braces", `Universit\"{a}t`},
+		{"wrapped", `Universit{\"a}t`},
+		{"wrapped-double", `Universit{\"{a}}t`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runs := ProseRuns("f.tex", tc.src, nil)
+			if len(runs) != 1 {
+				t.Fatalf("want 1 run, got %d", len(runs))
+			}
+			text := runs[0].Text
+			if len(text) != len(tc.src) {
+				t.Errorf("length not preserved: src=%d got=%d", len(tc.src), len(text))
+			}
+			// No internal whitespace inside the token region (positions 0 to len-1).
+			if strings.ContainsAny(strings.TrimSpace(text), " \t") {
+				t.Errorf("accent split word: %q", text)
+			}
+		})
+	}
+}
+
 func TestProseRuns_LineLengthPreserved(t *testing.T) {
 	src := `Hello \emph{world} here.`
 	runs := ProseRuns("f.tex", src, nil)

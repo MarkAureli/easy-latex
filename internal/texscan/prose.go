@@ -54,7 +54,7 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 	rawLines := strings.Split(content, "\n")
 	lines := make([]string, len(rawLines))
 	for i, l := range rawLines {
-		lines[i] = StripComment(l)
+		lines[i] = expandAccents(StripComment(l))
 	}
 
 	type state int
@@ -345,6 +345,81 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 		}
 	}
 	return out
+}
+
+// accentChars are TeX accent prefixes that take a single letter argument:
+// `\"a` (umlaut), `\'e` (acute), `` \`o `` (grave), `\~n` (tilde), `\=u`
+// (macron), `\.s` (overdot), `\^a` (circumflex).
+var accentChars = map[byte]bool{
+	'"': true, '\'': true, '`': true, '~': true, '=': true, '.': true, '^': true,
+}
+
+// expandAccents performs a length-preserving substitution of TeX accent-macro
+// patterns to letter padding so that hunspell sees a single compound token
+// rather than fragments split by `\`/`{`/`}`. The substitution covers:
+//
+//	\"a       → 3 letters
+//	\"{a}     → 5 letters
+//	{\"a}     → 5 letters
+//	{\"{a}}   → 7 letters
+//
+// The "letter" written is the inside character itself, ASCII-cased. Anything
+// not matching is left untouched. Length is always preserved so column offsets
+// in downstream prose runs remain accurate.
+func expandAccents(line string) string {
+	b := []byte(line)
+	i := 0
+	for i < len(b) {
+		if n := matchAccent(b, i); n > 0 {
+			letter := accentLetter(b[i : i+n])
+			for j := range n {
+				b[i+j] = letter
+			}
+			i += n
+			continue
+		}
+		i++
+	}
+	return string(b)
+}
+
+// matchAccent checks whether an accent pattern starts at b[i]. Returns its
+// length (3, 5, or 7) on a match, else 0.
+func matchAccent(b []byte, i int) int {
+	// Forms starting with `{`.
+	if b[i] == '{' {
+		// {\<acc>{<L>}}
+		if i+6 < len(b) && b[i+1] == '\\' && accentChars[b[i+2]] && b[i+3] == '{' && isLetter(b[i+4]) && b[i+5] == '}' && b[i+6] == '}' {
+			return 7
+		}
+		// {\<acc><L>}
+		if i+4 < len(b) && b[i+1] == '\\' && accentChars[b[i+2]] && isLetter(b[i+3]) && b[i+4] == '}' {
+			return 5
+		}
+		return 0
+	}
+	// Forms starting with `\`.
+	if b[i] == '\\' {
+		// \<acc>{<L>}
+		if i+4 < len(b) && accentChars[b[i+1]] && b[i+2] == '{' && isLetter(b[i+3]) && b[i+4] == '}' {
+			return 5
+		}
+		// \<acc><L>
+		if i+2 < len(b) && accentChars[b[i+1]] && isLetter(b[i+2]) {
+			return 3
+		}
+	}
+	return 0
+}
+
+// accentLetter returns the ASCII letter inside an accent-macro pattern.
+func accentLetter(seg []byte) byte {
+	for _, c := range seg {
+		if isLetter(c) {
+			return c
+		}
+	}
+	return 'a' // unreachable for well-formed input
 }
 
 // readMacroName reads `\<letters>(*?)` starting at i (where line[i]=='\\').
