@@ -51,15 +51,27 @@ var proseMathEnvs = map[string]bool{
 }
 
 // proseVerbatimEnvs are environments whose body is opaque verbatim text.
+// Also includes graphics environments whose body is a graphics specification
+// language (TikZ/PGF/CircuiTikZ/PSTricks/forest), not prose.
 var proseVerbatimEnvs = map[string]bool{
-	"verbatim":   true,
-	"Verbatim":   true,
-	"BVerbatim":  true,
-	"LVerbatim":  true,
-	"lstlisting": true,
-	"minted":     true,
-	"comment":    true,
-	"alltt":      true,
+	"verbatim":     true,
+	"Verbatim":     true,
+	"BVerbatim":    true,
+	"LVerbatim":    true,
+	"lstlisting":   true,
+	"minted":       true,
+	"comment":      true,
+	"alltt":        true,
+	"tikzpicture":  true,
+	"pgfpicture":   true,
+	"circuitikz":   true,
+	"forest":       true,
+	"pspicture":    true,
+	"scope":        true,
+	"axis":         true,
+	"semilogxaxis": true,
+	"semilogyaxis": true,
+	"loglogaxis":   true,
 }
 
 // ProseRuns extracts prose text from tex content. Returns one ProseRun per
@@ -186,6 +198,8 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 							blank(i + j)
 						}
 						i += n
+						// Blank any immediately-following `[...]` env options.
+						i = blankOptArgs(line, buf, i)
 						switch {
 						case proseVerbatimEnvs[name]:
 							st = stVerbEnv
@@ -214,6 +228,8 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 							blank(i + j)
 						}
 						i += n
+						// Blank any immediately-following `[...]` option args.
+						i = blankOptArgs(line, buf, i)
 						if ignoreMacros[name] {
 							awaitingArg = true
 						}
@@ -439,6 +455,48 @@ func accentLetter(seg []byte) byte {
 		}
 	}
 	return 'a' // unreachable for well-formed input
+}
+
+// blankOptArgs blanks any sequence of immediately-following `[...]` optional
+// arguments in line, in place on buf. Handles bracket nesting (e.g. inner
+// `[]` inside an option list). Stops on the first non-`[` byte. Returns the
+// new index after the consumed sequence. Backslash-escaped brackets inside
+// the option body are honored (the byte after `\` is skipped without
+// triggering depth changes).
+func blankOptArgs(line string, buf []byte, i int) int {
+	for i < len(line) && line[i] == '[' {
+		depth := 1
+		buf[i] = ' '
+		i++
+		for i < len(line) && depth > 0 {
+			switch line[i] {
+			case '\\':
+				buf[i] = ' '
+				if i+1 < len(line) {
+					buf[i+1] = ' '
+					i += 2
+					continue
+				}
+				i++
+			case '[':
+				depth++
+				buf[i] = ' '
+				i++
+			case ']':
+				depth--
+				buf[i] = ' '
+				i++
+			default:
+				buf[i] = ' '
+				i++
+			}
+		}
+		if depth > 0 {
+			// Unclosed bracket — abandon and let outer state machine handle.
+			return i
+		}
+	}
+	return i
 }
 
 // readMacroName reads `\<macroChars>(*?)` starting at i (where line[i]=='\\').
