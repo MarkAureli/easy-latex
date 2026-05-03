@@ -121,6 +121,7 @@ var (
 // digit-hyphen-digit (e.g. `revtex4-2`) which would otherwise be rewritten
 // by rule 4. File-inclusion macros take paths.
 var argSkipMacros = map[string]bool{
+	"bibliographystyle":	true,
 	"documentclass":        true,
 	"usepackage":           true,
 	"RequirePackage":       true,
