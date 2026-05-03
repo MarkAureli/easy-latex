@@ -10,11 +10,40 @@ import (
 // after the unit prevents matching prefixes of longer identifiers (`5cmore`).
 var lengthLiteralRe = regexp.MustCompile(`-?\d+(?:\.\d+)?(?:pt|pc|in|bp|cm|mm|dd|cc|nd|nc|sp|em|ex|px|mu|filll|fill|fil)\b`)
 
+// ordinalAfterMathRe matches an English ordinal suffix (`st`, `nd`, `rd`, `th`)
+// that immediately follows a math closer (`$`, `\)`, `\]`). Captures only the
+// suffix so callers can blank just those bytes. Catches `$n$th`, `\(k\)st`,
+// `\[m\]rd`, etc.
+var ordinalAfterMathRe = regexp.MustCompile(`(?:\$|\\\)|\\\])(st|nd|rd|th)\b`)
+
+// ordinalInSuperscriptRe matches an ordinal suffix inside the brace argument
+// of `\textsuperscript`/`\textsubscript`. Captures the suffix so the inside
+// of the braces can be blanked while the macro+braces remain blanked by the
+// regular state machine.
+var ordinalInSuperscriptRe = regexp.MustCompile(`\\text(?:super|sub)script\s*\{(st|nd|rd|th)\}`)
+
 // blankLengthLiterals replaces every length literal in buf with spaces, in
 // place. Length-preserving so column offsets stay aligned.
 func blankLengthLiterals(buf []byte) {
 	for _, m := range lengthLiteralRe.FindAllIndex(buf, -1) {
 		for i := m[0]; i < m[1]; i++ {
+			buf[i] = ' '
+		}
+	}
+}
+
+// blankOrdinalSuffixes blanks ordinal suffixes that follow math closers or
+// appear inside `\textsuperscript{}`/`\textsubscript{}` braces. Operates on
+// the original line for matching (so math markers are visible) and rewrites
+// buf at the captured suffix positions only.
+func blankOrdinalSuffixes(line string, buf []byte) {
+	for _, m := range ordinalAfterMathRe.FindAllStringSubmatchIndex(line, -1) {
+		for i := m[2]; i < m[3]; i++ {
+			buf[i] = ' '
+		}
+	}
+	for _, m := range ordinalInSuperscriptRe.FindAllStringSubmatchIndex(line, -1) {
+		for i := m[2]; i < m[3]; i++ {
 			buf[i] = ' '
 		}
 	}
@@ -374,6 +403,7 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 		}
 
 		blankLengthLiterals(buf)
+		blankOrdinalSuffixes(line, buf)
 		text := string(buf)
 		if strings.TrimSpace(text) != "" {
 			out = append(out, ProseRun{File: file, Line: li + 1, Text: text})

@@ -186,6 +186,46 @@ func TestProseRuns_PreservesNonLengthIdentifiers(t *testing.T) {
 	}
 }
 
+func TestProseRuns_OrdinalSuffixesAfterMath(t *testing.T) {
+	cases := []struct {
+		name, src, leak string
+	}{
+		{"dollar-th", `the $n$th element`, "th"},
+		{"dollar-st", `$k$st`, "st"},
+		{"paren-nd", `\(m\)nd`, "nd"},
+		{"bracket-rd", `\[i\]rd`, "rd"},
+		{"superscript-th", `5\textsuperscript{th} time`, "th"},
+		{"subscript-nd", `n\textsubscript{nd} entry`, "nd"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runs := ProseRuns("f.tex", tc.src, nil)
+			for _, r := range runs {
+				for w := range strings.FieldsSeq(r.Text) {
+					if w == tc.leak {
+						t.Errorf("ordinal %q leaked: %q", tc.leak, r.Text)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestProseRuns_PreservesNonOrdinalThWords(t *testing.T) {
+	// Words that contain `th` but aren't ordinal suffixes after math must
+	// pass through.
+	src := `the path has width and birth dates`
+	runs := ProseRuns("f.tex", src, nil)
+	if len(runs) != 1 {
+		t.Fatalf("want 1 run")
+	}
+	for _, w := range []string{"the", "path", "width", "birth"} {
+		if !strings.Contains(runs[0].Text, w) {
+			t.Errorf("word %q dropped: %q", w, runs[0].Text)
+		}
+	}
+}
+
 func TestProseRuns_LineLengthPreserved(t *testing.T) {
 	src := `Hello \emph{world} here.`
 	runs := ProseRuns("f.tex", src, nil)
