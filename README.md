@@ -252,6 +252,19 @@ ${XDG_CONFIG_HOME:-~/.config}/easy-latex/spell/
 
 One word per line. Blank lines and `#` comments are ignored. Files that do not exist are silently skipped — start with whichever subset you need.
 
+Manage these files via the `el spell` subcommand instead of editing by hand:
+
+```
+$ el spell add foo bar baz                      # add to local <lang>.txt
+$ el spell add --common foo                     # add to local common.txt
+$ el spell add --global --common foo            # add to global common.txt
+$ el spell remove bar                           # drop from local <lang>.txt
+$ el spell list                                 # print local <lang>.txt sorted
+$ el spell list --global                        # print global <lang>.txt sorted
+```
+
+Files are sorted and deduplicated on every write; user comments are not preserved.
+
 ##### Macro-arg ignore list
 
 By default `el` skips spell-checking the first brace argument of common citation, reference, file-include, package, and graphics macros (`\cite`, `\ref`, `\label`, `\input`, `\usepackage`, `\includegraphics`, …). Extend or override the defaults via:
@@ -262,6 +275,17 @@ ${XDG_CONFIG_HOME:-~/.config}/easy-latex/spell/ignore.txt
 ```
 
 One macro name per line (without the leading `\`). Comments (`#`) and blank lines are ignored. Prefix a name with `!` to remove a default — e.g. `!url` re-enables spell-check inside `\url{…}` arguments.
+
+Manage via `el spell` with `--ignore`:
+
+```
+$ el spell add --ignore usetikzlibrary           # extend ignore list
+$ el spell remove --ignore cite                  # negate a built-in default
+$ el spell list --ignore                         # show local ignore.txt
+$ el spell list --global --ignore                # show global ignore.txt
+```
+
+`remove --ignore` automatically writes `!macro` for built-in defaults and drops the negation again on a subsequent `add --ignore`.
 
 ### `el bib`
 

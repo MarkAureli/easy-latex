@@ -11,6 +11,7 @@ Spell-check engine. Backed by `hunspell` (pipe mode). Surfaces hits as
 | `ignore.go` | `DefaultIgnoreMacros` (code-baked list of macros whose first arg is skipped during prose extraction). `LoadIgnoreMacros(files...)` returns merged set: defaults + additive entries from files, minus negations (`!macro`). `#` comments and blank lines ignored. |
 | `hunspell.go` | `HunspellAvailable(_, warn)` — LookPath check + warn-once. `StartHunspell(lang, personalDict)` — launch `hunspell -a -d <lang> [-p <dict>]`, read banner. `Hunspell.CheckLine(text)` returns `[]Miss`. Banner-read failure → dict missing → caller warns-once. |
 | `spell.go` | `Run(files, lang, auxDir, paths, warn) []Diagnostic` — orchestrate: merge dicts → start hunspell → extract prose via `texscan.ProseRuns` per file → check each line → emit diagnostics with column embedded in message. `DefaultPaths(globalDir, auxDir, lang)` builds the conventional set of dict/ignore paths. |
+| `manage.go` | File mutation helpers used by `cmd/spell.go`: `ResolveTarget`, `ValidateToken`, `AddTokens`, `RemoveTokens`, `ListTokens`, `CompletionCandidates`. Sort-and-dedup writes; ignore-mode handles default-vs-user-line semantics (negate-on-remove, drop-negation-on-add). |
 
 ## Dictionary layout
 

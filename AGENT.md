@@ -46,6 +46,7 @@ See `internal/bib/AGENT.md` for entry-type specs.
 | `cmd/config.agent.md` | `el config` flags |
 | `cmd/init.agent.md` | `el init` steps |
 | `cmd/lsp.agent.md` | `el lsp` (thin, see below) |
+| `cmd/spell.agent.md` | `el spell` add/remove/list dict and ignore files |
 | `internal/bib/AGENT.md` | Bib pipeline, entry types, validation, ISO 4 |
 | `internal/lsp/AGENT.md` | LSP protocol, completion trigger, JSON-RPC |
 | `internal/pedantic/AGENT.md` | Pedantic check system |

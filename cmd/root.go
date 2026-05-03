@@ -267,7 +267,7 @@ var rootCmd = &cobra.Command{
 		case "init", "help", "completion":
 			return nil
 		}
-		if isConfigCommand(cmd) {
+		if isConfigCommand(cmd) || isSpellCommand(cmd) {
 			return nil
 		}
 		root, err := findProjectRoot()
@@ -301,6 +301,18 @@ func findProjectRoot() (string, error) {
 func isConfigCommand(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		if c == configCmd {
+			return true
+		}
+	}
+	return false
+}
+
+// isSpellCommand returns true if cmd is spellCmd or a child of spellCmd.
+// Spell subcommands resolve the project root themselves only when needed
+// (i.e. without --global), so we skip the global PreRunE check.
+func isSpellCommand(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c == spellCmd {
 			return true
 		}
 	}
