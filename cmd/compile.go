@@ -182,6 +182,18 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	// Generate bibliography.bib from cache for cited entries only.
 	if ef := entriesBibFile(cfg.BibFiles); ef != "" {
 		citeKeys := citedKeysFromArtifacts(stem, auxDir)
+		// Drop keys defined in generated .bib files (e.g. revtex's
+		// citeautoscript writes mainNotes.bib with @FOOTNOTE{Note1,...}).
+		// Those keys live outside our cache and bibtex resolves them on its own.
+		if excluded := generatedBibKeys(stem, auxDir, cfg.BibFiles); len(excluded) > 0 {
+			kept := citeKeys[:0]
+			for _, k := range citeKeys {
+				if !excluded[k] {
+					kept = append(kept, k)
+				}
+			}
+			citeKeys = kept
+		}
 		if len(citeKeys) > 0 {
 			if err := bib.WriteBibFromCache(ef, citeKeys, auxDir, bib.WriteOptions{
 				AbbreviateJournals:  cfg.abbreviateJournals(),
@@ -525,6 +537,40 @@ func bibFilesFromArtifacts(stem, auxDir string) []string {
 	}
 
 	return files
+}
+
+// generatedBibKeys returns cite keys defined in .bib files referenced by
+// \bibdata{...} in the .aux but not declared in cfg.BibFiles. Such files are
+// produced by LaTeX packages — e.g. revtex's citeautoscript writes
+// <stem>Notes.bib with @FOOTNOTE{NoteN,...} entries for each \footnote.
+// Generated files are searched in auxDir first, then the project root.
+func generatedBibKeys(stem, auxDir string, userBibFiles []string) map[string]bool {
+	user := map[string]bool{}
+	for _, f := range userBibFiles {
+		user[filepath.Base(f)] = true
+	}
+	keys := map[string]bool{}
+	for _, name := range bibFilesFromArtifacts(stem, auxDir) {
+		if user[filepath.Base(name)] {
+			continue
+		}
+		var data []byte
+		for _, candidate := range []string{filepath.Join(auxDir, name), name} {
+			if b, err := os.ReadFile(candidate); err == nil {
+				data = b
+				break
+			}
+		}
+		if data == nil {
+			continue
+		}
+		for _, item := range bib.ParseFile(string(data)) {
+			if item.IsEntry && item.Entry.Key != "" {
+				keys[item.Entry.Key] = true
+			}
+		}
+	}
+	return keys
 }
 
 // citedKeysFromArtifacts extracts the set of citation keys from the .aux and

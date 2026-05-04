@@ -5,7 +5,7 @@ Pass sequence:
 2. **Pass 1** — `runPdflatex`; buffer output (bib warnings expected here)
 3. **Bib file discovery fallback** — if `cfg.BibFiles` empty after pass 1, parse `.aux`/`.bcf` to find them, save to config
 4. **Cite-key rewrite** — if `.el/renames.json` non-empty (`bib.LoadRenames`), announces key renames and `.tex` file rewrites, rewrite `\cite{}` in all `.tex` files via `rewriteCiteKeys`, clear renames, re-run pdflatex
-5. **Write bibliography** — `bib.WriteBibFromCache`: extract cited keys from `.aux`/`.bcf` (`citedKeysFromArtifacts`), write only those entries to `bibliography.bib` with all config transforms applied; update hash
+5. **Write bibliography** — `bib.WriteBibFromCache`: extract cited keys from `.aux`/`.bcf` (`citedKeysFromArtifacts`), filter out keys defined in generated `.bib` files (`generatedBibKeys` — any `\bibdata{}` source not in `cfg.BibFiles`, e.g. revtex `citeautoscript`'s `<stem>Notes.bib`), write only those entries to `bibliography.bib` with all config transforms applied; update hash
 6. **Detect bib tool** — `.bcf` present → `biber`; `.aux` contains `\bibdata{` → `bibtex`; else none
 7. **Bib pass** — `runBibTool`; biber uses `--input/output-directory`; bibtex runs from inside aux dir with `BIBINPUTS=..:` and `BSTINPUTS=..:` (both needed so bibtex finds `.bib` and `.bst` files in project root)
 8. **Pass 2** — `runPdflatex`; print filtered output
