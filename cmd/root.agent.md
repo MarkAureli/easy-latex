@@ -22,7 +22,7 @@ Config struct + load/save/merge. Shared by all commands that load config.
 | `bib_files` | []string | Registered `.bib` paths (local only) |
 | `bib` | `BibConfig` | Bibliography processing options (see below) |
 | `pedantic` | `PedanticConfig` | Per-check enable/disable map |
-| `spelling` | *string | Spell-check language: `en_GB`, `en_US`, or unset (off). Drives the `spelling` pedantic check via `effectiveEnabledChecks` + `pedantic.ConfigureSpelling`. |
+| `spelling` | *string | Spell-check language: `en_GB`, `en_US`, or unset (off). Triggers `runSpellCheck` in `cmd/check.go` and `cmd/compile.go`; independent of the pedantic registry. |
 
 ### `BibConfig`
 
@@ -60,7 +60,8 @@ Accessor methods on `*Config` (e.g. `cfg.ieeeFormat()`, `cfg.maxAuthors()`) enco
 | `saveGlobalConfig(cfg)` | Write global config; auto-creates parent dir |
 | `GlobalConfigDir()` | Returns the global dir (honours `globalConfigDir` test override, then `XDG_CONFIG_HOME`, then `~/.config`). Used by `internal/spell` to locate `spell/{lang,common,ignore}.txt`. |
 | `globalConfigPath()` | `GlobalConfigDir()/config.json` |
-| `effectiveEnabledChecks(cfg)` | Returns enabled pedantic check names, appending `"spelling"` when `cfg.Spelling` set; also calls `pedantic.ConfigureSpelling`. Used by `cmd/check.go` and `cmd/compile.go`. |
+| `runSpellCheck(cfg, texFiles)` | Runs `internal/spell.Run` if `cfg.Spelling != nil`, returning `[]pedantic.Diagnostic` for merging with pedantic output. Reads tex files, strips comments via `texscan.StripComment`. Used by `cmd/check.go` and `cmd/compile.go`. |
+| `sortDiagnostics(d)` | In-place stable sort of `[]pedantic.Diagnostic` by File then Line; used after merging spell + pedantic diagnostics. |
 
 JSON `omitzero` on `bib` and `pedantic` fields suppresses empty objects (Go 1.24+).
 

@@ -50,7 +50,7 @@ Spell-check (stored at top level, not under `pedantic.checks`):
 |---|---|---|---|
 | `spelling` | string | `en_GB`, `en_US` | unset (off) |
 
-`el config set spelling en_GB` enables British-English spell-check; `el config unset spelling` turns it off. Validation rejects any other value. The `spelling` pedantic check is automatically appended to the enabled list when this key is set (see `effectiveEnabledChecks` in `root.go`).
+`el config set spelling en_GB` enables British-English spell-check; `el config unset spelling` turns it off. Validation rejects any other value. Spelling runs as its own pass alongside pedantic checks (see `runSpellCheck` in `root.go`); it is **not** a pedantic-registry entry, so it does not appear under `pedantic.checks` and there is no `spelling` row in `pedanticConfigFields`.
 
 ### `pedantic` (alias)
 

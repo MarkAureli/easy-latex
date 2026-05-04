@@ -1,8 +1,8 @@
 # el spell (`spell.go`)
 
 Manage spell-check dictionaries and the macro-arg ignore list. Subcommands
-write/read flat token files; the `spelling` pedantic check consumes them at
-compile time via `internal/spell`.
+write/read flat token files; `cmd/root.go:runSpellCheck` consumes them at
+compile/check time via `internal/spell`.
 
 ## Subcommands
 

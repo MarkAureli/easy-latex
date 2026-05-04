@@ -31,11 +31,8 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	enabled, err := effectiveEnabledChecks(cfg)
-	if err != nil {
-		return err
-	}
-	if len(enabled) == 0 {
+	enabled := cfg.Pedantic.EnabledNames()
+	if len(enabled) == 0 && cfg.Spelling == nil {
 		return fmt.Errorf("no pedantic checks enabled (configure with `el config set <check>`)")
 	}
 	if err := pedantic.ValidateCheckNames(enabled); err != nil {
@@ -64,6 +61,12 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	diags := pedantic.RunSourceChecks(enabled, texFiles)
+	spellDiags, err := runSpellCheck(cfg, texFiles)
+	if err != nil {
+		return err
+	}
+	diags = append(diags, spellDiags...)
+	sortDiagnostics(diags)
 	if len(diags) == 0 {
 		fmt.Println("No issues found.")
 		return nil

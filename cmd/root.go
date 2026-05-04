@@ -7,9 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
 	"github.com/MarkAureli/easy-latex/internal/pedantic"
+	"github.com/MarkAureli/easy-latex/internal/spell"
+	"github.com/MarkAureli/easy-latex/internal/texscan"
 	"github.com/spf13/cobra"
 )
 
@@ -334,22 +337,47 @@ func init() {
 	rootCmd.AddCommand(lspCmd)
 }
 
-// effectiveEnabledChecks returns enabled pedantic check names, appending
-// "spelling" when cfg.Spelling is set. Also wires the spell-check package-level
-// configuration so the registered check has the runtime context it needs.
-func effectiveEnabledChecks(cfg *Config) ([]string, error) {
-	enabled := cfg.Pedantic.EnabledNames()
-	if cfg.Spelling != nil {
-		globalDir, err := GlobalConfigDir()
-		if err != nil {
-			return nil, err
-		}
-		pedantic.ConfigureSpelling(*cfg.Spelling, globalDir, auxDir)
-		enabled = append(enabled, "spelling")
-	} else {
-		pedantic.ConfigureSpelling("", "", "")
+// runSpellCheck runs the spell-checker on the project source if cfg.Spelling
+// is set. Returns spell findings reshaped as pedantic.Diagnostic so callers
+// can merge them with pedantic check output.
+func runSpellCheck(cfg *Config, texFiles []string) ([]pedantic.Diagnostic, error) {
+	if cfg.Spelling == nil {
+		return nil, nil
 	}
-	return enabled, nil
+	globalDir, err := GlobalConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	files := make(map[string][]string, len(texFiles))
+	for _, p := range texFiles {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		raw := strings.Split(string(data), "\n")
+		stripped := make([]string, len(raw))
+		for i, l := range raw {
+			stripped[i] = texscan.StripComment(l)
+		}
+		files[p] = stripped
+	}
+	paths := spell.DefaultPaths(globalDir, auxDir, *cfg.Spelling)
+	sd := spell.Run(files, *cfg.Spelling, auxDir, paths, os.Stderr)
+	out := make([]pedantic.Diagnostic, len(sd))
+	for i, d := range sd {
+		out[i] = pedantic.Diagnostic{File: d.File, Line: d.Line, Message: d.Message}
+	}
+	return out, nil
+}
+
+// sortDiagnostics orders diagnostics by File then Line for stable output.
+func sortDiagnostics(d []pedantic.Diagnostic) {
+	sort.SliceStable(d, func(i, j int) bool {
+		if d[i].File != d[j].File {
+			return d[i].File < d[j].File
+		}
+		return d[i].Line < d[j].Line
+	})
 }
 
 // entriesBibFile returns the path of the entries bib file (bibliography.bib)

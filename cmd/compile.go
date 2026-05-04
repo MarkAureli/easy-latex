@@ -78,11 +78,9 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	enabledChecks, err := effectiveEnabledChecks(cfg)
-	if err != nil {
-		return err
-	}
-	if !compileNoCheck && len(enabledChecks) > 0 {
+	enabledChecks := cfg.Pedantic.EnabledNames()
+	runChecks := !compileNoCheck && (len(enabledChecks) > 0 || cfg.Spelling != nil)
+	if runChecks {
 		if err := pedantic.ValidateCheckNames(enabledChecks); err != nil {
 			return err
 		}
@@ -256,7 +254,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Pedantic checks
-	if !compileNoCheck && len(enabledChecks) > 0 {
+	if runChecks {
 		texFiles := texscan.FindTexFiles(cfg.Main, ".")
 
 		if compileFix {
@@ -276,6 +274,12 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 		diags := pedantic.RunSourceChecks(enabledChecks, texFiles)
 		diags = append(diags, pedantic.RunPostCompileChecks(enabledChecks, auxDir)...)
+		spellDiags, err := runSpellCheck(cfg, texFiles)
+		if err != nil {
+			return err
+		}
+		diags = append(diags, spellDiags...)
+		sortDiagnostics(diags)
 
 		if len(diags) > 0 {
 			fmt.Fprintf(os.Stderr, "%s%sPedantic:%s\n", compileColors.Bold, compileColors.Red, compileColors.Reset)
