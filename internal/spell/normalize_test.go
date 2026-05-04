@@ -28,3 +28,28 @@ func TestNormalizeSharpS(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeUmlauts(t *testing.T) {
+	cases := []struct {
+		name, in, want string
+	}{
+		{"bare", `f\"ur`, "für"},
+		{"braces", `f\"{u}r`, "für"},
+		{"group", `f{\"u}r`, "für"},
+		{"group-braces", `f{\"{u}}r`, "für"},
+		{"already-utf8", "für", "für"},
+		{"capital", `\"Uber`, "Über"},
+		{"o-umlaut", `sch\"on`, "schön"},
+		{"a-umlaut", `M\"adchen`, "Mädchen"},
+		{"multiple", `\"u\"o\"a`, "üöä"},
+		{"no-touch-non-vowel", `\"x`, `\"x`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NormalizeUmlauts(tc.in)
+			if got != tc.want {
+				t.Errorf("NormalizeUmlauts(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}

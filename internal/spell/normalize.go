@@ -26,6 +26,34 @@ var (
 	bigSSEndRe      = regexp.MustCompile(`\\SS\z`)
 )
 
+// umlautRe matches every TeX umlaut spelling for a single ASCII vowel, in
+// longest-form-first order so leftmost-first alternation picks the maximal
+// span: `{\"{u}}`, `{\"u}`, `\"{u}`, `\"u`. The captured letter (one of four
+// alternation branches) is the inside vowel.
+var umlautRe = regexp.MustCompile(`\{\\"\{([aeiouyAEIOUY])\}\}|\{\\"([aeiouyAEIOUY])\}|\\"\{([aeiouyAEIOUY])\}|\\"([aeiouyAEIOUY])`)
+
+var umlautMap = map[byte]string{
+	'a': "ä", 'e': "ë", 'i': "ï", 'o': "ö", 'u': "ü", 'y': "ÿ",
+	'A': "Ä", 'E': "Ë", 'I': "Ï", 'O': "Ö", 'U': "Ü", 'Y': "Ÿ",
+}
+
+// NormalizeUmlauts rewrites every TeX umlaut macro form to the precomposed
+// UTF-8 character so a German dict entry like `für` covers `f\"ur`,
+// `f\"{u}r`, `f{\"u}r`, `f{\"{u}}r`, and the literal `für`.
+func NormalizeUmlauts(s string) string {
+	return umlautRe.ReplaceAllStringFunc(s, func(m string) string {
+		for i := 0; i < len(m); i++ {
+			c := m[i]
+			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+				if r, ok := umlautMap[c]; ok {
+					return r
+				}
+			}
+		}
+		return m
+	})
+}
+
 // NormalizeSharpS rewrites every German sharp-s spelling to plain `ss`/`SS`.
 func NormalizeSharpS(s string) string {
 	s = ssGroupRe.ReplaceAllString(s, "ss")
