@@ -52,6 +52,14 @@ Spell-check (stored at top level, not under `pedantic.checks`):
 
 `el config set spelling en_GB` enables British-English spell-check; `el config unset spelling` turns it off. Validation rejects any other value. Spelling runs as its own pass alongside pedantic checks (see `runSpellCheck` in `root.go`); it is **not** a pedantic-registry entry, so it does not appear under `pedantic.checks` and there is no `spelling` row in `pedanticConfigFields`.
 
+Strict mode (stored at top level):
+
+| Key | Type | Default |
+|---|---|---|
+| `strict` | bool | false |
+
+When true, `el check` and `el compile` exit non-zero if any pedantic, spelling, or compile-time warning is reported. Per-invocation override via `--strict` / `--no-strict` flags on those commands. Configured via the `strict` entry in `generalConfigFields`.
+
 ### `pedantic` (alias)
 
 `el config set pedantic [value]` and `el config unset pedantic` apply the
@@ -69,6 +77,6 @@ local `.el/config.json` > global `~/.config/easy-latex/config.json` > built-in d
 
 ## Implementation
 
-`configFields` is built as `bibConfigFields` (static slice) + `pedanticConfigFields()` (one entry per registered check). `findField(key)` does a linear lookup; `loadTargetConfig(cmd)` returns config + save func based on `--global` flag. Shell completion via `configKeyCompletion`.
+`configFields` is built as `bibConfigFields` + `generalConfigFields` (e.g. `strict`) + `pedanticConfigFields()`. `findField(key)` does a linear lookup; `loadTargetConfig(cmd)` returns config + save func based on `--global` flag. Shell completion via `configKeyCompletion`.
 
 See `cmd/root.agent.md` for Config / BibConfig / PedanticConfig struct definitions.

@@ -10,7 +10,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var checkFix bool
+var (
+	checkFix      bool
+	checkStrict   bool
+	checkNoStrict bool
+)
 
 var checkCmd = &cobra.Command{
 	Use:               "check",
@@ -22,6 +26,9 @@ var checkCmd = &cobra.Command{
 
 func init() {
 	checkCmd.Flags().BoolVarP(&checkFix, "fix", "f", false, "Apply autofixes to source files where available")
+	checkCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors (overrides config)")
+	checkCmd.Flags().BoolVar(&checkNoStrict, "no-strict", false, "Treat warnings as warnings (overrides config)")
+	checkCmd.MarkFlagsMutuallyExclusive("strict", "no-strict")
 	rootCmd.AddCommand(checkCmd)
 }
 
@@ -60,21 +67,26 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	diags := pedantic.RunSourceChecks(enabled, texFiles)
+	pedDiags := pedantic.RunSourceChecks(enabled, texFiles)
 	spellDiags, err := runSpellCheck(cfg, texFiles)
 	if err != nil {
 		return err
 	}
-	diags = append(diags, spellDiags...)
-	sortDiagnostics(diags)
-	if len(diags) == 0 {
+	sortDiagnostics(pedDiags)
+	sortDiagnostics(spellDiags)
+	if len(pedDiags) == 0 && len(spellDiags) == 0 {
 		fmt.Println("No issues found.")
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "%s%sPedantic:%s\n", colors.Bold, colors.Red, colors.Reset)
-	for _, d := range diags {
-		fmt.Fprintf(os.Stderr, "  %s%s%s\n", colors.Red, d.String(), colors.Reset)
+	printDiagSection(os.Stderr, "Pedantics", pedDiags, colors)
+	if len(pedDiags) > 0 && len(spellDiags) > 0 {
+		fmt.Fprintln(os.Stderr)
 	}
-	return fmt.Errorf("pedantic checks failed (%d violations)", len(diags))
+	printDiagSection(os.Stderr, "Misspellings", spellDiags, colors)
+	printSummary(os.Stderr, len(pedDiags), len(spellDiags), 0, false, colors)
+	if resolveStrict(cfg, checkStrict, checkNoStrict) {
+		return errStrict
+	}
+	return nil
 }

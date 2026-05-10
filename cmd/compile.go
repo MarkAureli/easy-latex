@@ -18,9 +18,11 @@ import (
 )
 
 var (
-	openAfter       bool
-	compileFix      bool
-	compileNoCheck  bool
+	openAfter        bool
+	compileFix       bool
+	compileNoCheck   bool
+	compileStrict    bool
+	compileNoStrict  bool
 )
 
 var compileCmd = &cobra.Command{
@@ -38,6 +40,9 @@ func init() {
 	compileCmd.Flags().BoolVarP(&openAfter, "open", "o", false, "Open PDF after successful compilation")
 	compileCmd.Flags().BoolVarP(&compileFix, "fix", "f", false, "Apply autofixes to source files where available")
 	compileCmd.Flags().BoolVarP(&compileNoCheck, "no-check", "n", false, "Skip all pedantic checks (static and dynamic)")
+	compileCmd.Flags().BoolVar(&compileStrict, "strict", false, "Treat warnings as errors (overrides config)")
+	compileCmd.Flags().BoolVar(&compileNoStrict, "no-strict", false, "Treat warnings as warnings (overrides config)")
+	compileCmd.MarkFlagsMutuallyExclusive("strict", "no-strict")
 }
 
 var errorPatterns = []*regexp.Regexp{
@@ -108,6 +113,8 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	}
 
 	stem := filepath.Base(strings.TrimSuffix(cfg.Main, ".tex"))
+
+	var compileWarnLines []string
 
 	log := newBibLogger()
 
@@ -235,9 +242,9 @@ func runCompile(cmd *cobra.Command, args []string) error {
 				return err
 			}
 		}
-		printLines(prev)
+		compileWarnLines = prev
 	} else {
-		printLines(firstLines)
+		compileWarnLines = firstLines
 	}
 
 	pdfName := stem + ".pdf"
@@ -253,7 +260,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot write %s: %w", pdfName, err)
 	}
 
-	// Pedantic checks
+	var pedDiags, spellDiags []pedantic.Diagnostic
 	if runChecks {
 		texFiles := texscan.FindTexFiles(cfg.Main, ".")
 
@@ -272,25 +279,31 @@ func runCompile(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		diags := pedantic.RunSourceChecks(enabledChecks, texFiles)
-		diags = append(diags, pedantic.RunPostCompileChecks(enabledChecks, auxDir)...)
-		spellDiags, err := runSpellCheck(cfg, texFiles)
+		pedDiags = pedantic.RunSourceChecks(enabledChecks, texFiles)
+		pedDiags = append(pedDiags, pedantic.RunPostCompileChecks(enabledChecks, auxDir)...)
+		var err error
+		spellDiags, err = runSpellCheck(cfg, texFiles)
 		if err != nil {
 			return err
 		}
-		diags = append(diags, spellDiags...)
-		sortDiagnostics(diags)
-
-		if len(diags) > 0 {
-			fmt.Fprintf(os.Stderr, "%s%sPedantic:%s\n", compileColors.Bold, compileColors.Red, compileColors.Reset)
-			for _, d := range diags {
-				fmt.Fprintf(os.Stderr, "  %s%s%s\n", compileColors.Red, d.String(), compileColors.Reset)
-			}
-			return fmt.Errorf("pedantic checks failed (%d violations)", len(diags))
-		}
+		sortDiagnostics(pedDiags)
+		sortDiagnostics(spellDiags)
 	}
 
+	hasWarnLines := len(compileWarnLines) > 0 && lineType(compileWarnLines[0]) == "warning"
+	printCompileSections(pedDiags, spellDiags, compileWarnLines, hasWarnLines)
+
 	fmt.Printf("Compiled successfully -> %s\n", pdfName)
+
+	if resolveStrict(cfg, compileStrict, compileNoStrict) {
+		warnCount := 0
+		if hasWarnLines {
+			warnCount = countWarnings(compileWarnLines)
+		}
+		if len(pedDiags)+len(spellDiags)+warnCount > 0 {
+			return errStrict
+		}
+	}
 
 	if openAfter {
 		var cmd *exec.Cmd
@@ -383,6 +396,57 @@ func printLines(lines []string) {
 		}
 		fmt.Printf("  %s%s%s\n", color, line, compileColors.Reset)
 	}
+}
+
+// printCompileSections prints Pedantics, Spelling, Warnings sections in order
+// (blank line between each pair of non-empty sections), followed by the summary.
+func printCompileSections(ped, spell []pedantic.Diagnostic, warnLines []string, hasWarnLines bool) {
+	first := true
+	emit := func(fn func()) {
+		if !first {
+			fmt.Println()
+		}
+		fn()
+		first = false
+	}
+	if len(ped) > 0 {
+		emit(func() { printDiagSection(os.Stderr, "Pedantics", ped, compileColors) })
+	}
+	if len(spell) > 0 {
+		emit(func() { printDiagSection(os.Stderr, "Misspellings", spell, compileColors) })
+	}
+	if hasWarnLines {
+		emit(func() { printWarningLines(warnLines) })
+	}
+	printSummary(os.Stderr, len(ped), len(spell), countWarnings(warnLines), true, compileColors)
+}
+
+// printWarningLines prints compile-time warnings under the "Warnings:" header.
+func printWarningLines(lines []string) {
+	if len(lines) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%s%sWarnings:%s\n", compileColors.Bold, compileColors.Yellow, compileColors.Reset)
+	for i, line := range lines {
+		if i > 0 && !isContextLine(line) {
+			fmt.Fprintln(os.Stderr)
+		}
+		fmt.Fprintf(os.Stderr, "  %s%s%s\n", compileColors.Yellow, line, compileColors.Reset)
+	}
+}
+
+// countWarnings returns the count of distinct compile warnings (excludes context lines).
+func countWarnings(lines []string) int {
+	if len(lines) == 0 || lineType(lines[0]) != "warning" {
+		return 0
+	}
+	n := 0
+	for _, l := range lines {
+		if !isContextLine(l) {
+			n++
+		}
+	}
+	return n
 }
 
 func runPdflatex(pdflatex string, cfg *Config, mathPos bool) ([]string, error) {

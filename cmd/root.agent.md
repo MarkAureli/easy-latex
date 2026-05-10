@@ -12,7 +12,8 @@ Config struct + load/save/merge. Shared by all commands that load config.
   "bib_files": ["refs.bib"],
   "bib": { ... },
   "pedantic": { "checks": { "no-block-citations": true } },
-  "spelling": "en_US"
+  "spelling": "en_US",
+  "strict": false
 }
 ```
 
@@ -23,6 +24,7 @@ Config struct + load/save/merge. Shared by all commands that load config.
 | `bib` | `BibConfig` | Bibliography processing options (see below) |
 | `pedantic` | `PedanticConfig` | Per-check enable/disable map |
 | `spelling` | *string | Spell-check language: `en_GB`, `en_US`, or unset (off). Triggers `runSpellCheck` in `cmd/check.go` and `cmd/compile.go`; independent of the pedantic registry. |
+| `strict` | *bool | When true, `el check` and `el compile` exit non-zero on any pedantic / spelling / compile-time warning. Default false. CLI flags `--strict` / `--no-strict` override. Helper: `cfg.strict()`. |
 
 ### `BibConfig`
 
@@ -60,8 +62,11 @@ Accessor methods on `*Config` (e.g. `cfg.ieeeFormat()`, `cfg.maxAuthors()`) enco
 | `saveGlobalConfig(cfg)` | Write global config; auto-creates parent dir |
 | `GlobalConfigDir()` | Returns the global dir (honours `globalConfigDir` test override, then `XDG_CONFIG_HOME`, then `~/.config`). Used by `internal/spell` to locate `spell/{lang,common,ignore}.txt`. |
 | `globalConfigPath()` | `GlobalConfigDir()/config.json` |
-| `runSpellCheck(cfg, texFiles)` | Runs `internal/spell.Run` if `cfg.Spelling != nil`, returning `[]pedantic.Diagnostic` for merging with pedantic output. Reads tex files, strips comments via `texscan.StripComment`. Used by `cmd/check.go` and `cmd/compile.go`. |
-| `sortDiagnostics(d)` | In-place stable sort of `[]pedantic.Diagnostic` by File then Line; used after merging spell + pedantic diagnostics. |
+| `runSpellCheck(cfg, texFiles)` | Runs `internal/spell.Run` if `cfg.Spelling != nil`, returning `[]pedantic.Diagnostic`. Reads tex files, strips comments via `texscan.StripComment`. Callers display spelling diagnostics in their own `Spelling:` section (do not merge into pedantics). |
+| `sortDiagnostics(d)` | In-place stable sort of `[]pedantic.Diagnostic` by File then Line. |
+| `resolveStrict(cfg, strictFlag, noStrictFlag)` | Strict-mode resolution: `--strict` wins, then `--no-strict`, then `cfg.strict()`. |
+| `printDiagSection(w, label, diags, colors)` | Prints a yellow/bold `<label>:` header followed by indented yellow diag lines. Caller is responsible for blank-line separation between adjacent sections. |
+| `printSummary(w, ped, spell, warn, includeWarnings, colors)` | Yellow/bold one-line summary preceded by a blank line. No-op if all counts zero. `includeWarnings=false` for `el check` (omits compile-warning count). |
 
 JSON `omitzero` on `bib` and `pedantic` fields suppresses empty objects (Go 1.24+).
 

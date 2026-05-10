@@ -111,6 +111,25 @@ var bibConfigFields = []configField{
 	},
 }
 
+// generalConfigFields lists project-wide configurable options not tied to bib
+// or pedantic checks.
+var generalConfigFields = []configField{
+	{
+		key: "strict", isBool: true,
+		setVal: func(c *Config, val string) error {
+			v, err := parseBool(val)
+			if err != nil {
+				return err
+			}
+			c.Strict = &v
+			return nil
+		},
+		unset:   func(c *Config) { c.Strict = nil },
+		isSet:   func(c *Config) bool { return c.Strict != nil },
+		display: func(c *Config) string { return strconv.FormatBool(c.strict()) },
+	},
+}
+
 // pedanticConfigFields builds a configField per registered pedantic check.
 // Each check is a bool toggle stored in cfg.Pedantic.Checks[name].
 func pedanticConfigFields() []configField {
@@ -154,8 +173,9 @@ func pedanticConfigFields() []configField {
 // allConfigFields returns bib + pedantic fields. Built fresh each call so the
 // pedantic registry can be populated by package init() before use.
 func allConfigFields() []configField {
-	out := make([]configField, 0, len(bibConfigFields)+8)
+	out := make([]configField, 0, len(bibConfigFields)+len(generalConfigFields)+8)
 	out = append(out, bibConfigFields...)
+	out = append(out, generalConfigFields...)
 	out = append(out, pedanticConfigFields()...)
 	return out
 }

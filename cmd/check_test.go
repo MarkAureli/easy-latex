@@ -31,11 +31,15 @@ func invokeCheck(t *testing.T, args []string) error {
 	t.Helper()
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool("fix", false, "")
+	cmd.Flags().Bool("strict", false, "")
+	cmd.Flags().Bool("no-strict", false, "")
 	if err := cmd.ParseFlags(args); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
 	checkFix, _ = cmd.Flags().GetBool("fix")
-	defer func() { checkFix = false }()
+	checkStrict, _ = cmd.Flags().GetBool("strict")
+	checkNoStrict, _ = cmd.Flags().GetBool("no-strict")
+	defer func() { checkFix = false; checkStrict = false; checkNoStrict = false }()
 	return runCheck(cmd, cmd.Flags().Args())
 }
 
@@ -67,8 +71,11 @@ func TestCheck_DetectsViolation(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "main.tex"), []byte("Hello  world.\n"), 0644)
 	chdir(t, dir)
 
-	if err := invokeCheck(t, nil); err == nil {
-		t.Fatal("expected error for file with violations")
+	if err := invokeCheck(t, []string{"--strict"}); err == nil {
+		t.Fatal("expected error for file with violations under --strict")
+	}
+	if err := invokeCheck(t, nil); err != nil {
+		t.Fatalf("expected nil error for violations without --strict, got: %v", err)
 	}
 }
 

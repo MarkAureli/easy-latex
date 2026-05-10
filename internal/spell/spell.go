@@ -98,7 +98,7 @@ func Run(files map[string][]string, lang, auxDir string, paths Paths, warn io.Wr
 				return out
 			}
 			for _, m := range misses {
-				msg := fmt.Sprintf("spelling: %q [%s] col %d", m.Word, lang, m.Col)
+				msg := fmt.Sprintf("%q col %d", m.Word, m.Col)
 				if len(m.Suggestions) > 0 {
 					show := m.Suggestions
 					if len(show) > 5 {

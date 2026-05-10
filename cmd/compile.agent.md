@@ -11,7 +11,7 @@ Pass sequence:
 8. **Pass 2** — `runPdflatex`; print filtered output
 9. **Pass 3–4** — up to 2 additional passes if output contains "rerun" (`for range 2` loop), stabilizing cross-references and citations
 
-Post-compile: copy `<stem>.pdf` from `.el/` to project root. If `cfg.Pedantic.EnabledNames()` non-empty: run source checks via `pedantic.RunSourceChecks` + post-compile checks via `pedantic.RunPostCompileChecks`; violations → error (PDF still produced). When `no-math-linebreak` is enabled: writes embedded `el-mathpos.sty` to `.el/`, injects via `\RequirePackage{el-mathpos}\input{main.tex}` with `TEXINPUTS` pointing to aux dir and `-jobname=<stem>`.
+Post-compile: copy `<stem>.pdf` from `.el/` to project root. If checks enabled: run `pedantic.RunSourceChecks` + `pedantic.RunPostCompileChecks` + spell-check. Output, in order with blank line between non-empty sections, all yellow/bold: `Pedantics:`, `Misspellings:`, `Warnings:` (compile-time pdflatex warnings), followed by a yellow summary `N pedantic(s), M misspelling(s), K warning(s)` (each term singular when its count is 1). `Compiled successfully -> <pdf>` line always prints when PDF made. If strict mode (config `strict: true` or `--strict`) and any non-empty section, runCompile returns error after printing summary. When `no-math-linebreak` is enabled: writes embedded `el-mathpos.sty` to `.el/`, injects via `\RequirePackage{el-mathpos}\input{main.tex}` with `TEXINPUTS` pointing to aux dir and `-jobname=<stem>`.
 
 Uses `internal/term` for ANSI colors (replaces inline color vars). Uses `bibLogger` (`cmd/biblog.go`) for bib operation messages.
 
@@ -19,6 +19,7 @@ Flags:
 - `--open` / `-o` — call `open <pdf>` after success.
 - `--fix` — apply `pedantic.RunSourceFixes` to source files before running checks (static-with-fix checks only); reports modified files. Mutually exclusive with `--no-check`.
 - `--no-check` — skip all pedantic checks for this run (static and dynamic); also skips writing `el-mathpos.sty` and `needsMathPos` instrumentation. Mutually exclusive with `--fix`.
+- `--strict` / `--no-strict` — override `cfg.Strict` for this run. In strict mode any pedantic, spelling, or compile-time warning makes runCompile return a non-zero error after printing all sections and "Compiled successfully".
 
 Output filtering (`filterLines`): keeps lines matching `^!`, `^l.\d+`, warning, error, undefined, multiply defined, Over/Underfull.
 

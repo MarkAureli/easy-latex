@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -12,11 +13,16 @@ import (
 	"github.com/MarkAureli/easy-latex/internal/bib"
 	"github.com/MarkAureli/easy-latex/internal/pedantic"
 	"github.com/MarkAureli/easy-latex/internal/spell"
+	"github.com/MarkAureli/easy-latex/internal/term"
 	"github.com/MarkAureli/easy-latex/internal/texscan"
 	"github.com/spf13/cobra"
 )
 
 const auxDir = ".el"
+
+// errStrict signals strict-mode failure. Execute() exits 1 without printing it
+// — the per-section yellow output already conveyed the cause.
+var errStrict = errors.New("strict mode: warnings present")
 
 // Config is the structure stored in .el/config.json
 type Config struct {
@@ -26,6 +32,12 @@ type Config struct {
 	Pedantic PedanticConfig `json:"pedantic,omitzero"`
 	// Spelling selects spell-check language. nil = off. Allowed: "en_GB", "en_US".
 	Spelling *string `json:"spelling,omitempty"`
+	// Strict treats pedantic, spelling, and compile warnings as errors when true.
+	Strict *bool `json:"strict,omitempty"`
+}
+
+func (cfg *Config) strict() bool {
+	return cfg.Strict != nil && *cfg.Strict
 }
 
 // spelling returns the active spell-check language ("en_GB", "en_US") or empty
@@ -233,6 +245,7 @@ func mergeConfig(local, global *Config) *Config {
 		return g
 	}
 	merged.Spelling = mergeStr(local.Spelling, global.Spelling)
+	merged.Strict = mergeBool(local.Strict, global.Strict)
 
 	// Pedantic: per-key pointer merge (local wins for keys it sets).
 	if len(local.Pedantic.Checks) > 0 || len(global.Pedantic.Checks) > 0 {
@@ -324,7 +337,9 @@ func isSpellCommand(cmd *cobra.Command) bool {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if !errors.Is(err, errStrict) {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(1)
 	}
 }
@@ -368,6 +383,53 @@ func runSpellCheck(cfg *Config, texFiles []string) ([]pedantic.Diagnostic, error
 		out[i] = pedantic.Diagnostic{File: d.File, Line: d.Line, Message: d.Message}
 	}
 	return out, nil
+}
+
+// resolveStrict returns the effective strict flag. CLI overrides config.
+func resolveStrict(cfg *Config, strictFlag, noStrictFlag bool) bool {
+	if strictFlag {
+		return true
+	}
+	if noStrictFlag {
+		return false
+	}
+	return cfg.strict()
+}
+
+// printDiagSection prints a labelled section of diagnostics in warning style.
+// Caller is responsible for blank-line separation between adjacent sections.
+func printDiagSection(w *os.File, label string, diags []pedantic.Diagnostic, colors term.Colors) {
+	if len(diags) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "%s%s%s:%s\n", colors.Bold, colors.Yellow, label, colors.Reset)
+	for _, d := range diags {
+		fmt.Fprintf(w, "  %s%s%s\n", colors.Yellow, d.String(), colors.Reset)
+	}
+}
+
+// printSummary prints a one-line yellow summary if any count is non-zero.
+// includeWarnings controls whether the compile warnings count appears (compile only).
+func printSummary(w *os.File, ped, spell, warn int, includeWarnings bool, colors term.Colors) {
+	if ped == 0 && spell == 0 && warn == 0 {
+		return
+	}
+	plural := func(n int, sing, pl string) string {
+		if n == 1 {
+			return fmt.Sprintf("%d %s", n, sing)
+		}
+		return fmt.Sprintf("%d %s", n, pl)
+	}
+	fmt.Fprintln(w)
+	parts := []string{
+		plural(ped, "pedantic", "pedantics"),
+		plural(spell, "misspelling", "misspellings"),
+	}
+	if includeWarnings {
+		parts = append(parts, plural(warn, "warning", "warnings"))
+	}
+	summary := strings.Join(parts, ", ")
+	fmt.Fprintf(w, "%s%s%s%s\n", colors.Bold, colors.Yellow, summary, colors.Reset)
 }
 
 // sortDiagnostics orders diagnostics by File then Line for stable output.
