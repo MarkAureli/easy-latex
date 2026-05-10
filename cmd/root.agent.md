@@ -65,7 +65,8 @@ Accessor methods on `*Config` (e.g. `cfg.ieeeFormat()`, `cfg.maxAuthors()`) enco
 | `runSpellCheck(cfg, texFiles)` | Runs `internal/spell.Run` if `cfg.Spelling != nil`, returning `[]pedantic.Diagnostic`. Reads tex files, strips comments via `texscan.StripComment`. Callers display spelling diagnostics in their own `Spelling:` section (do not merge into pedantics). |
 | `sortDiagnostics(d)` | In-place stable sort of `[]pedantic.Diagnostic` by File then Line. |
 | `resolveStrict(cfg, strictFlag, noStrictFlag)` | Strict-mode resolution: `--strict` wins, then `--no-strict`, then `cfg.strict()`. |
-| `printDiagSection(w, label, diags, colors)` | Prints a yellow/bold `<label>:` header followed by indented yellow diag lines. Caller is responsible for blank-line separation between adjacent sections. |
+| `printDiagSection(w, label, diags, headerColor, entryColor, colors)` | Prints a bold `<label>:` header in `headerColor` followed by indented diag lines in `entryColor`. Pass `""` for default-colour rendering (used by the `Pedantics (fixed)` section). Caller is responsible for blank-line separation between adjacent sections. |
+| `diffDiagnostics(before, after)` | Set difference: returns diagnostics present in `before` but not in `after` (matched by File+Line+Message). Used by `el check`/`el compile` with `--fix` to derive the "fixed" subset from pre/post detector runs. |
 | `printSummary(w, ped, spell, warn, includeWarnings, colors)` | Yellow/bold one-line summary preceded by a blank line. No-op if all counts zero. `includeWarnings=false` for `el check` (omits compile-warning count). |
 
 JSON `omitzero` on `bib` and `pedantic` fields suppresses empty objects (Go 1.24+).

@@ -396,16 +396,40 @@ func resolveStrict(cfg *Config, strictFlag, noStrictFlag bool) bool {
 	return cfg.strict()
 }
 
-// printDiagSection prints a labelled section of diagnostics in warning style.
-// Caller is responsible for blank-line separation between adjacent sections.
-func printDiagSection(w *os.File, label string, diags []pedantic.Diagnostic, colors term.Colors) {
+// printDiagSection prints a labelled section of diagnostics. headerColor and
+// entryColor are ANSI sequences (use "" for default colour). Caller is
+// responsible for blank-line separation between adjacent sections.
+func printDiagSection(w *os.File, label string, diags []pedantic.Diagnostic, headerColor, entryColor string, colors term.Colors) {
 	if len(diags) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "%s%s%s:%s\n", colors.Bold, colors.Yellow, label, colors.Reset)
+	fmt.Fprintf(w, "%s%s%s:%s\n", colors.Bold, headerColor, label, colors.Reset)
 	for _, d := range diags {
-		fmt.Fprintf(w, "  %s%s%s\n", colors.Yellow, d.String(), colors.Reset)
+		fmt.Fprintf(w, "  %s%s%s\n", entryColor, d.String(), colors.Reset)
 	}
+}
+
+// diffDiagnostics returns the diagnostics in `before` that are not present in
+// `after` (matched by File+Line+Message). Used to derive the "fixed" subset
+// after running source autofixes.
+func diffDiagnostics(before, after []pedantic.Diagnostic) []pedantic.Diagnostic {
+	key := func(d pedantic.Diagnostic) string {
+		return fmt.Sprintf("%s\x00%d\x00%s", d.File, d.Line, d.Message)
+	}
+	seen := make(map[string]int, len(after))
+	for _, d := range after {
+		seen[key(d)]++
+	}
+	var fixed []pedantic.Diagnostic
+	for _, d := range before {
+		k := key(d)
+		if seen[k] > 0 {
+			seen[k]--
+			continue
+		}
+		fixed = append(fixed, d)
+	}
+	return fixed
 }
 
 // printSummary prints a one-line yellow summary if any count is non-zero.

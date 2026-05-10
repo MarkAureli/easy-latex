@@ -260,38 +260,34 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot write %s: %w", pdfName, err)
 	}
 
-	var pedDiags, spellDiags []pedantic.Diagnostic
+	var fixedPedDiags, pedDiags, spellDiags []pedantic.Diagnostic
 	if runChecks {
 		texFiles := texscan.FindTexFiles(cfg.Main, ".")
 
 		if compileFix {
-			modified, err := pedantic.RunSourceFixes(enabledChecks, texFiles)
-			if err != nil {
+			beforeSrc := pedantic.RunSourceChecks(enabledChecks, texFiles)
+			if _, err := pedantic.RunSourceFixes(enabledChecks, texFiles); err != nil {
 				return err
 			}
-			if len(modified) == 0 {
-				fmt.Println("No fixes applied.")
-			} else {
-				fmt.Printf("Applied fixes to %d file(s):\n", len(modified))
-				for _, p := range modified {
-					fmt.Printf("  %s%s%s\n", compileColors.Green, p, compileColors.Reset)
-				}
-			}
+			afterSrc := pedantic.RunSourceChecks(enabledChecks, texFiles)
+			fixedPedDiags = diffDiagnostics(beforeSrc, afterSrc)
+			pedDiags = append(afterSrc, pedantic.RunPostCompileChecks(enabledChecks, auxDir)...)
+		} else {
+			pedDiags = pedantic.RunSourceChecks(enabledChecks, texFiles)
+			pedDiags = append(pedDiags, pedantic.RunPostCompileChecks(enabledChecks, auxDir)...)
 		}
-
-		pedDiags = pedantic.RunSourceChecks(enabledChecks, texFiles)
-		pedDiags = append(pedDiags, pedantic.RunPostCompileChecks(enabledChecks, auxDir)...)
 		var err error
 		spellDiags, err = runSpellCheck(cfg, texFiles)
 		if err != nil {
 			return err
 		}
+		sortDiagnostics(fixedPedDiags)
 		sortDiagnostics(pedDiags)
 		sortDiagnostics(spellDiags)
 	}
 
 	hasWarnLines := len(compileWarnLines) > 0 && lineType(compileWarnLines[0]) == "warning"
-	printCompileSections(pedDiags, spellDiags, compileWarnLines, hasWarnLines)
+	printCompileSections(fixedPedDiags, pedDiags, spellDiags, compileWarnLines, hasWarnLines, compileFix)
 
 	fmt.Printf("Compiled successfully -> %s\n", pdfName)
 
@@ -398,9 +394,12 @@ func printLines(lines []string) {
 	}
 }
 
-// printCompileSections prints Pedantics, Spelling, Warnings sections in order
-// (blank line between each pair of non-empty sections), followed by the summary.
-func printCompileSections(ped, spell []pedantic.Diagnostic, warnLines []string, hasWarnLines bool) {
+// printCompileSections prints Pedantics (fixed), Pedantics (remaining)/Pedantics,
+// Misspellings, Warnings sections in order (blank line between each pair of
+// non-empty sections), followed by the summary. The "fixed" section is shown in
+// the default colour; remaining/misspelling/warnings sections are yellow.
+// `withFix` toggles the "(remaining)" suffix on the pedantics header label.
+func printCompileSections(fixedPed, ped, spell []pedantic.Diagnostic, warnLines []string, hasWarnLines, withFix bool) {
 	first := true
 	emit := func(fn func()) {
 		if !first {
@@ -409,11 +408,22 @@ func printCompileSections(ped, spell []pedantic.Diagnostic, warnLines []string, 
 		fn()
 		first = false
 	}
+	remainingLabel := "Pedantics"
+	if withFix {
+		remainingLabel = "Pedantics (remaining)"
+	}
+	if len(fixedPed) > 0 {
+		emit(func() { printDiagSection(os.Stderr, "Pedantics (fixed)", fixedPed, "", "", compileColors) })
+	}
 	if len(ped) > 0 {
-		emit(func() { printDiagSection(os.Stderr, "Pedantics", ped, compileColors) })
+		emit(func() {
+			printDiagSection(os.Stderr, remainingLabel, ped, compileColors.Yellow, compileColors.Yellow, compileColors)
+		})
 	}
 	if len(spell) > 0 {
-		emit(func() { printDiagSection(os.Stderr, "Misspellings", spell, compileColors) })
+		emit(func() {
+			printDiagSection(os.Stderr, "Misspellings", spell, compileColors.Yellow, compileColors.Yellow, compileColors)
+		})
 	}
 	if hasWarnLines {
 		emit(func() { printWarningLines(warnLines) })

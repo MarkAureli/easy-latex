@@ -52,40 +52,53 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	texFiles := texscan.FindTexFiles(cfg.Main, ".")
 	colors := term.Detect()
 
+	var fixedPedDiags, pedDiags []pedantic.Diagnostic
 	if checkFix {
-		modified, err := pedantic.RunSourceFixes(enabled, texFiles)
-		if err != nil {
+		before := pedantic.RunSourceChecks(enabled, texFiles)
+		if _, err := pedantic.RunSourceFixes(enabled, texFiles); err != nil {
 			return err
 		}
-		if len(modified) == 0 {
-			fmt.Println("No fixes applied.")
-		} else {
-			fmt.Printf("Applied fixes to %d file(s):\n", len(modified))
-			for _, p := range modified {
-				fmt.Printf("  %s%s%s\n", colors.Green, p, colors.Reset)
-			}
-		}
+		pedDiags = pedantic.RunSourceChecks(enabled, texFiles)
+		fixedPedDiags = diffDiagnostics(before, pedDiags)
+	} else {
+		pedDiags = pedantic.RunSourceChecks(enabled, texFiles)
 	}
-
-	pedDiags := pedantic.RunSourceChecks(enabled, texFiles)
 	spellDiags, err := runSpellCheck(cfg, texFiles)
 	if err != nil {
 		return err
 	}
+	sortDiagnostics(fixedPedDiags)
 	sortDiagnostics(pedDiags)
 	sortDiagnostics(spellDiags)
-	if len(pedDiags) == 0 && len(spellDiags) == 0 {
+
+	if len(fixedPedDiags) == 0 && len(pedDiags) == 0 && len(spellDiags) == 0 {
 		fmt.Println("No issues found.")
 		return nil
 	}
 
-	printDiagSection(os.Stderr, "Pedantics", pedDiags, colors)
-	if len(pedDiags) > 0 && len(spellDiags) > 0 {
-		fmt.Fprintln(os.Stderr)
+	remainingLabel := "Pedantics"
+	if checkFix {
+		remainingLabel = "Pedantics (remaining)"
 	}
-	printDiagSection(os.Stderr, "Misspellings", spellDiags, colors)
+	first := true
+	emit := func(fn func()) {
+		if !first {
+			fmt.Fprintln(os.Stderr)
+		}
+		fn()
+		first = false
+	}
+	if len(fixedPedDiags) > 0 {
+		emit(func() { printDiagSection(os.Stderr, "Pedantics (fixed)", fixedPedDiags, "", "", colors) })
+	}
+	if len(pedDiags) > 0 {
+		emit(func() { printDiagSection(os.Stderr, remainingLabel, pedDiags, colors.Yellow, colors.Yellow, colors) })
+	}
+	if len(spellDiags) > 0 {
+		emit(func() { printDiagSection(os.Stderr, "Misspellings", spellDiags, colors.Yellow, colors.Yellow, colors) })
+	}
 	printSummary(os.Stderr, len(pedDiags), len(spellDiags), 0, false, colors)
-	if resolveStrict(cfg, checkStrict, checkNoStrict) {
+	if (len(pedDiags) > 0 || len(spellDiags) > 0) && resolveStrict(cfg, checkStrict, checkNoStrict) {
 		return errStrict
 	}
 	return nil

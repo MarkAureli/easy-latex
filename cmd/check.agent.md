@@ -8,7 +8,7 @@ Run static (source-phase) pedantic checks without compiling.
 - Errors out if no checks are enabled.
 - Validates main file exists; resolves all `.tex` files via `texscan.FindTexFiles`.
 - Without `--fix`: runs `pedantic.RunSourceChecks` + spell-check; prints two yellow sections — `Pedantics:` then (blank line) `Misspellings:` — to stderr, followed by a yellow summary line `N pedantic(s), M misspelling(s)` (singular when count is 1). Exits 0 unless `--strict` (or config `strict: true`) is set, in which case any violation produces a non-zero exit.
-- With `--fix`: first runs `pedantic.RunSourceFixes` (in-place rewrites for fixable checks), then runs detector on post-fix content. Reports modified file paths to stdout.
+- With `--fix`: captures source-check diagnostics pre-fix, runs `pedantic.RunSourceFixes` (in-place rewrites for fixable checks), re-runs the detector. The pre/post diff produces a `Pedantics (fixed)` section (default colour, header bold), followed by `Pedantics (remaining)` (yellow) for what survived. The summary counts only remaining pedantics; fixed items are informational and never trigger strict-mode failure. Modified file paths are no longer printed (the section entries imply them).
 
 ## Scope
 
