@@ -123,6 +123,7 @@ var (
 var argSkipMacros = map[string]bool{
 	"bibliographystyle":	true,
 	"documentclass":        true,
+	"orcid":                true,
 	"usepackage":           true,
 	"RequirePackage":       true,
 	"LoadClass":            true,
