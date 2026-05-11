@@ -24,7 +24,7 @@ func isArgSkipCmd(name string) bool {
 	switch name {
 	case "mbox", "hbox", "intertext",
 		"mathrm", "mathsf", "mathtt", "mathit",
-		"label", "begin", "end",
+		"label", "begin", "end", "tag",
 		"hspace", "vspace":
 		return true
 	}

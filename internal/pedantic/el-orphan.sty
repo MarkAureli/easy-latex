@@ -1,0 +1,77 @@
+%% el-orphan.sty — detect orphan lines (paragraph's first line alone at page bottom).
+%% Auto-injected by el compile when pedantic no-orphan-line is enabled.
+%%
+%% Output format (records in <jobname>.orphan):
+%%   P <pageno>                       page boundary marker (immediate, at shipout)
+%%   S <id> <y-sp> <source-line>      paragraph start (deferred; y from \pdflastypos)
+%%   E <id> <y-sp> <linecount>        paragraph end with \prevgraf (deferred)
+%%
+%% A paragraph whose S and E records span a P boundary AND whose linecount == 2
+%% is a definite orphan: line 1 is alone on the start page.
+%%
+%% Longer-paragraph orphans (e.g. 3-line paragraph with only line 1 on start
+%% page) are NOT flagged here, because pdftex has no per-line position hook —
+%% the detection requires per-line tracking we cannot supply without rewriting
+%% the output routine.  Most orphans in practice are 2-line paragraphs anyway.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{el-orphan}[2026/05/11 Orphan-line detection for easy-latex]
+
+\makeatletter
+
+\newwrite\elorphanfile
+\immediate\openout\elorphanfile=\jobname.orphan
+
+\newcount\el@orphanid
+\el@orphanid=0
+\def\el@orphan@pendingpid{0}
+\newif\ifel@orphan@inpar
+
+%% Start marker.  Bumps id, sets the inpar flag so the next \par writes E.
+%% \pdflastypos is deferred to shipout; \inputlineno expanded now.
+\protected\def\el@orphan@start{%
+  \global\advance\el@orphanid by 1\relax
+  \xdef\el@orphan@pendingpid{\the\el@orphanid}%
+  \global\el@orphan@inpartrue
+  \pdfsavepos
+  \begingroup
+    \edef\act{\endgroup
+      \write\elorphanfile{S \el@orphan@pendingpid\space
+        \noexpand\the\noexpand\pdflastypos\space\the\inputlineno}%
+    }\act
+}
+
+%% End marker — runs after \par finalises (vertical mode, \prevgraf is the
+%% just-built paragraph's line count).  \par is called many times beyond
+%% user paragraph ends (section headings, env exits, repeated \par); the
+%% inpar flag ensures we emit exactly one E per matching S.
+\protected\def\el@orphan@end{%
+  \ifel@orphan@inpar
+    \begingroup
+      \edef\act{\endgroup
+        \write\elorphanfile{E \el@orphan@pendingpid\space\the\prevgraf}%
+      }\act
+    \global\el@orphan@inparfalse
+  \fi
+}
+
+%% Hook installation.  Start hook goes through the kernel para/begin hook
+%% (LaTeX 2021+) — \everypar would be unreliable here, since \@startsection
+%% and other commands clobber it without restoring our addition.  End hook
+%% wraps \par directly: this puts \el@orphan@end in vertical mode after
+%% \par finalises, where \prevgraf is the just-built paragraph's line
+%% count.  (The kernel para/end hook fires too early — \prevgraf is 0.)
+\@ifundefined{AddToHook}{%
+  \PackageError{el-orphan}{Requires LaTeX2e 2021-06 or newer (for \string\AddToHook)}\@ehc
+}{%
+  \AddToHook{para/begin}{\el@orphan@start}%
+  \AddToHook{shipout/before}{%
+    \immediate\write\elorphanfile{P \the\c@page}%
+  }%
+}
+\AtBeginDocument{%
+  \let\el@orig@par\par
+  \protected\def\par{\el@orig@par\el@orphan@end}%
+}
+
+\makeatother
+\endinput

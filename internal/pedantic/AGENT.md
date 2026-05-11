@@ -28,6 +28,7 @@ Spelling is **not** part of this registry. It is a parameterised pass keyed by l
 | `dashes` | Source | yes | Dash style normalization in text regions. Rules: (1) `–` → `--`; (2) `—` → `---`; (3) `−` → `-` in math, `$-$` in text; (4) `\d\s*-\s*\d` → `\d--\d`; (5) `\d\s*---\s*\d` → `\d--\d`; (6) `----+` → `---`; (7) strip spaces around `---`; (8) `(\w+)\s*--\s*(\w+)` → `w---w` unless either side is a digit-leading word OR both first chars uppercase; (9) `(\w) - (\w)` → `w---w` unless either side digit. Fixpoint loop handles chains. Region mask skips math (except 3-math), verbatim envs, and comments. Brace bodies of class/package/file macros (`\documentclass`, `\usepackage`, `\RequirePackage`, `\LoadClass`, `\WarningFilter`, `\PassOptionsToClass`, `\PassOptionsToPackage`, `\input`, `\include`, `\includeonly`, `\InputIfFileExists`, `\IfFileExists`) are passed through unchanged so package names like `revtex4-2` are preserved. |
 | `no-math-linebreak` | PostCompile | no | Inline math (`$...$` or `\(...\)`) that spans multiple PDF lines |
 | `no-section-linebreak` | PostCompile | no | Sectioning title (`\title`, `\part`, `\chapter`, `\section`, `\subsection`, `\subsubsection`, incl. `*`-variants) that spans multiple PDF lines |
+| `no-orphan-line` | PostCompile | no | Orphan paragraphs (2-line paragraph split across pages — line 1 stranded alone at bottom of page A, line 2 on page B). Longer-paragraph orphans not flagged (ambiguous without per-line tracking). |
 
 ### `unused-labels` ignore set
 
@@ -39,6 +40,16 @@ Labels whose name (before the first `:`) matches one of these spelled-out prefix
 - Textbook style: `exercise`, `problem`, `solution`, `case`
 
 All other prefixes — including bare labels, `eq:`/`fig:`/`tab:`/etc. abbreviations, and project-defined prefixes — are flagged when unreferenced. Escape hatches: rename to a standard prefix or disable the check.
+
+## no-orphan-line implementation
+
+Uses `el-orphan.sty` (embedded, auto-injected via `\RequirePackage`):
+- Start hook installed via `\AddToHook{para/begin}` — kernel hook survives the `\everypar` resets that `\@startsection` / `\@afterheading` perform (a plain `\everypar` append loses our hook after the first sectioning command). Records `S <id> <y> <inputlineno>` (deferred so `\pdflastypos` fires at shipout).
+- End hook installed by wrapping `\par` at `\AtBeginDocument`: `\protected\def\par{\el@orig@par\el@orphan@end}`. The kernel `para/end` hook fires too early — `\prevgraf` is still 0 in horizontal mode. Wrapping `\par` places the hook in vertical mode after `\par` finalises, where `\prevgraf` is the just-built paragraph's line count. Records `E <id> <prevgraf>`.
+- `\par` is called many times beyond user paragraph ends (section headings, environment exits, repeated `\par`); `\ifel@orphan@inpar` flag ensures exactly one E per matching S.
+- Page boundary records via `\AddToHook{shipout/before}`: `\immediate\write` of `P <pageno>` lands in the file before that page's deferred S/E writes.
+- Requires LaTeX 2021-06+ (for `\AddToHook`).
+- Go check pairs S/E by id, assigns S.page / E.page from the most recent P record seen in file order, flags when `S.page != E.page AND prevgraf == 2`. Longer-paragraph orphans need per-line position data, which pdfTeX doesn't expose; flagged only the unambiguous case.
 
 ## no-section-linebreak implementation
 
@@ -85,6 +96,8 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 | `el-mathpos.sty` | LaTeX package for inline-math position tracking (embedded into binary) |
 | `section_linebreak.go` | `no-section-linebreak` check impl, `parseSectionPos`, `SectionPosSty` embed, `findTitleLine` |
 | `el-sectionpos.sty` | LaTeX package for sectioning-title position tracking (embedded into binary) |
+| `orphan.go` | `no-orphan-line` check impl, `parseOrphan`, `OrphanSty` embed |
+| `el-orphan.sty` | LaTeX package for paragraph/page-boundary tracking (embedded into binary) |
 
 ## Adding a new check
 
