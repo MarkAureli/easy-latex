@@ -62,6 +62,12 @@ type Check struct {
 	WantRaw       bool
 	ProjectSource ProjectSourceCheckFunc
 	PostCompile   PostCompileCheckFunc
+	// StyName + Sty: for PhasePostCompile checks that need a LaTeX package
+	// auto-injected into the build. StyName is the filename (e.g.
+	// "el-mathpos.sty"); Sty is its embedded bytes. The package basename
+	// (without .sty) is \RequirePackage'd before the document.
+	StyName string
+	Sty     []byte
 }
 
 var registry = map[string]Check{}

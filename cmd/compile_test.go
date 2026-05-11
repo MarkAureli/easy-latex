@@ -265,7 +265,7 @@ func TestRunPdflatex_ErrorSuppressesWarnings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lines, err := runPdflatex(pdflatex, &Config{Main: "main.tex"}, false)
+	lines, err := runPdflatex(pdflatex, &Config{Main: "main.tex"}, nil)
 	if err == nil {
 		t.Fatal("expected compilation error")
 	}

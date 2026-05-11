@@ -18,6 +18,8 @@ func init() {
 		Name:        "no-math-linebreak",
 		Phase:       PhasePostCompile,
 		PostCompile: checkMathLinebreak,
+		StyName:     "el-mathpos.sty",
+		Sty:         MathPosSty,
 	})
 }
 

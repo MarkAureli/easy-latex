@@ -1,0 +1,109 @@
+%% el-sectionpos.sty — record y-positions of sectioning titles for linebreak detection.
+%% Auto-injected by el compile when pedantic no-section-linebreak is enabled.
+%%
+%% Output format (one line per event in <jobname>.sectionpos):
+%%   M <id> <source-line> <kind>          written immediately at command call
+%%   S <id> <y-sp> <kind>                 written when title starts typesetting
+%%   E <id> <y-sp> <kind>                 written when title ends typesetting
+%% where y-sp is the vertical PDF position in scaled points (from \pdflastypos)
+%% and <kind> is one of title|part|chapter|section|subsection|subsubsection
+%% (with optional trailing *).  A pair (S,E) with differing y values means
+%% the sectioning title was split across PDF lines.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{el-sectionpos}[2026/05/11 Section title position tracking for easy-latex]
+
+\makeatletter
+
+\newwrite\elsecfile
+\immediate\openout\elsecfile=\jobname.sectionpos
+
+\newcount\el@secid
+\el@secid=0
+
+%% Start marker: write S <id> <y> <kind>.  #1 = kind, #2 = id literal.
+\protected\def\el@secstart#1#2{%
+  \pdfsavepos
+  \begingroup
+    \edef\act{\endgroup
+      \write\elsecfile{S #2\space
+        \noexpand\the\noexpand\pdflastypos\space#1}%
+    }\act
+}
+
+%% End marker: write E <id> <y> <kind>.  #1 = kind, #2 = id literal.
+\protected\def\el@secend#1#2{%
+  \pdfsavepos
+  \begingroup
+    \edef\act{\endgroup
+      \write\elsecfile{E #2\space
+        \noexpand\the\noexpand\pdflastypos\space#1}%
+    }\act
+}
+
+%% \el@redef{name} preserves \name as \el@orig@name and installs a wrapper
+%% accepting (star, optional, mandatory).  At call time it writes an M record
+%% with the *call-site* \inputlineno, then forwards to the original with the
+%% title body wrapped in S/E markers carrying the current id.
+\def\el@redef#1{%
+  \expandafter\let\csname el@orig@#1\expandafter\endcsname\csname #1\endcsname
+  \expandafter\RenewDocumentCommand\csname #1\endcsname{s o m}{%
+    \global\advance\el@secid by 1\relax
+    \immediate\write\elsecfile{M \the\el@secid\space\the\inputlineno\space#1}%
+    \edef\el@thisid{\the\el@secid}%
+    \edef\el@thisbody{%
+      \noexpand\el@secstart{#1}{\el@thisid}%
+      \unexpanded{##3}%
+      \noexpand\el@secend{#1}{\el@thisid}%
+    }%
+    \IfBooleanTF{##1}{%
+      \@nameuse{el@orig@#1}*{\el@thisbody}%
+    }{%
+      \IfNoValueTF{##2}{%
+        \@nameuse{el@orig@#1}{\el@thisbody}%
+      }{%
+        \@nameuse{el@orig@#1}[##2]{\el@thisbody}%
+      }%
+    }%
+  }%
+}
+
+%% \title is special: by the time \AtBeginDocument fires, the user has already
+%% called \title{...} in the preamble and the body lives in \@title.  We wrap
+%% \@title in-place; \maketitle later typesets the wrapped body, firing S/E
+%% markers.  Source line is recorded as 0; the Go checker recovers it by
+%% scanning main.tex for \title{.
+\def\el@wraptitle{%
+  \@ifundefined{@title}{}{%
+    \global\advance\el@secid by 1\relax
+    \immediate\write\elsecfile{M \the\el@secid\space 0\space title}%
+    \edef\el@titleid{\the\el@secid}%
+    \edef\el@newtitle{%
+      \noexpand\el@secstart{title}{\el@titleid}%
+      \unexpanded\expandafter{\@title}%
+      \noexpand\el@secend{title}{\el@titleid}%
+    }%
+    \global\let\@title\el@newtitle
+  }%
+}
+
+\AtBeginDocument{%
+  %% When hyperref is loaded, section titles are also converted to PDF
+  %% strings (bookmarks, /Title metadata).  Our marker macros must
+  %% expand to nothing during that conversion, otherwise hyperref emits
+  %% "Token not allowed in a PDF string (Unicode)" warnings.
+  \@ifpackageloaded{hyperref}{%
+    \pdfstringdefDisableCommands{%
+      \def\el@secstart#1#2{}%
+      \def\el@secend#1#2{}%
+    }%
+  }{}%
+  \el@wraptitle
+  \@ifundefined{part}{}{\el@redef{part}}%
+  \@ifundefined{chapter}{}{\el@redef{chapter}}%
+  \@ifundefined{section}{}{\el@redef{section}}%
+  \@ifundefined{subsection}{}{\el@redef{subsection}}%
+  \@ifundefined{subsubsection}{}{\el@redef{subsubsection}}%
+}
+
+\makeatother
+\endinput

@@ -8,7 +8,7 @@ Registry-based: each check registers via `init()` → `Register(Check{...})`.
 
 - `PhaseSource` — runs on tex source lines (comment-stripped) per file. Diagnostic signature: `func(path string, lines []string) []Diagnostic`. Set `WantRaw: true` on the `Check` to receive raw (non-stripped) lines instead. May optionally provide `Fix` for autofix (raw lines, not comment-stripped): `func(path string, lines []string) ([]string, bool)` — returns rewritten lines and changed flag.
 - `PhaseProjectSource` — runs once with all tex files at hand. Signature: `func(files map[string][]string) []Diagnostic`. Read-only (no autofix). Use when a check needs cross-file analysis (e.g. labels defined in one file, referenced in another).
-- `PhasePostCompile` — runs after all pdflatex passes complete. Read-only. Signature: `func(auxDir string) []Diagnostic`. No Fix permitted (dynamic checks are non-convergent under autofix).
+- `PhasePostCompile` — runs after all pdflatex passes complete. Read-only. Signature: `func(auxDir string) []Diagnostic`. No Fix permitted (dynamic checks are non-convergent under autofix). May ship a LaTeX package by setting `Check.StyName` + `Check.Sty` (embedded bytes); `cmd/compile.go` writes each enabled check's sty into `auxDir` and `\RequirePackage`s it before `\input{main.tex}`. Aggregated via `pedantic.PostCompileStys(names)`.
 
 Spelling is **not** part of this registry. It is a parameterised pass keyed by language, driven directly from `cmd/root.go:runSpellCheck` via `internal/spell.Run`. Diagnostics are reshaped to `pedantic.Diagnostic` and merged with pedantic output by callers (`cmd/check.go`, `cmd/compile.go`).
 
@@ -27,6 +27,7 @@ Spelling is **not** part of this registry. It is a parameterised pass keyed by l
 | `math-bare-word` | Source | no | 2+ consecutive ASCII letters in math mode not inside a text/font wrapper or forming a command |
 | `dashes` | Source | yes | Dash style normalization in text regions. Rules: (1) `–` → `--`; (2) `—` → `---`; (3) `−` → `-` in math, `$-$` in text; (4) `\d\s*-\s*\d` → `\d--\d`; (5) `\d\s*---\s*\d` → `\d--\d`; (6) `----+` → `---`; (7) strip spaces around `---`; (8) `(\w+)\s*--\s*(\w+)` → `w---w` unless either side is a digit-leading word OR both first chars uppercase; (9) `(\w) - (\w)` → `w---w` unless either side digit. Fixpoint loop handles chains. Region mask skips math (except 3-math), verbatim envs, and comments. Brace bodies of class/package/file macros (`\documentclass`, `\usepackage`, `\RequirePackage`, `\LoadClass`, `\WarningFilter`, `\PassOptionsToClass`, `\PassOptionsToPackage`, `\input`, `\include`, `\includeonly`, `\InputIfFileExists`, `\IfFileExists`) are passed through unchanged so package names like `revtex4-2` are preserved. |
 | `no-math-linebreak` | PostCompile | no | Inline math (`$...$` or `\(...\)`) that spans multiple PDF lines |
+| `no-section-linebreak` | PostCompile | no | Sectioning title (`\title`, `\part`, `\chapter`, `\section`, `\subsection`, `\subsubsection`, incl. `*`-variants) that spans multiple PDF lines |
 
 ### `unused-labels` ignore set
 
@@ -38,6 +39,18 @@ Labels whose name (before the first `:`) matches one of these spelled-out prefix
 - Textbook style: `exercise`, `problem`, `solution`, `case`
 
 All other prefixes — including bare labels, `eq:`/`fig:`/`tab:`/etc. abbreviations, and project-defined prefixes — are flagged when unreferenced. Escape hatches: rename to a standard prefix or disable the check.
+
+## no-section-linebreak implementation
+
+Uses `el-sectionpos.sty` (embedded, auto-injected via `\RequirePackage`):
+- At `\AtBeginDocument` time, redefines `\part`/`\chapter`/`\section`/`\subsection`/`\subsubsection` (via xparse `s o m` so star + optional short + mandatory all flow through). Each redefined command:
+  1. Increments `\el@secid`, writes `M <id> <inputlineno> <kind>` immediately (call-site line).
+  2. Wraps the mandatory title arg in `\el@secstart{kind}{id} ... \el@secend{kind}{id}` via `\edef` (captures id at call site so concurrent typesetting is safe).
+  3. Forwards to original `\el@orig@<name>` with star / optional preserved.
+- `\el@secstart`/`\el@secend` use `\pdfsavepos` + deferred `\write` to record `S <id> <y-sp> <kind>` / `E <id> <y-sp> <kind>` when the title actually typesets.
+- `\title` is special: by `\AtBeginDocument` the user has already called it and the body lives in `\@title`. Wrap `\@title` in-place with S/E markers; M record carries line=0. Go checker recovers line by grepping main.tex for `\title{` (`reTitleCall`).
+- hyperref compatibility: when `hyperref` is loaded, `\pdfstringdefDisableCommands` makes `\el@secstart` / `\el@secend` expand to nothing during PDF-string conversion (bookmarks, `/Title` metadata). Without this hook hyperref emits "Token not allowed in a PDF string (Unicode)" for every wrapped heading.
+- Writes `<jobname>.sectionpos`. Go check pairs S/E by id; if y-positions differ → diagnostic on M's line.
 
 ## no-math-linebreak implementation
 
@@ -69,7 +82,9 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 | `math_bare_word.go` | `math-bare-word` check impl, `isTextMathCmd`, `isASCIILetter` |
 | `dashes.go` | `dashes` check + fix impl, `applyDashRules`, `rewriteTextSpan`, `rewriteMathSpan`, fixpoint loop with regex pipeline |
 | `math_linebreak.go` | `no-math-linebreak` check impl, `parseMathPos`, `MathPosSty` embed |
-| `el-mathpos.sty` | LaTeX package for position tracking (embedded into binary) |
+| `el-mathpos.sty` | LaTeX package for inline-math position tracking (embedded into binary) |
+| `section_linebreak.go` | `no-section-linebreak` check impl, `parseSectionPos`, `SectionPosSty` embed, `findTitleLine` |
+| `el-sectionpos.sty` | LaTeX package for sectioning-title position tracking (embedded into binary) |
 
 ## Adding a new check
 

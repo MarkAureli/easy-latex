@@ -91,12 +91,17 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	needsMathPos := !compileNoCheck && pedantic.HasPostCompileChecks(enabledChecks)
-	if needsMathPos {
-		styPath := filepath.Join(auxDir, "el-mathpos.sty")
-		if err := os.WriteFile(styPath, pedantic.MathPosSty, 0644); err != nil {
-			return fmt.Errorf("cannot write %s: %w", styPath, err)
+	var injectStys []string
+	if !compileNoCheck {
+		stys := pedantic.PostCompileStys(enabledChecks)
+		for name, data := range stys {
+			styPath := filepath.Join(auxDir, name)
+			if err := os.WriteFile(styPath, data, 0644); err != nil {
+				return fmt.Errorf("cannot write %s: %w", styPath, err)
+			}
+			injectStys = append(injectStys, strings.TrimSuffix(name, ".sty"))
 		}
+		slices.Sort(injectStys)
 	}
 
 	if _, err := os.Stat(cfg.Main); err != nil {
@@ -143,12 +148,12 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	// If the pass fails and a stale .bbl exists (e.g. from a previous failed
 	// compile with malformed bib content), delete it and retry once: the .bbl
 	// will be regenerated correctly by the bib tool on this run.
-	firstLines, err := runPdflatex(pdflatex, cfg, needsMathPos)
+	firstLines, err := runPdflatex(pdflatex, cfg, injectStys)
 	if err != nil {
 		bblPath := filepath.Join(auxDir, stem+".bbl")
 		if _, statErr := os.Stat(bblPath); statErr == nil {
 			os.Remove(bblPath) //nolint:errcheck
-			firstLines, err = runPdflatex(pdflatex, cfg, needsMathPos)
+			firstLines, err = runPdflatex(pdflatex, cfg, injectStys)
 		}
 		if err != nil {
 			printLines(firstLines)
@@ -179,7 +184,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		bib.ClearRenames(auxDir)
-		if _, err := runPdflatex(pdflatex, cfg, needsMathPos); err != nil {
+		if _, err := runPdflatex(pdflatex, cfg, injectStys); err != nil {
 			return err
 		}
 	}
@@ -225,7 +230,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		}
 		fixBblBurl(filepath.Join(auxDir, stem+".bbl"))
 		// Second pdflatex pass to incorporate bibliography
-		secondLines, err := runPdflatex(pdflatex, cfg, needsMathPos)
+		secondLines, err := runPdflatex(pdflatex, cfg, injectStys)
 		if err != nil {
 			printLines(secondLines)
 			return err
@@ -236,7 +241,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 			if !needsRerun(prev) {
 				break
 			}
-			prev, err = runPdflatex(pdflatex, cfg, needsMathPos)
+			prev, err = runPdflatex(pdflatex, cfg, injectStys)
 			if err != nil {
 				printLines(prev)
 				return err
@@ -459,7 +464,7 @@ func countWarnings(lines []string) int {
 	return n
 }
 
-func runPdflatex(pdflatex string, cfg *Config, mathPos bool) ([]string, error) {
+func runPdflatex(pdflatex string, cfg *Config, injectStys []string) ([]string, error) {
 	args := []string{
 		"-interaction=nonstopmode",
 		"-halt-on-error",
@@ -467,16 +472,20 @@ func runPdflatex(pdflatex string, cfg *Config, mathPos bool) ([]string, error) {
 		"-output-directory=" + auxDir,
 	}
 	input := cfg.Main
-	if mathPos {
-		// Wrap input to inject el-mathpos.sty before the document.
+	if len(injectStys) > 0 {
+		// Wrap input to inject pedantic post-compile .sty packages before the document.
 		stem := strings.TrimSuffix(filepath.Base(cfg.Main), ".tex")
 		args = append(args, "-jobname="+stem)
-		input = `\RequirePackage{el-mathpos}\input{` + cfg.Main + `}`
+		var reqs strings.Builder
+		for _, pkg := range injectStys {
+			reqs.WriteString(`\RequirePackage{` + pkg + `}`)
+		}
+		input = reqs.String() + `\input{` + cfg.Main + `}`
 	}
 	args = append(args, input)
 	c := exec.Command(pdflatex, args...)
-	if mathPos {
-		// Add aux dir to TEXINPUTS so pdflatex finds el-mathpos.sty.
+	if len(injectStys) > 0 {
+		// Add aux dir to TEXINPUTS so pdflatex finds the injected .sty files.
 		absAux, _ := filepath.Abs(auxDir)
 		c.Env = append(os.Environ(), "TEXINPUTS="+absAux+string(os.PathListSeparator))
 	}

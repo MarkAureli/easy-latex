@@ -87,6 +87,21 @@ func HasPostCompileChecks(checkNames []string) bool {
 	return false
 }
 
+// PostCompileStys returns the sty files (filename → embedded bytes) needed by
+// the enabled post-compile checks. Callers should write each file into the
+// aux dir and \RequirePackage its basename before \input{main.tex}.
+func PostCompileStys(checkNames []string) map[string][]byte {
+	out := map[string][]byte{}
+	for _, name := range checkNames {
+		c, ok := Get(name)
+		if !ok || c.StyName == "" || len(c.Sty) == 0 {
+			continue
+		}
+		out[c.StyName] = c.Sty
+	}
+	return out
+}
+
 // HasFixableChecks returns true if any enabled check provides a Fix.
 func HasFixableChecks(checkNames []string) bool {
 	for _, name := range checkNames {
