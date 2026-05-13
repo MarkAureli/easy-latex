@@ -8,10 +8,32 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
-var httpClient = &http.Client{Timeout: 10 * time.Second}
+const minRequestGap = 300 * time.Millisecond
+
+type throttledTransport struct {
+	base http.RoundTripper
+	mu   sync.Mutex
+	last time.Time
+}
+
+func (t *throttledTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	t.mu.Lock()
+	if wait := minRequestGap - time.Since(t.last); wait > 0 {
+		time.Sleep(wait)
+	}
+	t.last = time.Now()
+	t.mu.Unlock()
+	return t.base.RoundTrip(req)
+}
+
+var httpClient = &http.Client{
+	Timeout:   30 * time.Second,
+	Transport: &throttledTransport{base: http.DefaultTransport},
+}
 
 type crossrefAuthor struct {
 	Family string `json:"family"`

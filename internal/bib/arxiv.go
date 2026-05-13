@@ -31,8 +31,13 @@ func queryArxiv(e Entry, id string, log Logger) (*Entry, cacheEntry, string, err
 	log = logOrNop(log)
 	log.Progress(e.Key, "fetching metadata from arXiv...")
 	apiURL := "https://export.arxiv.org/api/query?id_list=" + url.QueryEscape(id)
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, cacheEntry{}, "", err
+	}
+	req.Header.Set("User-Agent", "easy-latex/"+Version+" (https://github.com/MarkAureli/easy-latex)")
 	resp, err := doWithRetry(func() (*http.Response, error) {
-		return httpClient.Get(apiURL)
+		return httpClient.Do(req)
 	}, log, e.Key)
 	if err != nil {
 		if isRetryableError(err) {

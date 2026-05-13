@@ -19,6 +19,10 @@ Two-phase design: **cache allocation** (parse + validate) and **bib generation**
 
 `doWithRetry(req, log) (*http.Response, error)` — exponential backoff (1s/2s/4s), max 3 attempts. Retries on: HTTP 429, 5xx (`retryableStatusCode`), timeouts/connection errors (`isRetryableError`). `friendlyHTTPError(status, url)` converts codes to human-readable messages ("not found in Crossref" instead of "HTTP 404"). Used by `queryCrossref` and `queryArxiv`.
 
+### HTTP client (`crossref.go`)
+
+`httpClient` shared by Crossref and arXiv: 30s timeout, `throttledTransport` wrapping `http.DefaultTransport` enforces `minRequestGap = 300ms` between requests (≈3 req/s, under arXiv's 4 req/s burst limit). Both `queryCrossref` and `queryArxiv` set `User-Agent: easy-latex/<Version> (<repo>)`.
+
 ## Single-entry insertion from ID (`validate.go`)
 
 Entry point: `AddEntryFromID(id, auxDir string, log Logger) (key string, isNew bool, err error)`.
