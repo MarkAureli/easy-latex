@@ -18,6 +18,7 @@ Flags:
 
 Manually allocate/update bib cache entries from registered `.bib` files. Calls `bib.AllocateCacheEntries(bibFiles, auxDir, log)`:
 - Parses all `.bib` files in config
+- Batch-prefetches all uncached arXiv ids in one API call (`bib.PrefetchArxivIDs`) before per-entry validation
 - Deduplicates by DOI (Crossref validated), arXiv ID (arXiv validated), or canonical key (no-ID)
 - Skips entries already in cache
 - Does NOT rewrite bib files
@@ -28,13 +29,15 @@ Uses `bibLogger` (`cmd/biblog.go`) for colored output.
 
 Useful for pre-validating bib entries without compiling, or re-populating cache after `.el/bib.json` deletion.
 
-### `el bib add <ID>`
+### `el bib add <ID> [<ID>...]`
 
-Add a single entry to bib cache from a bare DOI or arXiv ID. Implemented by `runBibAdd`. Calls `bib.AddEntryFromID(id, auxDir, log)` which returns `(key, isNew, err)`.
+Add one or more entries to bib cache from bare DOIs or arXiv IDs (`cobra.MinimumNArgs(1)`). Implemented by `runBibAdd`. Pre-batches all arXiv ids in the argument list via `bib.PrefetchArxivIDs` (single API call) then loops `bib.AddEntryFromID(id, auxDir, log)` for each arg.
 
+Per-arg outcomes:
 - `isNew=true` — announces newly added entry with key
 - `isNew=false` — announces entry already cached with existing key
-- `bib.ErrUnrecognizedID` — warns unrecognized format, exits 0
+- `bib.ErrUnrecognizedID` — warns unrecognized format, continues to next arg
+- Other errors — prints to stderr, continues; first error returned at end
 
 Uses `bibLogger` (`cmd/biblog.go`) for colored output. No config load required.
 

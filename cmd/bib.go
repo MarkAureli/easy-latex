@@ -24,9 +24,9 @@ var bibListCmd = &cobra.Command{
 }
 
 var bibAddCmd = &cobra.Command{
-	Use:               "add <ID>",
-	Short:             "Add an entry from a DOI or arXiv ID",
-	Args:              cobra.ExactArgs(1),
+	Use:               "add <ID> [<ID>...]",
+	Short:             "Add one or more entries from DOIs or arXiv IDs",
+	Args:              cobra.MinimumNArgs(1),
 	RunE:              runBibAdd,
 	ValidArgsFunction: cobra.NoFileCompletions,
 }
@@ -146,34 +146,56 @@ func runBibList(cmd *cobra.Command, args []string) error {
 
 func runBibAdd(cmd *cobra.Command, args []string) error {
 	log := newBibLogger()
-	key, isNew, err := bib.AddEntryFromID(args[0], auxDir, log)
-	if err != nil {
-		if err == bib.ErrUnrecognizedID {
-			fmt.Fprintf(cmd.ErrOrStderr(), "[bib] warning: %q is not a valid DOI or arXiv identifier\n", args[0])
-			return nil
+
+	// Batch-prefetch any arXiv ids in the argument list so multiple adds
+	// share a single arXiv API call.
+	var arxivIDs []string
+	for _, a := range args {
+		if id := bib.NormalizeArxivID(a); id != "" {
+			arxivIDs = append(arxivIDs, id)
 		}
-		return err
 	}
-	if !isNew {
-		fmt.Printf("%q already in bib cache.\n", key)
-		return nil
+	bib.PrefetchArxivIDs(arxivIDs, log)
+
+	var firstErr error
+	for _, arg := range args {
+		key, isNew, err := bib.AddEntryFromID(arg, auxDir, log)
+		if err != nil {
+			if err == bib.ErrUnrecognizedID {
+				fmt.Fprintf(cmd.ErrOrStderr(), "[bib] warning: %q is not a valid DOI or arXiv identifier\n", arg)
+				continue
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "[bib] error: %q: %v\n", arg, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if !isNew {
+			fmt.Printf("%q already in bib cache.\n", key)
+			continue
+		}
+		entry := findCacheEntry(auxDir, key)
+		fmt.Printf("Added %q to bib cache.\n", key)
+		if entry != nil {
+			if entry.Title != "" {
+				fmt.Printf("  Title:  %s\n", entry.Title)
+			}
+			if entry.Author != "" {
+				fmt.Printf("  Author: %s\n", truncateAuthor(entry.Author))
+			}
+			fmt.Printf("  Source: %s\n", entry.Source)
+		}
 	}
-	// Show entry details from cache.
-	entries := bib.LoadCacheEntries(auxDir)
-	for _, e := range entries {
+	return firstErr
+}
+
+func findCacheEntry(auxDir, key string) *bib.CacheEntryInfo {
+	for _, e := range bib.LoadCacheEntries(auxDir) {
 		if e.Key == key {
-			fmt.Printf("Added %q to bib cache.\n", key)
-			if e.Title != "" {
-				fmt.Printf("  Title:  %s\n", e.Title)
-			}
-			if e.Author != "" {
-				fmt.Printf("  Author: %s\n", truncateAuthor(e.Author))
-			}
-			fmt.Printf("  Source: %s\n", e.Source)
-			return nil
+			return &e
 		}
 	}
-	fmt.Printf("Added %q to bib cache.\n", key)
 	return nil
 }
 

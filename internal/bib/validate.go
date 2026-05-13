@@ -49,6 +49,31 @@ func AllocateCacheEntries(bibFiles []string, auxDir string, retryTimeout bool, l
 		}
 	}
 
+	// Pre-pass: collect all uncached arXiv ids across all bib files and
+	// fetch them in batched API calls. Per-entry validation below then
+	// consumes the prefetched results without further HTTP calls.
+	var pendingArxiv []string
+	for _, path := range bibFiles {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for _, item := range ParseFile(string(data)) {
+			if !item.IsEntry {
+				continue
+			}
+			if findDOI(item.Entry) != "" {
+				continue
+			}
+			id := findArxivID(item.Entry)
+			if id == "" || cachedArxivIDs[strings.ToLower(id)] {
+				continue
+			}
+			pendingArxiv = append(pendingArxiv, id)
+		}
+	}
+	PrefetchArxivIDs(pendingArxiv, log)
+
 	added := 0
 	allRenames := map[string]string{}
 	for _, path := range bibFiles {
@@ -613,6 +638,10 @@ func normalizeDOI(s string) string {
 	}
 	return ""
 }
+
+// NormalizeArxivID returns the bare arXiv identifier from s (URL or bare form),
+// or empty string if s is not an arXiv identifier.
+func NormalizeArxivID(s string) string { return normalizeArxivID(s) }
 
 // normalizeArxivID returns the bare arXiv identifier from s (URL or bare form),
 // or empty string if s is not an arXiv identifier.

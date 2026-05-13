@@ -23,6 +23,10 @@ Two-phase design: **cache allocation** (parse + validate) and **bib generation**
 
 `httpClient` shared by Crossref and arXiv: 30s timeout, `throttledTransport` wrapping `http.DefaultTransport` enforces `minRequestGap = 300ms` between requests (≈3 req/s, under arXiv's 4 req/s burst limit). Both `queryCrossref` and `queryArxiv` set `User-Agent: easy-latex/<Version> (<repo>)`.
 
+### arXiv batch prefetch (`arxiv.go`)
+
+`PrefetchArxivIDs(ids []string, log Logger)` fetches metadata for up to `arxivBatchSize = 100` arXiv ids per request via the API's `id_list=a,b,c` parameter and stores parsed entries in an in-process `arxivPrefetch` map keyed by `arxivCanonical(id)` (lowercase, version-stripped). `queryArxiv` consults this map first via `lookupArxivPrefetch` and consumes the cached entry without an HTTP call; cache miss falls back to a per-id fetch. `AllocateCacheEntries` pre-scans all bib files for uncached arXiv ids and calls `PrefetchArxivIDs` before the per-entry validation loop; `cmd/bib add` does the same for its CLI arguments. Batch failures are silent — per-id fallback produces the user-facing error.
+
 ## Single-entry insertion from ID (`validate.go`)
 
 Entry point: `AddEntryFromID(id, auxDir string, log Logger) (key string, isNew bool, err error)`.
