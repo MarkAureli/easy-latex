@@ -39,9 +39,9 @@ var bibParseCmd = &cobra.Command{
 }
 
 var bibRemoveCmd = &cobra.Command{
-	Use:               "remove <key>",
-	Short:             "Remove an entry from the bib cache",
-	Args:              cobra.ExactArgs(1),
+	Use:               "remove <key> [<key>...]",
+	Short:             "Remove one or more entries from the bib cache",
+	Args:              cobra.MinimumNArgs(1),
 	RunE:              runBibRemove,
 	ValidArgsFunction: bibKeyCompletion,
 }
@@ -200,16 +200,16 @@ func findCacheEntry(auxDir, key string) *bib.CacheEntryInfo {
 }
 
 func runBibRemove(cmd *cobra.Command, args []string) error {
-	key := args[0]
-	removed, err := bib.RemoveEntryFromCache(key, auxDir)
+	removed, notFound, err := bib.RemoveEntriesFromCache(args, auxDir)
 	if err != nil {
 		return err
 	}
-	if !removed {
-		fmt.Fprintf(cmd.ErrOrStderr(), "[bib] warning: %q not found in bib cache\n", key)
-		return nil
+	for _, key := range removed {
+		fmt.Printf("Removed %q from bib cache.\n", key)
 	}
-	fmt.Printf("Removed %q from bib cache.\n", key)
+	for _, key := range notFound {
+		fmt.Fprintf(cmd.ErrOrStderr(), "[bib] warning: %q not found in bib cache\n", key)
+	}
 	return nil
 }
 

@@ -154,16 +154,33 @@ func LoadCacheKeys(auxDir string) []string {
 // RemoveEntryFromCache deletes the entry with the given key from the bib cache.
 // Returns true if the key existed and was removed, false if not found.
 func RemoveEntryFromCache(key, auxDir string) (bool, error) {
-	c, err := loadCacheStrict(auxDir)
+	removed, _, err := RemoveEntriesFromCache([]string{key}, auxDir)
 	if err != nil {
 		return false, err
 	}
-	if _, ok := c[key]; !ok {
-		return false, nil
+	return len(removed) == 1, nil
+}
+
+// RemoveEntriesFromCache deletes multiple entries from the bib cache in a
+// single load/save cycle. Returns the keys actually removed and the keys that
+// were not found in the cache.
+func RemoveEntriesFromCache(keys []string, auxDir string) (removed, notFound []string, err error) {
+	c, err := loadCacheStrict(auxDir)
+	if err != nil {
+		return nil, nil, err
 	}
-	delete(c, key)
-	saveCache(auxDir, c, nil)
-	return true, nil
+	for _, k := range keys {
+		if _, ok := c[k]; ok {
+			delete(c, k)
+			removed = append(removed, k)
+		} else {
+			notFound = append(notFound, k)
+		}
+	}
+	if len(removed) > 0 {
+		saveCache(auxDir, c, nil)
+	}
+	return removed, notFound, nil
 }
 
 // CacheEntryInfo holds summary information about a cached bib entry.

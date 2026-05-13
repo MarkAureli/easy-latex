@@ -41,9 +41,9 @@ Per-arg outcomes:
 
 Uses `bibLogger` (`cmd/biblog.go`) for colored output. No config load required.
 
-### `el bib remove <key>`
+### `el bib remove <key> [<key>...]`
 
-Remove a single entry from bib cache by key. Implemented by `runBibRemove`. Calls `bib.RemoveEntryFromCache(key, auxDir)` which returns `(removed bool, err error)`.
+Remove one or more entries from bib cache by key (`cobra.MinimumNArgs(1)`). Implemented by `runBibRemove`. Calls `bib.RemoveEntriesFromCache(keys, auxDir)` which loads/saves the cache once and returns `(removed, notFound []string, err error)`. Prints one "Removed" line per success and a "not found" warning per missing key.
 
 - Key completion via `bibKeyCompletion` — shows all keys in cache
 - Warns if key not found, exits 0
