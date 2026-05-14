@@ -6,9 +6,9 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 
 | Path | Role |
 |---|---|
-| `.el/` | Working directory: config, all pdflatex/bibtex/biber intermediates, bib cache |
+| `.el/` | Per-project working directory: config, all pdflatex/bibtex/biber intermediates, bib hash, renames |
 | `.el/config.json` | Config: main tex file, aux dir, bib paths, processing options |
-| `.el/bib.json` | Per-entry validation source cache |
+| Global bib cache | Per-user validation cache shared across all projects. Path via `bib.GlobalBibPath()`: `$EL_GLOBAL_BIB` → `$XDG_DATA_HOME/easy-latex/bib.json` → mac `~/Library/Application Support/easy-latex/bib.json` → linux `~/.local/share/easy-latex/bib.json`. Read-modify-write is serialised via `flock` on a sibling `.lock` file; writes are atomic via tmp+rename. |
 | `cmd/` | Cobra commands (`bib`, `check`, `compile`, `config`, `init`, `lsp`) |
 | `internal/bib/` | Bib parsing, key gen, formatting, validation, Logger interface, retry logic |
 | `internal/term/` | Shared terminal detection (`IsTerminal`) + ANSI color codes (`Colors` struct, `Detect()`) |
@@ -19,11 +19,11 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 
 ## Bib processing
 
-Two-phase design: **cache allocation** and **bib generation from cache**.
+Two-phase design: **cache allocation** and **bib generation from cache**. All validated entries live in the **global bib cache** (path from `bib.GlobalBibPath()`); there is no per-project cache file. Read-modify-write paths wrap their work in `withGlobalLock` for cross-process safety.
 
-- `AllocateCacheEntries(bibFiles, auxDir, log Logger)` — parses bib files, assigns canonical keys (`{LastName}{Year}{Title}`), validates unseen entries via Crossref (DOI) or arXiv (eprint), seeds `.el/bib.json`. Used by `el init`, `el bib parse`, and auto-triggered by `el compile` when `bibliography.bib` changes.
-- `WriteBibFromCache` — reconstructs entries from cache for cited keys only, applies config transforms (journal abbreviation, author formatting, brace titles, etc.), writes `bibliography.bib`. Called by `el compile` after pass 1.
-- `AddEntryFromID(id, auxDir, log Logger) (key, isNew, err)` — single-entry insertion from bare DOI/arXiv ID. Used by `el bib add`.
+- `AllocateCacheEntries(bibFiles, retryTimeout, log Logger)` — parses bib files, assigns canonical keys (`{LastName}{Year}{Title}`), validates unseen entries via Crossref (DOI) or arXiv (eprint), seeds the global cache. Used by `el init`, `el bib parse`, and auto-triggered by `el compile` when `bibliography.bib` changes.
+- `WriteBibFromCache(path, citeKeys, opts)` — reconstructs entries from the global cache for cited keys only, applies config transforms (journal abbreviation, author formatting, brace titles, etc.), writes `bibliography.bib`. Called by `el compile` after pass 1. Any cited key present in the global cache but not yet in the project bib file is materialised here (auto-import on compile).
+- `AddEntryFromID(id, log Logger) (key, isNew, err)` — single-entry insertion from bare DOI/arXiv ID. Used by `el bib add`.
 
 ### Logger architecture
 

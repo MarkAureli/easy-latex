@@ -18,7 +18,7 @@ var lspCmd = &cobra.Command{
 			enabled = cfg.Pedantic.EnabledNames()
 		}
 		return lsp.Serve(lsp.Config{
-			Items:         lsp.BuildItems(auxDir),
+			Items:         lsp.BuildItems(),
 			EnabledChecks: enabled,
 		}, os.Stdin, os.Stdout)
 	},

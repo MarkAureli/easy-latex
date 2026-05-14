@@ -3,12 +3,14 @@ package bib
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 )
 
 // cacheEntry stores the validation source and a snapshot of all allowed field
@@ -33,19 +35,29 @@ type cacheEntry struct {
 // cache maps canonical citation keys to their cacheEntry.
 type cache map[string]cacheEntry
 
-// errCorruptCache is returned by loadCacheStrict when bib.json exists but
-// cannot be parsed as valid JSON.
-var errCorruptCache = fmt.Errorf("bib.json exists but contains invalid JSON; please fix or delete it")
+// errCorruptCache is returned by loadCacheStrict when the global bib cache
+// exists but cannot be parsed as valid JSON.
+var errCorruptCache = fmt.Errorf("global bib cache exists but contains invalid JSON; please fix or delete it")
 
-func loadCache(auxDir string) cache {
-	c, _ := loadCacheStrict(auxDir)
+func loadCache() cache {
+	c, _ := loadCacheStrict()
 	return c
 }
 
-func loadCacheStrict(auxDir string) (cache, error) {
-	data, err := os.ReadFile(filepath.Join(auxDir, "bib.json"))
+func loadCacheStrict() (cache, error) {
+	path, err := GlobalBibPath()
 	if err != nil {
-		return make(cache), nil // file absent — empty cache is fine
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return make(cache), nil
+		}
+		return nil, err
+	}
+	if len(data) == 0 {
+		return make(cache), nil
 	}
 	var c cache
 	if err := json.Unmarshal(data, &c); err != nil {
@@ -61,16 +73,52 @@ func loadCacheStrict(auxDir string) (cache, error) {
 	return c, nil
 }
 
-func saveCache(auxDir string, c cache, log Logger) {
+// saveCache writes the cache to the global bib path atomically via tmp+rename.
+// Callers are expected to hold the global lock via withGlobalLock when doing a
+// read-modify-write sequence.
+func saveCache(c cache, log Logger) {
 	log = logOrNop(log)
+	path, err := ensureGlobalDir()
+	if err != nil {
+		log.Warn("", err.Error())
+		return
+	}
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		log.Warn("", fmt.Sprintf("could not marshal cache: %v", err))
 		return
 	}
-	if err := os.WriteFile(filepath.Join(auxDir, "bib.json"), data, 0644); err != nil {
-		log.Warn("", fmt.Sprintf("could not write %s: %v", filepath.Join(auxDir, "bib.json"), err))
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		log.Warn("", fmt.Sprintf("could not write %s: %v", tmp, err))
+		return
 	}
+	if err := os.Rename(tmp, path); err != nil {
+		log.Warn("", fmt.Sprintf("could not rename %s -> %s: %v", tmp, path, err))
+		_ = os.Remove(tmp)
+	}
+}
+
+// withGlobalLock serializes read-modify-write access to the global bib cache
+// across processes via an advisory flock on a sibling lock file. The lock file
+// path is stable (never renamed) so it remains a reliable mutex even when the
+// cache file is replaced atomically.
+func withGlobalLock(fn func() error) error {
+	path, err := ensureGlobalDir()
+	if err != nil {
+		return err
+	}
+	lockPath := path + ".lock"
+	f, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return fmt.Errorf("could not open %s: %w", lockPath, err)
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("could not lock %s: %w", lockPath, err)
+	}
+	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	return fn()
 }
 
 // LoadRenames reads .el/renames.json and returns the old→new key map.
@@ -141,9 +189,10 @@ func loadBibHash(auxDir string) string {
 	return strings.TrimSpace(string(data))
 }
 
-// LoadCacheKeys returns all canonical citation keys stored in the bib cache.
-func LoadCacheKeys(auxDir string) []string {
-	c := loadCache(auxDir)
+// LoadCacheKeys returns all canonical citation keys stored in the global bib
+// cache.
+func LoadCacheKeys() []string {
+	c := loadCache()
 	keys := make([]string, 0, len(c))
 	for k := range c {
 		keys = append(keys, k)
@@ -151,34 +200,41 @@ func LoadCacheKeys(auxDir string) []string {
 	return keys
 }
 
-// RemoveEntryFromCache deletes the entry with the given key from the bib cache.
-// Returns true if the key existed and was removed, false if not found.
-func RemoveEntryFromCache(key, auxDir string) (bool, error) {
-	removed, _, err := RemoveEntriesFromCache([]string{key}, auxDir)
+// RemoveEntryFromCache deletes the entry with the given key from the global
+// bib cache. Returns true if the key existed and was removed, false if not
+// found.
+func RemoveEntryFromCache(key string) (bool, error) {
+	removed, _, err := RemoveEntriesFromCache([]string{key})
 	if err != nil {
 		return false, err
 	}
 	return len(removed) == 1, nil
 }
 
-// RemoveEntriesFromCache deletes multiple entries from the bib cache in a
-// single load/save cycle. Returns the keys actually removed and the keys that
-// were not found in the cache.
-func RemoveEntriesFromCache(keys []string, auxDir string) (removed, notFound []string, err error) {
-	c, err := loadCacheStrict(auxDir)
+// RemoveEntriesFromCache deletes multiple entries from the global bib cache in
+// a single locked read-modify-write cycle. Returns the keys actually removed
+// and the keys that were not found in the cache.
+func RemoveEntriesFromCache(keys []string) (removed, notFound []string, err error) {
+	err = withGlobalLock(func() error {
+		c, err := loadCacheStrict()
+		if err != nil {
+			return err
+		}
+		for _, k := range keys {
+			if _, ok := c[k]; ok {
+				delete(c, k)
+				removed = append(removed, k)
+			} else {
+				notFound = append(notFound, k)
+			}
+		}
+		if len(removed) > 0 {
+			saveCache(c, nil)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, nil, err
-	}
-	for _, k := range keys {
-		if _, ok := c[k]; ok {
-			delete(c, k)
-			removed = append(removed, k)
-		} else {
-			notFound = append(notFound, k)
-		}
-	}
-	if len(removed) > 0 {
-		saveCache(auxDir, c, nil)
 	}
 	return removed, notFound, nil
 }
@@ -192,10 +248,10 @@ type CacheEntryInfo struct {
 	Author string
 }
 
-// LoadCacheEntries returns summary information for all entries in the bib cache,
-// sorted by key.
-func LoadCacheEntries(auxDir string) []CacheEntryInfo {
-	c := loadCache(auxDir)
+// LoadCacheEntries returns summary information for all entries in the global
+// bib cache, sorted by key.
+func LoadCacheEntries() []CacheEntryInfo {
+	c := loadCache()
 	entries := make([]CacheEntryInfo, 0, len(c))
 	for key, e := range c {
 		entries = append(entries, CacheEntryInfo{

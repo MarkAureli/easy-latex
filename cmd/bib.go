@@ -48,6 +48,7 @@ var bibRemoveCmd = &cobra.Command{
 func init() {
 	bibListCmd.Flags().Bool("cited", false, "Show only entries referenced in .tex files")
 	bibListCmd.Flags().Bool("uncited", false, "Show only entries not referenced in .tex files")
+	bibListCmd.Flags().String("search", "", "Case-insensitive substring filter on key, author, and title")
 	bibCmd.AddCommand(bibListCmd)
 	bibCmd.AddCommand(bibAddCmd)
 	bibCmd.AddCommand(bibParseCmd)
@@ -55,7 +56,7 @@ func init() {
 }
 
 func runBibList(cmd *cobra.Command, args []string) error {
-	entries := bib.LoadCacheEntries(auxDir)
+	entries := bib.LoadCacheEntries()
 	if len(entries) == 0 {
 		fmt.Println("No entries in bib cache.")
 		return nil
@@ -63,6 +64,23 @@ func runBibList(cmd *cobra.Command, args []string) error {
 
 	citedOnly, _ := cmd.Flags().GetBool("cited")
 	uncitedOnly, _ := cmd.Flags().GetBool("uncited")
+	search, _ := cmd.Flags().GetString("search")
+	if search != "" {
+		q := strings.ToLower(search)
+		filtered := entries[:0:0]
+		for _, e := range entries {
+			if strings.Contains(strings.ToLower(e.Key), q) ||
+				strings.Contains(strings.ToLower(e.Author), q) ||
+				strings.Contains(strings.ToLower(e.Title), q) {
+				filtered = append(filtered, e)
+			}
+		}
+		entries = filtered
+		if len(entries) == 0 {
+			fmt.Printf("No entries match %q.\n", search)
+			return nil
+		}
+	}
 
 	// Try to resolve cited keys from tex files.
 	var citedSet map[string]bool
@@ -165,7 +183,7 @@ func runBibAdd(cmd *cobra.Command, args []string) error {
 
 	var firstErr error
 	for _, arg := range args {
-		key, isNew, err := bib.AddEntryFromID(arg, auxDir, log)
+		key, isNew, err := bib.AddEntryFromID(arg, log)
 		if err != nil {
 			if err == bib.ErrUnrecognizedID {
 				fmt.Fprintf(cmd.ErrOrStderr(), "[bib] warning: %q is not a valid DOI or arXiv identifier\n", arg)
@@ -181,7 +199,7 @@ func runBibAdd(cmd *cobra.Command, args []string) error {
 			fmt.Printf("%q already in bib cache.\n", key)
 			continue
 		}
-		entry := findCacheEntry(auxDir, key)
+		entry := findCacheEntry(key)
 		fmt.Printf("Added %q to bib cache.\n", key)
 		if entry != nil {
 			if entry.Title != "" {
@@ -196,8 +214,8 @@ func runBibAdd(cmd *cobra.Command, args []string) error {
 	return firstErr
 }
 
-func findCacheEntry(auxDir, key string) *bib.CacheEntryInfo {
-	for _, e := range bib.LoadCacheEntries(auxDir) {
+func findCacheEntry(key string) *bib.CacheEntryInfo {
+	for _, e := range bib.LoadCacheEntries() {
 		if e.Key == key {
 			return &e
 		}
@@ -206,7 +224,7 @@ func findCacheEntry(auxDir, key string) *bib.CacheEntryInfo {
 }
 
 func runBibRemove(cmd *cobra.Command, args []string) error {
-	removed, notFound, err := bib.RemoveEntriesFromCache(args, auxDir)
+	removed, notFound, err := bib.RemoveEntriesFromCache(args)
 	if err != nil {
 		return err
 	}
@@ -223,7 +241,7 @@ func bibKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, cobr
 	if len(args) >= 1 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	return bib.LoadCacheKeys(auxDir), cobra.ShellCompDirectiveNoFileComp
+	return bib.LoadCacheKeys(), cobra.ShellCompDirectiveNoFileComp
 }
 
 func runBibParse(cmd *cobra.Command, args []string) error {
@@ -232,7 +250,7 @@ func runBibParse(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	log := newBibLogger()
-	added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir, cfg.retryTimeout(), log)
+	added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, cfg.retryTimeout(), log)
 	if err != nil {
 		return err
 	}

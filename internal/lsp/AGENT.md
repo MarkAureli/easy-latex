@@ -3,7 +3,7 @@
 Minimal LSP server for `el lsp`. Hand-rolled JSON-RPC over stdio, no external LSP library.
 
 Surfaces:
-- Cite-key completion (read from `.el/bib.json`).
+- Cite-key completion (read from the global bib cache — see `internal/bib/global.go`).
 - Static pedantic diagnostics (push on didOpen / didChange).
 - Code actions (autofix) for fixable static checks.
 
@@ -16,7 +16,7 @@ Surfaces:
 | File | Contents |
 |---|---|
 | `protocol.go` | LSP wire types: capabilities, completion, diagnostics, code action, workspace edit |
-| `index.go` | `BuildItems(auxDir)` — reads keys from `.el/bib.json` |
+| `index.go` | `BuildItems()` — reads keys from the global bib cache |
 | `server.go` | JSON-RPC loop, dispatch, completion, diagnostics, code action handlers |
 
 ## Protocol subset
@@ -48,7 +48,7 @@ Regex on line up to cursor matches cite commands then `{[^}]*$`. Supported comma
 
 ## Bib key loading (`index.go: BuildItems`)
 
-Reads all keys from `.el/bib.json` via `bib.LoadCacheKeys(auxDir)`. No bib file parsing. Loaded once at startup — **restart LSP to pick up new entries**.
+Reads all keys from the global bib cache via `bib.LoadCacheKeys()`. No bib file parsing. Loaded once at startup — **restart LSP to pick up new entries**.
 
 ## Known limitations
 

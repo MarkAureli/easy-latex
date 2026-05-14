@@ -93,7 +93,7 @@ func PrefetchArxivIDs(ids []string, log Logger) {
 		end := min(start+arxivBatchSize, len(todo))
 		chunk := todo[start:end]
 		if len(chunk) == 1 {
-			log.Progress("", fmt.Sprintf("prefetching 1 arXiv entry..."))
+			log.Progress("", "prefetching 1 arXiv entry...")
 		} else {
 			log.Progress("", fmt.Sprintf("prefetching %d arXiv entries...", len(chunk)))
 		}

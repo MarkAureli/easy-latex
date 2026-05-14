@@ -298,6 +298,8 @@ const bibBook = `@book{knuth1984,
 
 func TestDoInit_MainBibTransferredBeforeCache(t *testing.T) {
 	dir := t.TempDir()
+	globalBib := filepath.Join(dir, "_global_bib.json")
+	t.Setenv("EL_GLOBAL_BIB", globalBib)
 	chdir(t, dir)
 	writeTeX(t, dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\bibliography{main}\n\\end{document}\n")
 	if err := os.WriteFile(filepath.Join(dir, "main.bib"), []byte(bibBook), 0644); err != nil {
@@ -322,9 +324,9 @@ func TestDoInit_MainBibTransferredBeforeCache(t *testing.T) {
 	if len(cfg.BibFiles) != 1 || cfg.BibFiles[0] != "bibliography.bib" {
 		t.Errorf("BibFiles = %v, want [bibliography.bib]", cfg.BibFiles)
 	}
-	// bib.json cache seeded — proves content was transferred before AllocateCacheEntries
-	if _, err := os.Stat(filepath.Join(dir, ".el", "bib.json")); err != nil {
-		t.Errorf("bib.json not created — AllocateCacheEntries may not have run: %v", err)
+	// global bib cache seeded — proves content was transferred before AllocateCacheEntries
+	if _, err := os.Stat(globalBib); err != nil {
+		t.Errorf("global bib cache not created — AllocateCacheEntries may not have run: %v", err)
 	}
 }
 

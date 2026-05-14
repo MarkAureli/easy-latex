@@ -127,7 +127,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	// auto-allocate new cache entries and record any renames before compiling.
 	if ef := entriesBibFile(cfg.BibFiles); ef != "" && bib.BibFileChanged(ef, auxDir) {
 		log.Info("", "bibliography.bib changed, re-parsing...")
-		added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, auxDir, cfg.retryTimeout(), log)
+		added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, cfg.retryTimeout(), log)
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 			citeKeys = kept
 		}
 		if len(citeKeys) > 0 {
-			if err := bib.WriteBibFromCache(ef, citeKeys, auxDir, bib.WriteOptions{
+			if err := bib.WriteBibFromCache(ef, citeKeys, bib.WriteOptions{
 				AbbreviateJournals:  cfg.abbreviateJournals(),
 				BraceTitles:         cfg.braceTitles(),
 				ArxivAsUnpublished:  cfg.arxivAsUnpublished(),

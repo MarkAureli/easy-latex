@@ -23,12 +23,20 @@ const Version = "0.1.0"
 //
 // Returns the number of newly added cache entries and a map of old→new key
 // renames for any entries whose canonical key differs from their original key.
-func AllocateCacheEntries(bibFiles []string, auxDir string, retryTimeout bool, log Logger) (int, map[string]string, error) {
+func AllocateCacheEntries(bibFiles []string, retryTimeout bool, log Logger) (added int, renames map[string]string, err error) {
 	log = logOrNop(log)
 	if len(bibFiles) == 0 {
 		return 0, map[string]string{}, nil
 	}
-	c, err := loadCacheStrict(auxDir)
+	err = withGlobalLock(func() error {
+		added, renames, err = allocateCacheEntriesLocked(bibFiles, retryTimeout, log)
+		return err
+	})
+	return added, renames, err
+}
+
+func allocateCacheEntriesLocked(bibFiles []string, retryTimeout bool, log Logger) (int, map[string]string, error) {
+	c, err := loadCacheStrict()
 	if err != nil {
 		return 0, nil, err
 	}
@@ -85,7 +93,7 @@ func AllocateCacheEntries(bibFiles []string, auxDir string, retryTimeout bool, l
 		maps.Copy(allRenames, renames)
 	}
 	if added > 0 {
-		saveCache(auxDir, c, log)
+		saveCache(c, log)
 	}
 	return added, allRenames, nil
 }
@@ -243,11 +251,11 @@ type WriteOptions struct {
 // WriteBibFromCache generates path from the bib cache for the given cited keys,
 // applying all config transforms. Returns an error if any key is absent from
 // the cache (caller should run 'el bib parse' first).
-func WriteBibFromCache(path string, citeKeys []string, auxDir string, opts WriteOptions) error {
+func WriteBibFromCache(path string, citeKeys []string, opts WriteOptions) error {
 	if len(citeKeys) == 0 {
 		return nil
 	}
-	c := loadCache(auxDir)
+	c := loadCache()
 
 	items := make([]Item, 0, len(citeKeys))
 	for _, key := range citeKeys {
@@ -656,12 +664,20 @@ func normalizeArxivID(s string) string {
 }
 
 // AddEntryFromID fetches metadata for a DOI or arXiv ID and inserts the entry
-// into the bib cache at auxDir. Returns the canonical cite key on success.
+// into the global bib cache. Returns the canonical cite key on success.
 // Returns ErrUnrecognizedID if s is neither a DOI nor an arXiv identifier.
 // If the entry is already cached, its existing key is returned with isNew=false.
-func AddEntryFromID(id, auxDir string, log Logger) (key string, isNew bool, err error) {
+func AddEntryFromID(id string, log Logger) (key string, isNew bool, err error) {
 	log = logOrNop(log)
-	c, err := loadCacheStrict(auxDir)
+	err = withGlobalLock(func() error {
+		key, isNew, err = addEntryFromIDLocked(id, log)
+		return err
+	})
+	return key, isNew, err
+}
+
+func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err error) {
+	c, err := loadCacheStrict()
 	if err != nil {
 		return "", false, err
 	}
@@ -688,7 +704,7 @@ func AddEntryFromID(id, auxDir string, log Logger) (key string, isNew bool, err 
 		cEntry := buildCacheEntry(e, raw, "crossref", "")
 		key := disambiguateKey(GenerateKey(e), c)
 		c[key] = cEntry
-		saveCache(auxDir, c, log)
+		saveCache(c, log)
 		return key, true, nil
 	}
 
@@ -732,7 +748,7 @@ func AddEntryFromID(id, auxDir string, log Logger) (key string, isNew bool, err 
 				cEntry := buildCacheEntry(e, crRaw, "crossref", "")
 				key := disambiguateKey(GenerateKey(e), c)
 				c[key] = cEntry
-				saveCache(auxDir, c, log)
+				saveCache(c, log)
 				return key, true, nil
 			}
 			// Crossref failed — fall back to arXiv result.
@@ -747,7 +763,7 @@ func AddEntryFromID(id, auxDir string, log Logger) (key string, isNew bool, err 
 		cEntry := buildCacheEntry(e, raw, "arxiv", "")
 		key := disambiguateKey(GenerateKey(e), c)
 		c[key] = cEntry
-		saveCache(auxDir, c, log)
+		saveCache(c, log)
 		return key, true, nil
 	}
 

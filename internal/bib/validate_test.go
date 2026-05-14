@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -496,11 +497,12 @@ func TestAddEntryFromID_DOI_SetsCrossrefType(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	key, _, err := AddEntryFromID("10.1/conf", dir, nil)
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	key, _, err := AddEntryFromID("10.1/conf", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	c := loadCache(dir)
+	c := loadCache()
 	entry, ok := c[key]
 	if !ok {
 		t.Fatalf("key %q not in cache", key)
@@ -1014,6 +1016,7 @@ func TestValidateEntry_NoIDWarning_BookSuppressed(t *testing.T) {
 // bib file, overriding whatever was in the file.
 func TestCacheReappliesAllFields(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	c := cache{
 		"Smith2023StaleTitle": cacheEntry{
 			Source: "crossref",
@@ -1030,10 +1033,10 @@ func TestCacheReappliesAllFields(t *testing.T) {
 			},
 		},
 	}
-	saveCache(dir, c, nil)
+	saveCache(c, nil)
 
 	outPath := dir + "/bibliography.bib"
-	if err := WriteBibFromCache(outPath, []string{"Smith2023StaleTitle"}, dir, WriteOptions{AbbreviateFirstName: true}); err != nil {
+	if err := WriteBibFromCache(outPath, []string{"Smith2023StaleTitle"}, WriteOptions{AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1064,6 +1067,7 @@ func TestCacheReappliesAllFields(t *testing.T) {
 // the cache is abbreviated when abbreviateJournals=true, even for cached entries.
 func TestCacheJournalAbbreviationOnReapply(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	c := cache{
 		"Smith2023ATitle": cacheEntry{
 			Source: "crossref",
@@ -1077,10 +1081,10 @@ func TestCacheJournalAbbreviationOnReapply(t *testing.T) {
 			},
 		},
 	}
-	saveCache(dir, c, nil)
+	saveCache(c, nil)
 
 	outPath := dir + "/bibliography.bib"
-	if err := WriteBibFromCache(outPath, []string{"Smith2023ATitle"}, dir, WriteOptions{AbbreviateJournals: true, AbbreviateFirstName: true}); err != nil {
+	if err := WriteBibFromCache(outPath, []string{"Smith2023ATitle"}, WriteOptions{AbbreviateJournals: true, AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1106,6 +1110,7 @@ func TestCacheJournalAbbreviationOnReapply(t *testing.T) {
 // cache is written back and not overridden when urlFromDOI=false.
 func TestCacheRawURLPreservedOnReapply(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	c := cache{
 		"Smith2023ATitle": cacheEntry{
 			Source: "crossref",
@@ -1120,10 +1125,10 @@ func TestCacheRawURLPreservedOnReapply(t *testing.T) {
 			},
 		},
 	}
-	saveCache(dir, c, nil)
+	saveCache(c, nil)
 
 	outPath := dir + "/bibliography.bib"
-	if err := WriteBibFromCache(outPath, []string{"Smith2023ATitle"}, dir, WriteOptions{AbbreviateFirstName: true}); err != nil {
+	if err := WriteBibFromCache(outPath, []string{"Smith2023ATitle"}, WriteOptions{AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1145,7 +1150,8 @@ func TestCacheRawURLPreservedOnReapply(t *testing.T) {
 
 func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
 	dir := t.TempDir()
-	saveCache(dir, cache{
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	saveCache(cache{
 		"Smith2023Test": cacheEntry{
 			Source: "crossref",
 			Type:   "article",
@@ -1161,7 +1167,7 @@ func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
 	}, nil)
 
 	outPath := dir + "/bibliography.bib"
-	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1189,8 +1195,9 @@ func TestBraceTitles_AppliesDoublebraces(t *testing.T) {
 
 func TestBraceTitles_Idempotent(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	// Cache stores the title without braces; WriteBibFromCache applies braceTitles fresh.
-	saveCache(dir, cache{
+	saveCache(cache{
 		"Smith2023Test": cacheEntry{
 			Source: "crossref",
 			Type:   "article",
@@ -1207,7 +1214,7 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 
 	outPath := dir + "/bibliography.bib"
 	// First write
-	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("first write: unexpected error: %v", err)
 	}
 
@@ -1232,17 +1239,17 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 	}
 
 	// Verify idempotency: read output, parse, re-cache, write again
-	c := loadCache(dir)
+	c := loadCache()
 	var cachedEntry cacheEntry
 	for _, ce := range c {
 		cachedEntry = ce
 		break
 	}
 
-	saveCache(dir, cache{"Smith2023Test": cachedEntry}, nil)
+	saveCache(cache{"Smith2023Test": cachedEntry}, nil)
 
 	outPath2 := dir + "/bibliography2.bib"
-	if err := WriteBibFromCache(outPath2, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
+	if err := WriteBibFromCache(outPath2, []string{"Smith2023Test"}, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("second write: unexpected error: %v", err)
 	}
 
@@ -1254,7 +1261,8 @@ func TestBraceTitles_Idempotent(t *testing.T) {
 
 func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 	dir := t.TempDir()
-	saveCache(dir, cache{
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	saveCache(cache{
 		"Smith2023Test": cacheEntry{
 			Source: "crossref",
 			Type:   "article",
@@ -1270,7 +1278,7 @@ func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 	}, nil)
 
 	outPath := dir + "/bibliography.bib"
-	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, AbbreviateFirstName: true}); err != nil {
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, WriteOptions{AbbreviateJournals: true, AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1385,6 +1393,7 @@ func TestTransformArxivMiscToUnpublished_NoteContainsHref(t *testing.T) {
 
 func TestArxivAsUnpublished_ArxivMiscBecomesUnpublished(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	bibContent := `@misc{Smith2023MyPaper,
   author       = {Smith, John},
   year         = {2023},
@@ -1399,16 +1408,16 @@ func TestArxivAsUnpublished_ArxivMiscBecomesUnpublished(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := AllocateCacheEntries([]string{path}, dir, true, nil); err != nil {
+	if _, _, err := AllocateCacheEntries([]string{path}, true, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// Cache must store the arXiv entry as @misc with eprint preserved.
-	keys := LoadCacheKeys(dir)
+	keys := LoadCacheKeys()
 	if len(keys) == 0 {
 		t.Fatal("cache is empty after AllocateCacheEntries")
 	}
-	c := loadCache(dir)
+	c := loadCache()
 	for _, k := range keys {
 		if e := c[k]; e.Type != "misc" {
 			t.Errorf("cache type = %q, want %q (arXiv entries must be cached as @misc)", e.Type, "misc")
@@ -1420,7 +1429,7 @@ func TestArxivAsUnpublished_ArxivMiscBecomesUnpublished(t *testing.T) {
 
 	// WriteBibFromCache must apply the transform: @misc arXiv -> @unpublished.
 	outPath := dir + "/bibliography.bib"
-	if err := WriteBibFromCache(outPath, keys, dir, WriteOptions{ArxivAsUnpublished: true}); err != nil {
+	if err := WriteBibFromCache(outPath, keys, WriteOptions{ArxivAsUnpublished: true}); err != nil {
 		t.Fatalf("WriteBibFromCache: %v", err)
 	}
 
@@ -1452,7 +1461,8 @@ func TestArxivAsUnpublished_ArxivMiscBecomesUnpublished(t *testing.T) {
 
 func TestBraceTitles_DoubleBracesTitle(t *testing.T) {
 	dir := t.TempDir()
-	saveCache(dir, cache{
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	saveCache(cache{
 		"Smith2023Test": cacheEntry{
 			Source: "crossref",
 			Type:   "article",
@@ -1469,7 +1479,7 @@ func TestBraceTitles_DoubleBracesTitle(t *testing.T) {
 
 	outPath := dir + "/bibliography.bib"
 	// brace_titles=true — should double-brace titles
-	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, dir, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Test"}, WriteOptions{AbbreviateJournals: true, BraceTitles: true, AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1496,7 +1506,8 @@ func TestBraceTitles_DoubleBracesTitle(t *testing.T) {
 
 func TestArxivAsUnpublished_NonArxivMiscUnchanged(t *testing.T) {
 	dir := t.TempDir()
-	saveCache(dir, cache{
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	saveCache(cache{
 		"Smith2023Software": cacheEntry{
 			Source: "no-id",
 			Type:   "misc",
@@ -1510,7 +1521,7 @@ func TestArxivAsUnpublished_NonArxivMiscUnchanged(t *testing.T) {
 	}, nil)
 
 	outPath := dir + "/bibliography.bib"
-	if err := WriteBibFromCache(outPath, []string{"Smith2023Software"}, dir, WriteOptions{AbbreviateJournals: true, ArxivAsUnpublished: true, AbbreviateFirstName: true}); err != nil {
+	if err := WriteBibFromCache(outPath, []string{"Smith2023Software"}, WriteOptions{AbbreviateJournals: true, ArxivAsUnpublished: true, AbbreviateFirstName: true}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1532,20 +1543,21 @@ func TestArxivAsUnpublished_NonArxivMiscUnchanged(t *testing.T) {
 
 func TestAllocateCacheEntries_NoIDEntryAdded(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	bibContent := "@misc{SomeKey,\n  author = {Doe, Jane},\n  title = {Some Title},\n  year = {2024},\n}\n"
 	path := dir + "/test.bib"
 	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if added != 1 {
 		t.Errorf("added = %d, want 1", added)
 	}
-	c := loadCache(dir)
+	c := loadCache()
 	var found bool
 	for _, entry := range c {
 		if entry.Source == "no-id" {
@@ -1559,8 +1571,9 @@ func TestAllocateCacheEntries_NoIDEntryAdded(t *testing.T) {
 
 func TestAllocateCacheEntries_NoIDDedup_ByCanonicalKey(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	// Pre-populate cache with the canonical key that the bib entry will produce.
-	saveCache(dir, cache{"Doe2024SomeTitle": cacheEntry{Source: "no-id", Type: "misc", Fields: map[string]string{"author": "Doe, Jane", "title": "Some Title", "year": "2024"}}}, nil)
+	saveCache(cache{"Doe2024SomeTitle": cacheEntry{Source: "no-id", Type: "misc", Fields: map[string]string{"author": "Doe, Jane", "title": "Some Title", "year": "2024"}}}, nil)
 
 	bibContent := "@misc{AnyKey,\n  author = {Doe, Jane},\n  title = {Some Title},\n  year = {2024},\n}\n"
 	path := dir + "/test.bib"
@@ -1568,7 +1581,7 @@ func TestAllocateCacheEntries_NoIDDedup_ByCanonicalKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1579,8 +1592,9 @@ func TestAllocateCacheEntries_NoIDDedup_ByCanonicalKey(t *testing.T) {
 
 func TestAllocateCacheEntries_DOIDedup_ByDOI(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	// Cache already has an entry whose Fields["doi"] matches.
-	saveCache(dir, cache{
+	saveCache(cache{
 		"Smith2020Title": cacheEntry{
 			Source: "crossref",
 			Type:   "article",
@@ -1595,7 +1609,7 @@ func TestAllocateCacheEntries_DOIDedup_ByDOI(t *testing.T) {
 	}
 
 	// No HTTP calls expected; if Crossref is reached the test will hang/fail.
-	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1606,7 +1620,8 @@ func TestAllocateCacheEntries_DOIDedup_ByDOI(t *testing.T) {
 
 func TestAllocateCacheEntries_ArxivDedup_ByEprint(t *testing.T) {
 	dir := t.TempDir()
-	saveCache(dir, cache{
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	saveCache(cache{
 		"Doe2023Title": cacheEntry{
 			Source: "arxiv",
 			Type:   "misc",
@@ -1620,7 +1635,7 @@ func TestAllocateCacheEntries_ArxivDedup_ByEprint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1631,7 +1646,8 @@ func TestAllocateCacheEntries_ArxivDedup_ByEprint(t *testing.T) {
 
 func TestAllocateCacheEntries_DOIDedup_CaseInsensitive(t *testing.T) {
 	dir := t.TempDir()
-	saveCache(dir, cache{
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	saveCache(cache{
 		"Smith2020Title": cacheEntry{
 			Source: "crossref",
 			Type:   "article",
@@ -1645,7 +1661,7 @@ func TestAllocateCacheEntries_DOIDedup_CaseInsensitive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1666,20 +1682,21 @@ func TestAllocateCacheEntries_NewDOIEntry_ValidatedAndCached(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	bibContent := "@article{AnyKey,\n  author = {Smith, John},\n  title = {Wrong Title},\n  year = {2023},\n  doi = {10.1/new},\n}\n"
 	path := dir + "/test.bib"
 	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	added, _, err := AllocateCacheEntries([]string{path}, dir, true, nil)
+	added, _, err := AllocateCacheEntries([]string{path}, true, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if added != 1 {
 		t.Errorf("added = %d, want 1", added)
 	}
-	c := loadCache(dir)
+	c := loadCache()
 	var found bool
 	for _, entry := range c {
 		if entry.Source == "crossref" && entry.Fields["doi"] == "10.1/new" {
@@ -1770,6 +1787,7 @@ func TestAllocateCacheEntries_TimeoutRetry(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	bibContent := `@article{Smith2024Test,
   author = {Smith, Jane},
   year   = {2024},
@@ -1781,7 +1799,7 @@ func TestAllocateCacheEntries_TimeoutRetry(t *testing.T) {
 	os.WriteFile(path, []byte(bibContent), 0644)
 
 	// Pre-seed cache with a "timeout" entry for this DOI.
-	saveCache(dir, cache{"Smith2024SomeTitle": cacheEntry{
+	saveCache(cache{"Smith2024SomeTitle": cacheEntry{
 		Source: "timeout",
 		Type:   "article",
 		Fields: map[string]string{
@@ -1794,14 +1812,14 @@ func TestAllocateCacheEntries_TimeoutRetry(t *testing.T) {
 
 	// With retryTimeout=true, should re-validate (calls Crossref).
 	calls = 0
-	AllocateCacheEntries([]string{path}, dir, true, nil)
+	AllocateCacheEntries([]string{path}, true, nil)
 	if calls == 0 {
 		t.Error("expected timeout entry to be re-validated when retryTimeout=true")
 	}
 
 	// With retryTimeout=false, should skip (no Crossref call).
 	calls = 0
-	AllocateCacheEntries([]string{path}, dir, false, nil)
+	AllocateCacheEntries([]string{path}, false, nil)
 	if calls != 0 {
 		t.Errorf("expected no re-validation when retryTimeout=false, got %d calls", calls)
 	}
@@ -1881,14 +1899,15 @@ func TestAddEntryFromID_DOI_CreatesEntry(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	key, _, err := AddEntryFromID("10.1/test", dir, nil)
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	key, _, err := AddEntryFromID("10.1/test", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if key == "" {
 		t.Fatal("expected non-empty key")
 	}
-	c := loadCache(dir)
+	c := loadCache()
 	entry, ok := c[key]
 	if !ok {
 		t.Fatalf("key %q not found in cache", key)
@@ -1912,11 +1931,12 @@ func TestAddEntryFromID_DOI_URLPrefix(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	key, _, err := AddEntryFromID("https://doi.org/10.2/abc", dir, nil)
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	key, _, err := AddEntryFromID("https://doi.org/10.2/abc", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	c := loadCache(dir)
+	c := loadCache()
 	if _, ok := c[key]; !ok {
 		t.Fatalf("key %q not in cache", key)
 	}
@@ -1933,11 +1953,12 @@ func TestAddEntryFromID_ArxivID_CreatesEntry(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	key, _, err := AddEntryFromID("1706.03762", dir, nil)
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	key, _, err := AddEntryFromID("1706.03762", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	c := loadCache(dir)
+	c := loadCache()
 	entry, ok := c[key]
 	if !ok {
 		t.Fatalf("key %q not in cache", key)
@@ -1956,15 +1977,16 @@ func TestAddEntryFromID_ArxivID_CreatesEntry(t *testing.T) {
 func TestAddEntryFromID_DOI_DeduplicatesExisting(t *testing.T) {
 	// Seed cache with a DOI entry; second call must not hit the network.
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	c := cache{"Jones2021Great": cacheEntry{
 		Source: "crossref",
 		Type:   "article",
 		Fields: map[string]string{"doi": "10.1/dup"},
 	}}
-	saveCache(dir, c, nil)
+	saveCache(c, nil)
 
 	// No HTTP server — any network call would fail.
-	key, _, err := AddEntryFromID("10.1/dup", dir, nil)
+	key, _, err := AddEntryFromID("10.1/dup", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1972,21 +1994,22 @@ func TestAddEntryFromID_DOI_DeduplicatesExisting(t *testing.T) {
 		t.Errorf("key = %q, want Jones2021Great", key)
 	}
 	// Cache must be unchanged.
-	if got := len(loadCache(dir)); got != 1 {
+	if got := len(loadCache()); got != 1 {
 		t.Errorf("cache size = %d, want 1", got)
 	}
 }
 
 func TestAddEntryFromID_ArxivID_DeduplicatesExisting(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	c := cache{"Vaswani2017Attention": cacheEntry{
 		Source: "arxiv",
 		Type:   "misc",
 		Fields: map[string]string{"eprint": "1706.03762"},
 	}}
-	saveCache(dir, c, nil)
+	saveCache(c, nil)
 
-	key, _, err := AddEntryFromID("1706.03762", dir, nil)
+	key, _, err := AddEntryFromID("1706.03762", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1997,7 +2020,8 @@ func TestAddEntryFromID_ArxivID_DeduplicatesExisting(t *testing.T) {
 
 func TestAddEntryFromID_UnrecognizedID(t *testing.T) {
 	dir := t.TempDir()
-	_, _, err := AddEntryFromID("not-an-id", dir, nil)
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	_, _, err := AddEntryFromID("not-an-id", nil)
 	if err != ErrUnrecognizedID {
 		t.Errorf("err = %v, want ErrUnrecognizedID", err)
 	}
@@ -2117,11 +2141,12 @@ func TestAddEntryFromID_ArxivWithDOI_UsesCrossref(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	key, _, err := AddEntryFromID("2301.00001", dir, nil)
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	key, _, err := AddEntryFromID("2301.00001", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	c := loadCache(dir)
+	c := loadCache()
 	entry, ok := c[key]
 	if !ok {
 		t.Fatalf("key %q not in cache", key)
@@ -2144,12 +2169,13 @@ func TestAddEntryFromID_ArxivWithDOI_DedupByDOI(t *testing.T) {
 	// Seed cache with an entry that has the same DOI. The arXiv lookup should
 	// find the DOI, then dedup against the existing cache entry.
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	c := cache{"Smith2023Crossref": cacheEntry{
 		Source: "crossref",
 		Type:   "article",
 		Fields: map[string]string{"doi": "10.1016/j.test.2023.1234"},
 	}}
-	saveCache(dir, c, nil)
+	saveCache(c, nil)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -2168,7 +2194,7 @@ func TestAddEntryFromID_ArxivWithDOI_DedupByDOI(t *testing.T) {
 	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
 	defer func() { httpClient = orig }()
 
-	key, _, err := AddEntryFromID("2301.00001", dir, nil)
+	key, _, err := AddEntryFromID("2301.00001", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -2176,15 +2202,17 @@ func TestAddEntryFromID_ArxivWithDOI_DedupByDOI(t *testing.T) {
 		t.Errorf("key = %q, want Smith2023Crossref", key)
 	}
 	// Cache must be unchanged.
-	if got := len(loadCache(dir)); got != 1 {
+	if got := len(loadCache()); got != 1 {
 		t.Errorf("cache size = %d, want 1", got)
 	}
 }
 
 func TestAddEntryFromID_CorruptCache(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(dir+"/bib.json", []byte("CORRUPT"), 0644)
-	_, _, err := AddEntryFromID("10.1234/test", dir, nil)
+	cachePath := filepath.Join(dir, "_global_bib.json")
+	t.Setenv("EL_GLOBAL_BIB", cachePath)
+	os.WriteFile(cachePath, []byte("CORRUPT"), 0644)
+	_, _, err := AddEntryFromID("10.1234/test", nil)
 	if err == nil {
 		t.Fatal("expected error for corrupt cache, got nil")
 	}
@@ -2192,9 +2220,9 @@ func TestAddEntryFromID_CorruptCache(t *testing.T) {
 		t.Errorf("expected errCorruptCache, got %v", err)
 	}
 	// Verify file was NOT overwritten.
-	data, _ := os.ReadFile(dir + "/bib.json")
+	data, _ := os.ReadFile(cachePath)
 	if string(data) != "CORRUPT" {
-		t.Error("corrupt bib.json was overwritten")
+		t.Error("corrupt cache was overwritten")
 	}
 }
 
@@ -2208,7 +2236,8 @@ func TestAddEntryFromID_DOI_APIFailure(t *testing.T) {
 	defer func() { httpClient = orig }()
 
 	dir := t.TempDir()
-	_, _, err := AddEntryFromID("10.1/fail", dir, nil)
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	_, _, err := AddEntryFromID("10.1/fail", nil)
 	if err == nil {
 		t.Fatal("expected error for API failure, got nil")
 	}

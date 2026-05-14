@@ -171,6 +171,7 @@ const bibKnuth = `@book{knuth1984,
 func setupCompileDir(t *testing.T, texContent, bibContent string) string {
 	t.Helper()
 	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	if err := os.WriteFile(filepath.Join(dir, "main.tex"), []byte(texContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +183,7 @@ func setupCompileDir(t *testing.T, texContent, bibContent string) string {
 		}
 		writeConfig(t, dir, "main.tex", "bibliography.bib")
 		// Simulate 'el bib parse': seed bib.json, write renames.json, record hash.
-		_, renames, err := bib.AllocateCacheEntries([]string{bibPath}, elDir, true, nil)
+		_, renames, err := bib.AllocateCacheEntries([]string{bibPath}, true, nil)
 		if err != nil {
 			t.Fatalf("AllocateCacheEntries: %v", err)
 		}

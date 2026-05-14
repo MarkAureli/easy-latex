@@ -25,6 +25,8 @@ func TestRunBibList_WithEntries(t *testing.T) {
 	dir := t.TempDir()
 	elDir := filepath.Join(dir, ".el")
 	os.MkdirAll(elDir, 0755)
+	globalBib := filepath.Join(dir, "_global_bib.json")
+	t.Setenv("EL_GLOBAL_BIB", globalBib)
 
 	cache := map[string]any{
 		"Smith2024FooBar": map[string]any{
@@ -38,7 +40,7 @@ func TestRunBibList_WithEntries(t *testing.T) {
 		},
 	}
 	data, _ := json.MarshalIndent(cache, "", "  ")
-	os.WriteFile(filepath.Join(elDir, "bib.json"), data, 0644)
+	os.WriteFile(globalBib, data, 0644)
 
 	chdir(t, dir)
 
@@ -55,6 +57,8 @@ func setupBibListDir(t *testing.T) string {
 	dir := t.TempDir()
 	elDir := filepath.Join(dir, ".el")
 	os.MkdirAll(elDir, 0755)
+	globalBib := filepath.Join(dir, "_global_bib.json")
+	t.Setenv("EL_GLOBAL_BIB", globalBib)
 
 	cache := map[string]any{
 		"Smith2024FooBar": map[string]any{
@@ -85,7 +89,7 @@ func setupBibListDir(t *testing.T) string {
 		},
 	}
 	data, _ := json.MarshalIndent(cache, "", "  ")
-	os.WriteFile(filepath.Join(elDir, "bib.json"), data, 0644)
+	os.WriteFile(globalBib, data, 0644)
 
 	// Config pointing at main.tex
 	cfg := map[string]any{"main": "main.tex"}
@@ -188,6 +192,8 @@ func TestRunBibList_NoConfigFallback(t *testing.T) {
 	dir := t.TempDir()
 	elDir := filepath.Join(dir, ".el")
 	os.MkdirAll(elDir, 0755)
+	globalBib := filepath.Join(dir, "_global_bib.json")
+	t.Setenv("EL_GLOBAL_BIB", globalBib)
 
 	cache := map[string]any{
 		"Smith2024FooBar": map[string]any{
@@ -197,7 +203,7 @@ func TestRunBibList_NoConfigFallback(t *testing.T) {
 		},
 	}
 	data, _ := json.MarshalIndent(cache, "", "  ")
-	os.WriteFile(filepath.Join(elDir, "bib.json"), data, 0644)
+	os.WriteFile(globalBib, data, 0644)
 
 	chdir(t, dir)
 

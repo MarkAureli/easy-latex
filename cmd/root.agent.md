@@ -73,4 +73,8 @@ JSON `omitzero` on `bib` and `pedantic` fields suppresses empty objects (Go 1.24
 
 ## PersistentPreRunE
 
-Skips project root check for `init` and all `config` subcommands (config handles project check internally based on `--global` flag). Uses `isConfigCommand(cmd)` helper.
+Skips project root check for:
+- `init`, `help`, `completion`, `lsp`
+- all `config` subcommands (`isConfigCommand`) — config handles project check internally based on `--global` flag
+- all `spell` subcommands (`isSpellCommand`) — same pattern, project check deferred to subcommand
+- all `bib` subcommands except `bib parse` (`isBibCommand`) — the bib cache is global, so `add`/`list`/`remove` work anywhere; only `parse` needs a project to find registered `.bib` files

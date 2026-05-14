@@ -57,9 +57,18 @@ $ el compile -o
 
 #### Bib processing
 
-The bib cache (`.el/bib.json`) is the source of truth for all bibliography entries. After each successful compilation, `el compile` writes `bibliography.bib` from the cache, including only cited entries with all configured transforms applied.
+`el` keeps a single **global bib cache** for the entire user account — every project on your machine shares the same validation store. The cache lives at:
+
+- `$EL_GLOBAL_BIB` if set (escape hatch, primarily for tests), otherwise
+- `$XDG_DATA_HOME/easy-latex/bib.json` if `XDG_DATA_HOME` is set, otherwise
+- macOS: `~/Library/Application Support/easy-latex/bib.json`
+- Linux/other: `~/.local/share/easy-latex/bib.json`
+
+The cache is the source of truth for all bibliography entries. After each successful compilation, `el compile` writes `bibliography.bib` from the cache, including only cited entries with all configured transforms applied. Cited keys present in the global cache but missing from the project bib file are materialised automatically — type `\cite{Smith2024Foo}` (picked from `el lsp` completion or pulled from a coauthor's earlier work), run `el compile`, and the entry appears in `bibliography.bib` without an explicit `el bib add` step.
 
 If `bibliography.bib` changed since the last compile, new entries are automatically parsed and added to the cache. When a new entry's canonical key differs from its original key, `\cite{}` references in all `.tex` files are rewritten automatically.
+
+Concurrent `el` invocations (e.g. two compiles in different projects) are serialised on the cache via an advisory `flock` on a sibling `bib.json.lock` file; writes are atomic via tmp+rename.
 
 **Citation key normalisation** — each entry's key is rewritten to the canonical form `{LastName}{Year}{Title}`:
 
@@ -104,7 +113,7 @@ Additional rules:
 
 The file is only rewritten if the content actually changes.
 
-**Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in `.el/bib.json`). Entries that fail due to a transient error (timeout, rate limit, server error) are marked `source: "timeout"` and automatically retried on the next parse (disable with `el config set retry-timeout false`). Entries whose identifier is not found are marked `source: "invalid-id"` and not retried.
+**Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in the global bib cache; see above for the path). Entries that fail due to a transient error (timeout, rate limit, server error) are marked `source: "timeout"` and automatically retried on the next parse (disable with `el config set retry-timeout false`). Entries whose identifier is not found are marked `source: "invalid-id"` and not retried.
 
 - Entry has a `doi` field (or a `url` containing `doi.org`) → queried against the [Crossref API](https://api.crossref.org); mismatched fields are auto-corrected in place and the entry type is set from Crossref's `type` field (e.g. `journal-article` → `@article`, `proceedings-article` → `@inproceedings`). For `@article` entries, the journal name is mechanically abbreviated to its ISO 4 form using the [LTWA](https://www.issn.org/services/online-services/access-to-the-ltwa/) (e.g. `Nature Communications` → `Nat. Commun.`). For proceedings and collection types, Crossref's `container-title` maps to `booktitle` instead of `journal`.
 - Entry has an `eprint` field with `archiveprefix`/`eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org` → queried against the arXiv API. If the arXiv response contains a DOI (i.e. the paper has been published), the entry is automatically redirected to Crossref validation with the correct entry type and full metadata. If Crossref is unavailable, it falls back to arXiv-only correction of title, author, and year.
@@ -336,7 +345,7 @@ The entry will appear in `bibliography.bib` on the next `el compile` when cited.
 
 #### `el bib list`
 
-Show all entries in the bib cache as a table.
+Show all entries in the global bib cache as a table.
 
 ```
 $ el bib list
@@ -346,6 +355,16 @@ Doe2023SomePreprint         misc      arxiv     Some Preprint
 
 2 entries in bib cache.
 ```
+
+When run inside a project (with `.el/config.json` and a main `.tex` file), entries are grouped into `Referenced` and `Unreferenced` sections based on which keys are actually cited in the source files. Filter the listing:
+
+```
+$ el bib list --cited                # only entries cited in this project
+$ el bib list --uncited              # only entries not cited in this project
+$ el bib list --search bose          # substring match on key, author, or title
+```
+
+`--search` composes with the other flags and with the section grouping.
 
 #### `el bib remove <key>`
 
@@ -361,7 +380,7 @@ $ el bib remove nonexistent
 
 #### `el bib parse`
 
-Pre-populate the bib cache from registered `.bib` files without compiling. Useful for validating entries against Crossref/arXiv ahead of time, or for re-populating the cache after deleting `.el/bib.json`. Shows progress during API calls and announces key renames.
+Pre-populate the global bib cache from this project's registered `.bib` files without compiling. Useful for validating entries against Crossref/arXiv ahead of time, or for re-populating the cache after manual deletion. Shows progress during API calls and announces key renames.
 
 ```
 $ el bib parse
@@ -373,7 +392,9 @@ Allocated 5 new bib cache entries.
 
 Start a Language Server Protocol server over stdio that provides cite-key completions. Intended for editor integration (VS Code, Neovim, etc.).
 
-Typing any cite command (`\cite{`, `\citet{`, `\citep{`, `\citealt{`, `\citeauthor{`, `\citeyear{`, etc.) triggers completion with all known cite keys from the bib cache. Capitalised (`\Citet{`), starred (`\citet*{`), and optional-argument (`\citep[see]{`) forms are also supported. Keys are loaded once at startup — restart the LSP to pick up new entries.
+Typing any cite command (`\cite{`, `\citet{`, `\citep{`, `\citealt{`, `\citeauthor{`, `\citeyear{`, etc.) triggers completion with all known cite keys from the global bib cache. Capitalised (`\Citet{`), starred (`\citet*{`), and optional-argument (`\citep[see]{`) forms are also supported. Keys are loaded once at startup — restart the LSP to pick up new entries.
+
+Because the cache is global, completion offers keys added by `el bib add` in any directory. Cited keys that are present in the global cache but not yet in the project's `bibliography.bib` are materialised automatically on the next `el compile`.
 
 ## Installation
 
@@ -427,8 +448,9 @@ Running `el init` and `el compile` in a LaTeX project creates the following:
 | Path | Purpose |
 |---|---|
 | `.el/config.json` | Main `.tex` file, aux directory path, registered `.bib` files, and processing options |
-| `.el/bib.json` | Bib cache: validated entry data (source of truth for bibliography generation) |
-| `.el/` | All pdflatex/bibtex/biber intermediate files, kept out of the project root |
+| `.el/` | All pdflatex/bibtex/biber intermediate files, bib hash, key-rename map — kept out of the project root |
 | `<name>.pdf` | Copy of compiled PDF from `.el/` |
+
+The validated bib cache lives **outside** the project, in a user-level directory shared by every `el` project on the same machine — see *Bib processing* above for the resolved path. Nothing project-specific is stored in there.
 
 In a git repository, `el init` registers `.el` in `.git/info/exclude` automatically, so none of these files need to be added to `.gitignore`.

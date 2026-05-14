@@ -4,12 +4,23 @@ Handle `.bib` file processing.
 
 ## Architecture
 
-Two-phase design: **cache allocation** (parse + validate) and **bib generation** (cache → file with config transforms).
+Two-phase design: **cache allocation** (parse + validate) and **bib generation** (cache → file with config transforms). The validation cache is **global per user**, not per-project — see `global.go`.
 
-- `AllocateCacheEntries(bibFiles, auxDir, log Logger)` (`validate.go`) — seeds `.el/bib.json` from bib files (used by `el init`, `el bib parse`, auto-triggered by `el compile` when `bibliography.bib` hash changes)
-- `WriteBibFromCache` (`validate.go`) — reconstructs entries from cache for cited keys, applies all config transforms via `WriteOptions` struct, writes `bibliography.bib` (used by `el compile` after pass 1)
-- Cache I/O in `cache.go`; Crossref HTTP in `crossref.go`; arXiv HTTP in `arxiv.go`
+- `AllocateCacheEntries(bibFiles, retryTimeout, log Logger)` (`validate.go`) — seeds the global bib cache from bib files (used by `el init`, `el bib parse`, auto-triggered by `el compile` when `bibliography.bib` hash changes). Wraps work in `withGlobalLock`.
+- `WriteBibFromCache(path, citeKeys, opts)` (`validate.go`) — reconstructs entries from the global cache for cited keys, applies all config transforms via `WriteOptions` struct, writes `bibliography.bib` (used by `el compile` after pass 1). Cited keys present in the global cache but not yet in the project bib file are materialised at this step (auto-import on compile).
+- Cache I/O in `cache.go`; global path resolution + lock in `global.go`/`cache.go`; Crossref HTTP in `crossref.go`; arXiv HTTP in `arxiv.go`
 - `Version` constant in `validate.go` (used by Crossref User-Agent and CLI `--version`)
+
+### Global bib cache (`global.go`, `cache.go`)
+
+`GlobalBibPath() (string, error)` resolves the cache file path:
+
+1. `$EL_GLOBAL_BIB` (escape hatch; used by tests via `t.Setenv`)
+2. `$XDG_DATA_HOME/easy-latex/bib.json`
+3. darwin: `~/Library/Application Support/easy-latex/bib.json`
+4. other unix: `~/.local/share/easy-latex/bib.json`
+
+`ensureGlobalDir()` creates the parent directory lazily. `saveCache` writes via `bib.json.tmp` + `os.Rename` for atomicity. `withGlobalLock(fn func() error) error` serialises read-modify-write across processes via `syscall.Flock(LOCK_EX)` on a sibling `bib.json.lock` file (a stable path so renames of the data file do not break the mutex). Read-only callers (`LoadCacheEntries`, `LoadCacheKeys`, lsp completion) skip the lock — atomic rename means readers either see the old file or the new file, never a torn write.
 
 ### Logger (`logger.go`)
 
@@ -29,9 +40,9 @@ Two-phase design: **cache allocation** (parse + validate) and **bib generation**
 
 ## Single-entry insertion from ID (`validate.go`)
 
-Entry point: `AddEntryFromID(id, auxDir string, log Logger) (key string, isNew bool, err error)`.
+Entry point: `AddEntryFromID(id string, log Logger) (key string, isNew bool, err error)`.
 
-Adds one entry to cache from a raw DOI or arXiv identifier (no bib file needed). Returns `isNew=true` when entry was newly created, `false` when already cached (dedup hit).
+Adds one entry to the global bib cache from a raw DOI or arXiv identifier (no bib file needed). Returns `isNew=true` when entry was newly created, `false` when already cached (dedup hit). Wraps work in `withGlobalLock`.
 
 - `normalizeDOI(s)` — strips `doi.org/` prefixes, returns bare DOI if starts with `10.`, else `""`
 - `normalizeArxivID(s)` — matches `reArxivBare` (bare form) or `reArxivURL` (full URL), returns bare ID or `""`
@@ -42,9 +53,9 @@ Adds one entry to cache from a raw DOI or arXiv identifier (no bib file needed).
 
 ## Cache allocation (`validate.go`)
 
-Entry point: `AllocateCacheEntries(bibFiles, auxDir string, retryTimeout bool, log Logger) (int, map[string]string, error)`.
+Entry point: `AllocateCacheEntries(bibFiles []string, retryTimeout bool, log Logger) (int, map[string]string, error)`.
 
-Returns count of newly cached entries and a renames map (old key → new canonical key). Parses each bib file and seeds `.el/bib.json` with any entries not yet cached. Parse-only: does NOT rewrite files or run full normalization pipeline. Used by `el init` and `el bib parse` to pre-populate cache without compile.
+Returns count of newly cached entries and a renames map (old key → new canonical key). Parses each bib file and seeds the global bib cache with any entries not yet cached. Parse-only: does NOT rewrite files or run full normalization pipeline. Used by `el init` and `el bib parse` to pre-populate cache without compile. Wraps work in `withGlobalLock`.
 
 Deduplication:
 - **Entries with DOI**: matched by DOI (case-insensitive). Crossref-validated if new.
@@ -70,9 +81,9 @@ For new DOI/arXiv entries, runs `validateEntry` and stores full field snapshot. 
 
 ## Bib generation from cache (`validate.go`)
 
-Entry point: `WriteBibFromCache(path, citeKeys, auxDir, abbreviateJournals, braceTitles, ieeeFormat, maxAuthors, abbreviateFirstName, urlFromDOI)`.
+Entry point: `WriteBibFromCache(path string, citeKeys []string, opts WriteOptions) error`.
 
-Reconstructs entries from cache for given cite keys and writes them to `path` (typically `bibliography.bib`) with all config transforms applied. Called by `el compile` after pass 1 to produce bib file from cache. Only cited keys written.
+Reconstructs entries from the global cache for given cite keys and writes them to `path` (typically `bibliography.bib`) with all config transforms applied. Called by `el compile` after pass 1 to produce bib file from cache. Only cited keys written. Cited keys present in the global cache but missing from the project bib file are materialised here automatically (auto-import on compile).
 
 ## Renames persistence (`validate.go`)
 
@@ -162,7 +173,8 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 | `validate.go` | `Version`, `WriteOptions`, `AllocateCacheEntries`, `WriteBibFromCache`, `AddEntryFromID`, `entrySpecs`, normalization, validation |
 | `logger.go` | `Logger` interface, `nopLogger`, `logOrNop`, `stderrLogger` |
 | `retry.go` | `doWithRetry`, `friendlyHTTPError`, `retryableStatusCode`, `isRetryableError` |
-| `cache.go` | `loadCache`, `saveCache`, `LoadRenames`, `SaveRenames`, `ClearRenames`, `BibFileChanged`, `UpdateBibHash`, `LoadCacheKeys`, `LoadCacheEntries`, `RemoveEntryFromCache`, `RemoveEntriesFromCache`, `CacheEntryInfo` |
+| `global.go` | `GlobalBibPath`, `ensureGlobalDir` |
+| `cache.go` | `loadCache`, `loadCacheStrict`, `saveCache` (atomic tmp+rename), `withGlobalLock` (flock on `bib.json.lock`), `LoadRenames`, `SaveRenames`, `ClearRenames`, `BibFileChanged`, `UpdateBibHash`, `LoadCacheKeys`, `LoadCacheEntries`, `RemoveEntryFromCache`, `RemoveEntriesFromCache`, `CacheEntryInfo` |
 | `crossref.go` | `httpClient`, `queryCrossref`, `mapCrossrefType`, `containerTitleField`, `formatCrossrefAuthors` |
 | `arxiv.go` | `queryArxiv`, `formatArxivAuthors`, `reverseArxivName` |
 | `xmltitle.go` | `cleanCrossrefTitle`, MathML→LaTeX converter (`encoding/xml` Decoder), Crossref face markup→LaTeX, XML tag stripper |

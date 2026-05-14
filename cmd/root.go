@@ -280,10 +280,15 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip project check for commands that work outside a project.
 		switch cmd.Name() {
-		case "init", "help", "completion":
+		case "init", "help", "completion", "lsp":
 			return nil
 		}
 		if isConfigCommand(cmd) || isSpellCommand(cmd) {
+			return nil
+		}
+		// bib subcommands target the global cache; only `bib parse` needs a
+		// project (it consumes the project's registered .bib files).
+		if isBibCommand(cmd) && cmd.Name() != "parse" {
 			return nil
 		}
 		root, err := findProjectRoot()
@@ -317,6 +322,16 @@ func findProjectRoot() (string, error) {
 func isConfigCommand(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		if c == configCmd {
+			return true
+		}
+	}
+	return false
+}
+
+// isBibCommand returns true if cmd is bibCmd or a child of bibCmd.
+func isBibCommand(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c == bibCmd {
 			return true
 		}
 	}
