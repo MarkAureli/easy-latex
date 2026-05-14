@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
 	"github.com/MarkAureli/easy-latex/internal/term"
@@ -93,6 +92,11 @@ func runBibList(cmd *cobra.Command, args []string) error {
 		srcW = max(srcW, len(e.Source))
 	}
 	keyMax := max(15, term.Width()-typeW-srcW-4)
+	keyW := len("KEY")
+	for _, e := range entries {
+		k := truncate(e.Key, keyMax)
+		keyW = max(keyW, len(k))
+	}
 	out := cmd.OutOrStdout()
 	c := term.Detect()
 
@@ -110,12 +114,10 @@ func runBibList(cmd *cobra.Command, args []string) error {
 	}
 
 	printSection := func(rows []bib.CacheEntryInfo) {
-		w := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-		fmt.Fprintf(w, "KEY\tTYPE\tSOURCE\n")
+		fmt.Fprintf(out, "%-*s  %-*s  %s\n", keyW, "KEY", typeW, "TYPE", "SOURCE")
 		for _, e := range rows {
-			fmt.Fprintf(w, "%s\t%s\t%s\n", truncate(e.Key, keyMax), e.Type, colorSource(e.Source))
+			fmt.Fprintf(out, "%-*s  %-*s  %s\n", keyW, truncate(e.Key, keyMax), typeW, e.Type, colorSource(e.Source))
 		}
-		w.Flush()
 	}
 
 	switch {
