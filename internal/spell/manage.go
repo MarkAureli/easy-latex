@@ -181,6 +181,57 @@ func CompletionCandidates(path string, isIgnore bool) []string {
 	return out
 }
 
+// MisspellingsPath returns the canonical path of the per-project misspellings
+// cache file. Callers pass the project's aux dir.
+func MisspellingsPath(auxDir string) string {
+	return filepath.Join(auxDir, "spell", "misspellings.txt")
+}
+
+// WriteMisspellings rewrites path with words, sorted-unique. Empty words
+// truncates the file. Creates parent dirs.
+func WriteMisspellings(path string, words []string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	set := map[string]bool{}
+	for _, w := range words {
+		if w == "" {
+			continue
+		}
+		set[w] = true
+	}
+	return writeLinesSorted(path, set)
+}
+
+// LoadMisspellings returns the sorted-unique words recorded at path. Missing
+// file returns nil.
+func LoadMisspellings(path string) []string {
+	lines, _ := readLinesIfExists(path)
+	out := slices.Clone(lines)
+	sort.Strings(out)
+	return out
+}
+
+// RemoveMisspellings drops the given tokens from path. Missing file or missing
+// tokens are no-ops.
+func RemoveMisspellings(path string, tokens []string) error {
+	lines, err := readLinesIfExists(path)
+	if err != nil || len(lines) == 0 {
+		return err
+	}
+	drop := map[string]bool{}
+	for _, t := range tokens {
+		drop[t] = true
+	}
+	set := map[string]bool{}
+	for _, l := range lines {
+		if !drop[l] {
+			set[l] = true
+		}
+	}
+	return writeLinesSorted(path, set)
+}
+
 // readLinesIfExists returns non-blank, non-comment trimmed lines, or nil if the
 // file does not exist.
 func readLinesIfExists(path string) ([]string, error) {

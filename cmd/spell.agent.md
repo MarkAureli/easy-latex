@@ -56,6 +56,22 @@ unset.
 file lines (with `!` prefix stripped) ∪ `DefaultIgnoreMacros` (when `isIgnore`).
 Tokens already in `args` are filtered out so a second TAB doesn't repeat.
 
+`spellAddCompletion` reads the per-project misspellings cache via
+`spell.LoadMisspellings(spell.MisspellingsPath(<root>/.el))`. Returns no
+candidates when `--ignore` is set or when no project root is found. Tokens
+already in `args` are filtered. `runSpellAdd` calls `spell.RemoveMisspellings`
+for the added tokens after a successful add (non-`--ignore` only), so the next
+TAB no longer offers them.
+
+## Misspellings cache
+
+`runSpellCheck` (root.go) writes the unique misspelled words observed in the
+latest run to `<auxDir>/spell/misspellings.txt` (sorted-unique). The file is
+overwritten on every `el check` / `el compile` pass. Helpers live in
+`internal/spell/manage.go`: `MisspellingsPath`, `WriteMisspellings`,
+`LoadMisspellings`, `RemoveMisspellings`. `spell.Diagnostic` carries the raw
+`Word` so writers don't have to re-parse the message.
+
 ## PreRunE bypass
 
 `isSpellCommand(cmd)` returns true for `spellCmd` and any descendant; root's

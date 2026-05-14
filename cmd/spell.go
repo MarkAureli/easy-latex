@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 
 	"github.com/MarkAureli/easy-latex/internal/spell"
@@ -27,7 +28,7 @@ var spellAddCmd = &cobra.Command{
 	Short:             "Add words to a dict, or macros to the ignore list",
 	Args:              cobra.MinimumNArgs(1),
 	RunE:              runSpellAdd,
-	ValidArgsFunction: cobra.NoFileCompletions,
+	ValidArgsFunction: spellAddCompletion,
 }
 
 var spellRemoveCmd = &cobra.Command{
@@ -106,6 +107,11 @@ func runSpellAdd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if !isIgnore {
+		if root, err := findProjectRoot(); err == nil {
+			_ = spell.RemoveMisspellings(spell.MisspellingsPath(filepath.Join(root, auxDir)), args)
+		}
+	}
 	fmt.Printf("%s: added %d (of %d)\n", path, added, len(args))
 	return nil
 }
@@ -141,6 +147,25 @@ func runSpellList(cmd *cobra.Command, _ []string) error {
 		fmt.Println(t)
 	}
 	return nil
+}
+
+func spellAddCompletion(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	isIgnore, _ := cmd.Flags().GetBool("ignore")
+	if isIgnore {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	root, err := findProjectRoot()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	cands := spell.LoadMisspellings(spell.MisspellingsPath(filepath.Join(root, auxDir)))
+	out := cands[:0]
+	for _, c := range cands {
+		if !slices.Contains(args, c) {
+			out = append(out, c)
+		}
+	}
+	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
 func spellRemoveCompletion(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {

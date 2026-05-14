@@ -394,9 +394,14 @@ func runSpellCheck(cfg *Config, texFiles []string) ([]pedantic.Diagnostic, error
 	paths := spell.DefaultPaths(globalDir, auxDir, *cfg.Spelling)
 	sd := spell.Run(files, *cfg.Spelling, auxDir, paths, os.Stderr)
 	out := make([]pedantic.Diagnostic, len(sd))
+	words := make([]string, 0, len(sd))
 	for i, d := range sd {
 		out[i] = pedantic.Diagnostic{File: d.File, Line: d.Line, Message: d.Message}
+		if d.Word != "" {
+			words = append(words, d.Word)
+		}
 	}
+	_ = spell.WriteMisspellings(spell.MisspellingsPath(auxDir), words)
 	return out, nil
 }
 

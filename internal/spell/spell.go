@@ -16,6 +16,7 @@ import (
 type Diagnostic struct {
 	File    string
 	Line    int
+	Word    string
 	Message string
 }
 
@@ -106,7 +107,7 @@ func Run(files map[string][]string, lang, auxDir string, paths Paths, warn io.Wr
 					}
 					msg = fmt.Sprintf("%s (suggest: %s)", msg, strings.Join(show, ", "))
 				}
-				out = append(out, Diagnostic{File: r.File, Line: r.Line, Message: msg})
+				out = append(out, Diagnostic{File: r.File, Line: r.Line, Word: m.Word, Message: msg})
 			}
 		}
 	}
