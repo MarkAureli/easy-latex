@@ -10,9 +10,14 @@ import (
 	"github.com/MarkAureli/easy-latex/internal/bib"
 )
 
-// chdir changes the process working directory to dir and restores it after the test.
+// chdir changes the process working directory to dir and restores it after the
+// test. Also isolates the global bib cache to a per-test file inside dir so
+// tests that allocate cache entries (via doInit, AllocateCacheEntries, …) do
+// not leak into the user's real cache. Tests that need a specific path may
+// override EL_GLOBAL_BIB again after this call.
 func chdir(t *testing.T, dir string) {
 	t.Helper()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
 	orig, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)

@@ -98,6 +98,9 @@ func (s *server) handle(req *request) (stop bool) {
 			return false
 		}
 		items := s.complete(p)
+		if items == nil {
+			items = []completionItem{}
+		}
 		s.reply(req.ID, completionList{IsIncomplete: false, Items: items})
 
 	case "shutdown":
@@ -233,7 +236,7 @@ func (s *server) complete(p completionParams) []completionItem {
 	if prefix == "" {
 		return s.items
 	}
-	var out []completionItem
+	out := []completionItem{}
 	for _, item := range s.items {
 		if strings.HasPrefix(item.Label, prefix) {
 			out = append(out, item)
