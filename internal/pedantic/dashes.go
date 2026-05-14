@@ -122,6 +122,7 @@ var (
 // by rule 4. File-inclusion macros take paths.
 var argSkipMacros = map[string]bool{
 	"bibliographystyle":	true,
+	"cline":		true,
 	"documentclass":        true,
 	"orcid":                true,
 	"usepackage":           true,

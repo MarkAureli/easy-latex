@@ -142,7 +142,11 @@ func runBibList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Fprintf(out, "\n%d entries in bib cache.\n", len(entries))
+	if len(entries) == 1 {
+		fmt.Fprintf(out, "\n1 entry in bib cache.\n")
+	} else {
+		fmt.Fprintf(out, "\n%d entries in bib cache.\n", len(entries))
+	}
 	return nil
 }
 
