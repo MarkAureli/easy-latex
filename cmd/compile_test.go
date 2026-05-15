@@ -259,7 +259,7 @@ func TestRunCompile_Biber(t *testing.T) {
 	assertBBLContains(t, "Knuth1984TheTexbook")
 }
 
-func TestRunPdflatex_ErrorSuppressesWarnings(t *testing.T) {
+func TestRunEngine_ErrorSuppressesWarnings(t *testing.T) {
 	skipIfToolMissing(t, "pdflatex")
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "main.tex"), []byte(texErrorWithCite), 0644)
@@ -271,7 +271,7 @@ func TestRunPdflatex_ErrorSuppressesWarnings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lines, err := runPdflatex(pdflatex, &Config{Main: "main.tex"}, nil)
+	lines, err := runEngine(pdflatex, &Config{Main: "main.tex"}, nil)
 	if err == nil {
 		t.Fatal("expected compilation error")
 	}
@@ -357,5 +357,76 @@ func TestIsContextLine(t *testing.T) {
 	}
 	if isContextLine("! Undefined control sequence.") {
 		t.Error("! line should not be context")
+	}
+}
+
+func TestDetectMagicEngine(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"none", "\\documentclass{article}\n", ""},
+		{"xelatex", "% !TEX program = xelatex\n\\documentclass{article}\n", "xelatex"},
+		{"lualatex TS-program", "%!TEX TS-program=lualatex\n", "lualatex"},
+		{"case insensitive", "% !tex Program = XeLaTeX\n", "xelatex"},
+		{"second line", "%\n% !TEX program = lualatex\n", "lualatex"},
+		{"invalid value passes through", "% !TEX program = pdftex\n", "pdftex"},
+		{"too deep ignored", strings.Repeat("\n", 25) + "% !TEX program = xelatex\n", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "main.tex")
+			os.WriteFile(path, []byte(tc.content), 0644)
+			if got := detectMagicEngine(path); got != tc.want {
+				t.Errorf("detectMagicEngine(%q) = %q, want %q", tc.content, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveEngine(t *testing.T) {
+	dir := t.TempDir()
+	main := filepath.Join(dir, "main.tex")
+
+	// Flag wins over magic comment and config.
+	os.WriteFile(main, []byte("% !TEX program = xelatex\n"), 0644)
+	xe := "xelatex"
+	cfg := &Config{Main: main, Engine: &xe}
+	got, err := resolveEngine(cfg, "lualatex")
+	if err != nil || got != "lualatex" {
+		t.Errorf("flag precedence: got %q err=%v, want lualatex", got, err)
+	}
+
+	// Magic comment wins over config.
+	got, err = resolveEngine(cfg, "")
+	if err != nil || got != "xelatex" {
+		t.Errorf("magic precedence: got %q err=%v, want xelatex", got, err)
+	}
+
+	// Config wins over default.
+	os.WriteFile(main, []byte("\\documentclass{article}\n"), 0644)
+	got, err = resolveEngine(cfg, "")
+	if err != nil || got != "xelatex" {
+		t.Errorf("config precedence: got %q err=%v, want xelatex", got, err)
+	}
+
+	// Default pdflatex when nothing set.
+	cfg.Engine = nil
+	got, err = resolveEngine(cfg, "")
+	if err != nil || got != "pdflatex" {
+		t.Errorf("default: got %q err=%v, want pdflatex", got, err)
+	}
+
+	// Invalid flag rejected.
+	if _, err := resolveEngine(cfg, "bogus"); err == nil {
+		t.Error("expected error for invalid flag")
+	}
+
+	// Invalid magic comment rejected.
+	os.WriteFile(main, []byte("% !TEX program = bogus\n"), 0644)
+	if _, err := resolveEngine(cfg, ""); err == nil {
+		t.Error("expected error for invalid magic engine")
 	}
 }

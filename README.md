@@ -31,7 +31,23 @@ If the main `.tex` file uses `\documentclass{IEEEtran}`, the preamble file is au
 
 ### `el compile`
 
-Compiles the document using `pdflatex`. Only warnings and errors are printed — all other LaTeX output is suppressed. On success, a copy of the PDF is placed in the project root.
+Compiles the document. Only warnings and errors are printed — all other LaTeX output is suppressed. On success, a copy of the PDF is placed in the project root.
+
+The default engine is `pdflatex`. To use `xelatex` or `lualatex` (e.g. when your document loads `fontspec` or needs system fonts), pick one of three ways:
+
+```
+$ el compile --engine xelatex     # one-off override
+$ el config set engine lualatex   # project default (persists in .el/config.json)
+```
+
+Or add a magic comment to the first lines of the main `.tex` file — the same convention used by TeXShop, VSCode, and TeXstudio:
+
+```latex
+% !TEX program = xelatex
+\documentclass{article}
+```
+
+Precedence: `--engine` flag → magic comment → config → `pdflatex` default.
 
 ```
 $ el compile
@@ -415,7 +431,7 @@ export PATH="$HOME/go/bin:$PATH"
 
 ### TeX tools not in PATH?
 
-On macOS, TeX Live installs its binaries to `/Library/TeX/texbin/`; on Linux, to `/usr/local/texlive/<year>/bin/<arch>/`. `el` checks these locations automatically as a fallback for `pdflatex`, `bibtex`, and `biber`, so it works even if you haven't added them to your `$PATH`.
+On macOS, TeX Live installs its binaries to `/Library/TeX/texbin/`; on Linux, to `/usr/local/texlive/<year>/bin/<arch>/`. `el` checks these locations automatically as a fallback for `pdflatex`, `xelatex`, `lualatex`, `bibtex`, and `biber`, so it works even if you haven't added them to your `$PATH`.
 
 ## Shell completion
 

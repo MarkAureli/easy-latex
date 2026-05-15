@@ -60,6 +60,14 @@ Strict mode (stored at top level):
 
 When true, `el check` and `el compile` exit non-zero if any pedantic, spelling, or compile-time warning is reported. Per-invocation override via `--strict` / `--no-strict` flags on those commands. Configured via the `strict` entry in `generalConfigFields`.
 
+LaTeX engine (stored at top level):
+
+| Key | Type | Allowed values | Default |
+|---|---|---|---|
+| `engine` | string | `pdflatex`, `xelatex`, `lualatex` | `pdflatex` |
+
+Selects the LaTeX engine used by `el compile`. Validated via `validateEngine`. Resolved in `cmd/compile.go` by `resolveEngine` with precedence: `--engine` flag → magic comment `% !TEX program = <engine>` in the main `.tex` file (first ~20 lines) → this config → `pdflatex` default. Configured via the `engine` entry in `generalConfigFields`.
+
 ### `pedantic` (alias)
 
 `el config set pedantic [value]` and `el config unset pedantic` apply the

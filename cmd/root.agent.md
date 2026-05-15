@@ -13,7 +13,8 @@ Config struct + load/save/merge. Shared by all commands that load config.
   "bib": { ... },
   "pedantic": { "checks": { "no-block-citations": true } },
   "spelling": "en_US",
-  "strict": false
+  "strict": false,
+  "engine": "xelatex"
 }
 ```
 
@@ -25,6 +26,7 @@ Config struct + load/save/merge. Shared by all commands that load config.
 | `pedantic` | `PedanticConfig` | Per-check enable/disable map |
 | `spelling` | *string | Spell-check language: `en_GB`, `en_US`, or unset (off). Triggers `runSpellCheck` in `cmd/check.go` and `cmd/compile.go`; independent of the pedantic registry. |
 | `strict` | *bool | When true, `el check` and `el compile` exit non-zero on any pedantic / spelling / compile-time warning. Default false. CLI flags `--strict` / `--no-strict` override. Helper: `cfg.strict()`. |
+| `engine` | *string | LaTeX engine: `pdflatex` (default), `xelatex`, `lualatex`. Validated via `validateEngine`. Helper: `cfg.engine()`. Resolved by `resolveEngine` in `cmd/compile.go` with precedence `--engine` flag → magic comment (`% !TEX program = ...`) → config → default. |
 
 ### `BibConfig`
 

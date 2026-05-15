@@ -23,6 +23,7 @@ var (
 	compileNoCheck   bool
 	compileStrict    bool
 	compileNoStrict  bool
+	compileEngine    string
 )
 
 var compileCmd = &cobra.Command{
@@ -42,7 +43,58 @@ func init() {
 	compileCmd.Flags().BoolVarP(&compileNoCheck, "no-check", "n", false, "Skip all pedantic checks (static and dynamic)")
 	compileCmd.Flags().BoolVar(&compileStrict, "strict", false, "Treat warnings as errors (overrides config)")
 	compileCmd.Flags().BoolVar(&compileNoStrict, "no-strict", false, "Treat warnings as warnings (overrides config)")
+	compileCmd.Flags().StringVar(&compileEngine, "engine", "", "LaTeX engine: pdflatex, xelatex, or lualatex (overrides config and magic comment)")
 	compileCmd.MarkFlagsMutuallyExclusive("strict", "no-strict")
+}
+
+// magicEnginePattern matches the de-facto TeXShop/VSCode convention:
+//
+//	% !TEX program = xelatex
+//	% !TEX TS-program = lualatex
+var magicEnginePattern = regexp.MustCompile(`(?i)^\s*%\s*!TEX\s+(?:TS-)?program\s*=\s*(\w+)`)
+
+// detectMagicEngine scans the first ~20 lines of mainTex for a magic comment.
+// Returns the engine name in lowercase, or "" if none found.
+func detectMagicEngine(mainTex string) string {
+	f, err := os.Open(mainTex)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	buf := make([]byte, 4096)
+	n, _ := f.Read(buf)
+	lines := strings.SplitN(string(buf[:n]), "\n", 21)
+	if len(lines) > 20 {
+		lines = lines[:20]
+	}
+	for _, line := range lines {
+		if m := magicEnginePattern.FindStringSubmatch(line); m != nil {
+			return strings.ToLower(m[1])
+		}
+	}
+	return ""
+}
+
+// resolveEngine picks the LaTeX engine per precedence:
+// CLI flag → magic comment → config → "pdflatex".
+func resolveEngine(cfg *Config, flagVal string) (string, error) {
+	if flagVal != "" {
+		if err := validateEngine(flagVal); err != nil {
+			return "", err
+		}
+		return flagVal, nil
+	}
+	if magic := detectMagicEngine(cfg.Main); magic != "" {
+		if err := validateEngine(magic); err != nil {
+			return "", fmt.Errorf("magic comment in %s: %w", cfg.Main, err)
+		}
+		return magic, nil
+	}
+	engine := cfg.engine()
+	if err := validateEngine(engine); err != nil {
+		return "", err
+	}
+	return engine, nil
 }
 
 var errorPatterns = []*regexp.Regexp{
@@ -112,7 +164,11 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot create %s: %w", auxDir, err)
 	}
 
-	pdflatex, err := findTool("pdflatex")
+	engine, err := resolveEngine(cfg, compileEngine)
+	if err != nil {
+		return err
+	}
+	enginePath, err := findTool(engine)
 	if err != nil {
 		return err
 	}
@@ -148,12 +204,12 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	// If the pass fails and a stale .bbl exists (e.g. from a previous failed
 	// compile with malformed bib content), delete it and retry once: the .bbl
 	// will be regenerated correctly by the bib tool on this run.
-	firstLines, err := runPdflatex(pdflatex, cfg, injectStys)
+	firstLines, err := runEngine(enginePath, cfg, injectStys)
 	if err != nil {
 		bblPath := filepath.Join(auxDir, stem+".bbl")
 		if _, statErr := os.Stat(bblPath); statErr == nil {
 			os.Remove(bblPath) //nolint:errcheck
-			firstLines, err = runPdflatex(pdflatex, cfg, injectStys)
+			firstLines, err = runEngine(enginePath, cfg, injectStys)
 		}
 		if err != nil {
 			printLines(firstLines)
@@ -184,7 +240,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		bib.ClearRenames(auxDir)
-		if _, err := runPdflatex(pdflatex, cfg, injectStys); err != nil {
+		if _, err := runEngine(enginePath, cfg, injectStys); err != nil {
 			return err
 		}
 	}
@@ -230,7 +286,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		}
 		fixBblBurl(filepath.Join(auxDir, stem+".bbl"))
 		// Second pdflatex pass to incorporate bibliography
-		secondLines, err := runPdflatex(pdflatex, cfg, injectStys)
+		secondLines, err := runEngine(enginePath, cfg, injectStys)
 		if err != nil {
 			printLines(secondLines)
 			return err
@@ -241,7 +297,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 			if !needsRerun(prev) {
 				break
 			}
-			prev, err = runPdflatex(pdflatex, cfg, injectStys)
+			prev, err = runEngine(enginePath, cfg, injectStys)
 			if err != nil {
 				printLines(prev)
 				return err
@@ -464,7 +520,7 @@ func countWarnings(lines []string) int {
 	return n
 }
 
-func runPdflatex(pdflatex string, cfg *Config, injectStys []string) ([]string, error) {
+func runEngine(enginePath string, cfg *Config, injectStys []string) ([]string, error) {
 	args := []string{
 		"-interaction=nonstopmode",
 		"-halt-on-error",
@@ -483,9 +539,9 @@ func runPdflatex(pdflatex string, cfg *Config, injectStys []string) ([]string, e
 		input = reqs.String() + `\input{` + cfg.Main + `}`
 	}
 	args = append(args, input)
-	c := exec.Command(pdflatex, args...)
+	c := exec.Command(enginePath, args...)
 	if len(injectStys) > 0 {
-		// Add aux dir to TEXINPUTS so pdflatex finds the injected .sty files.
+		// Add aux dir to TEXINPUTS so the engine finds the injected .sty files.
 		absAux, _ := filepath.Abs(auxDir)
 		c.Env = append(os.Environ(), "TEXINPUTS="+absAux+string(os.PathListSeparator))
 	}

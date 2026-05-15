@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -34,6 +35,25 @@ type Config struct {
 	Spelling *string `json:"spelling,omitempty"`
 	// Strict treats pedantic, spelling, and compile warnings as errors when true.
 	Strict *bool `json:"strict,omitempty"`
+	// Engine selects LaTeX engine. nil = default (pdflatex). Allowed: "pdflatex", "xelatex", "lualatex".
+	Engine *string `json:"engine,omitempty"`
+}
+
+var validEngines = []string{"pdflatex", "xelatex", "lualatex"}
+
+func validateEngine(s string) error {
+	if slices.Contains(validEngines, s) {
+		return nil
+	}
+	return fmt.Errorf("invalid engine %q (allowed: %s)", s, strings.Join(validEngines, ", "))
+}
+
+// engine returns the configured LaTeX engine, defaulting to "pdflatex".
+func (cfg *Config) engine() string {
+	if cfg.Engine == nil {
+		return "pdflatex"
+	}
+	return *cfg.Engine
 }
 
 func (cfg *Config) strict() bool {
@@ -246,6 +266,7 @@ func mergeConfig(local, global *Config) *Config {
 	}
 	merged.Spelling = mergeStr(local.Spelling, global.Spelling)
 	merged.Strict = mergeBool(local.Strict, global.Strict)
+	merged.Engine = mergeStr(local.Engine, global.Engine)
 
 	// Pedantic: per-key pointer merge (local wins for keys it sets).
 	if len(local.Pedantic.Checks) > 0 || len(global.Pedantic.Checks) > 0 {

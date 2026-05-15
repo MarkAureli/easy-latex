@@ -128,6 +128,19 @@ var generalConfigFields = []configField{
 		isSet:   func(c *Config) bool { return c.Strict != nil },
 		display: func(c *Config) string { return strconv.FormatBool(c.strict()) },
 	},
+	{
+		key: "engine", isBool: false,
+		setVal: func(c *Config, val string) error {
+			if err := validateEngine(val); err != nil {
+				return err
+			}
+			c.Engine = &val
+			return nil
+		},
+		unset:   func(c *Config) { c.Engine = nil },
+		isSet:   func(c *Config) bool { return c.Engine != nil },
+		display: func(c *Config) string { return c.engine() },
+	},
 }
 
 // pedanticConfigFields builds a configField per registered pedantic check.
