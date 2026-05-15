@@ -55,6 +55,11 @@ func TestCheckMathBareWord(t *testing.T) {
 		// begin/end env names exempt
 		{"begin env name", `\begin{equation}x = 5\end{equation}`, 0},
 		{"begin cases inside math", `\begin{align}\begin{cases}x\end{cases}\end{align}`, 0},
+		// begin/end with column spec args exempt (array, tabular)
+		{"begin array col spec", `\begin{array}{rrr}x\end{array}`, 0},
+		{"begin array centered", `\begin{array}{ccc}x\end{array}`, 0},
+		{"begin tabular col spec", `\begin{tabular}{lll}x\end{tabular}`, 0},
+		{"begin array opt and arg", `\begin{array}[t]{rrr}x\end{array}`, 0},
 		// hspace/vspace length args exempt
 		{"hspace cm", `$x \hspace{2cm} y$`, 0},
 		{"hspace em", `$x \hspace{1em} y$`, 0},

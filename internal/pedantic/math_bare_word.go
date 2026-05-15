@@ -35,6 +35,26 @@ func isASCIILetter(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
+// skipBalanced returns the index after a balanced group that starts at i with
+// the opening byte open (matching close). If line[i] != open, returns i.
+func skipBalanced(line string, i int, open, close byte) int {
+	if i >= len(line) || line[i] != open {
+		return i
+	}
+	depth := 1
+	i++
+	for i < len(line) && depth > 0 {
+		switch line[i] {
+		case open:
+			depth++
+		case close:
+			depth--
+		}
+		i++
+	}
+	return i
+}
+
 // checkMathBareWord flags sequences of 2+ consecutive ASCII letters in math
 // mode that are neither a LaTeX command (preceded by \) nor inside a text/font
 // wrapper or identifier argument (\text{…}, \mathrm{…}, \mbox{…}, \label{…},
@@ -64,16 +84,27 @@ func checkMathBareWord(path string, lines []string) []Diagnostic {
 					i++
 				}
 				if isArgSkipCmd(cmdName) && i < len(line) && line[i] == '{' {
-					depth := 1
-					i++ // consume opening {
-					for i < len(line) && depth > 0 {
-						switch line[i] {
-						case '{':
-							depth++
-						case '}':
-							depth--
+					i = skipBalanced(line, i, '{', '}')
+					// \begin{env} / \end{env} may carry extra optional
+					// [..] and required {..} arguments (e.g. column
+					// specs in \begin{array}{rrr}). Skip them too.
+					if cmdName == "begin" || cmdName == "end" {
+						for i < len(line) {
+							c := line[i]
+							if c == ' ' || c == '\t' {
+								i++
+								continue
+							}
+							if c == '[' {
+								i = skipBalanced(line, i, '[', ']')
+								continue
+							}
+							if c == '{' {
+								i = skipBalanced(line, i, '{', '}')
+								continue
+							}
+							break
 						}
-						i++
 					}
 				}
 				continue
