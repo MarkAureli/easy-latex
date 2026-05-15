@@ -522,6 +522,7 @@ func countWarnings(lines []string) int {
 
 func runEngine(enginePath string, cfg *Config, injectStys []string) ([]string, error) {
 	args := []string{
+		"-synctex=1",
 		"-interaction=nonstopmode",
 		"-halt-on-error",
 		"-file-line-error",
