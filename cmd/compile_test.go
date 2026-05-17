@@ -271,7 +271,7 @@ func TestRunEngine_ErrorSuppressesWarnings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lines, err := runEngine(pdflatex, &Config{Main: "main.tex"}, nil)
+	lines, err := runEngine(pdflatex, &Config{Main: "main.tex"}, nil, false)
 	if err == nil {
 		t.Fatal("expected compilation error")
 	}

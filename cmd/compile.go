@@ -204,12 +204,12 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	// If the pass fails and a stale .bbl exists (e.g. from a previous failed
 	// compile with malformed bib content), delete it and retry once: the .bbl
 	// will be regenerated correctly by the bib tool on this run.
-	firstLines, err := runEngine(enginePath, cfg, injectStys)
+	firstLines, err := runEngine(enginePath, cfg, injectStys, true)
 	if err != nil {
 		bblPath := filepath.Join(auxDir, stem+".bbl")
 		if _, statErr := os.Stat(bblPath); statErr == nil {
 			os.Remove(bblPath) //nolint:errcheck
-			firstLines, err = runEngine(enginePath, cfg, injectStys)
+			firstLines, err = runEngine(enginePath, cfg, injectStys, true)
 		}
 		if err != nil {
 			printLines(firstLines)
@@ -240,7 +240,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		bib.ClearRenames(auxDir)
-		if _, err := runEngine(enginePath, cfg, injectStys); err != nil {
+		if _, err := runEngine(enginePath, cfg, injectStys, true); err != nil {
 			return err
 		}
 	}
@@ -286,7 +286,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		}
 		fixBblBurl(filepath.Join(auxDir, stem+".bbl"))
 		// Second pdflatex pass to incorporate bibliography
-		secondLines, err := runEngine(enginePath, cfg, injectStys)
+		secondLines, err := runEngine(enginePath, cfg, injectStys, true)
 		if err != nil {
 			printLines(secondLines)
 			return err
@@ -297,7 +297,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 			if !needsRerun(prev) {
 				break
 			}
-			prev, err = runEngine(enginePath, cfg, injectStys)
+			prev, err = runEngine(enginePath, cfg, injectStys, true)
 			if err != nil {
 				printLines(prev)
 				return err
@@ -307,6 +307,16 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	} else {
 		compileWarnLines = firstLines
 	}
+
+	// Final non-draft pass writes the PDF. All prior passes run with -draftmode
+	// to avoid intermediate PDF writes (which trigger PDF viewer reloads when
+	// bib/rerun stabilization is in progress).
+	finalLines, err := runEngine(enginePath, cfg, injectStys, false)
+	if err != nil {
+		printLines(finalLines)
+		return err
+	}
+	compileWarnLines = finalLines
 
 	pdfName := stem + ".pdf"
 	srcPDF := filepath.Join(auxDir, pdfName)
@@ -520,13 +530,16 @@ func countWarnings(lines []string) int {
 	return n
 }
 
-func runEngine(enginePath string, cfg *Config, injectStys []string) ([]string, error) {
+func runEngine(enginePath string, cfg *Config, injectStys []string, draft bool) ([]string, error) {
 	args := []string{
 		"-synctex=1",
 		"-interaction=nonstopmode",
 		"-halt-on-error",
 		"-file-line-error",
 		"-output-directory=" + auxDir,
+	}
+	if draft {
+		args = append(args, "-draftmode")
 	}
 	input := cfg.Main
 	if len(injectStys) > 0 {
