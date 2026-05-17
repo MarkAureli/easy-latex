@@ -62,7 +62,7 @@ func (s *server) handle(req *request) (stop bool) {
 				CompletionProvider: &completionOptions{
 					TriggerCharacters: []string{"{", ","},
 				},
-				CodeActionProvider: len(s.enabledChecks) > 0,
+				CodeActionProvider: true,
 			},
 		})
 

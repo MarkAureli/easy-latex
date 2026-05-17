@@ -23,7 +23,7 @@ Surfaces:
 
 | Method | Action |
 |---|---|
-| `initialize` | Capabilities: `textDocumentSync=1`, completionProvider with `{` `,` triggers, codeActionProvider when ≥1 check enabled |
+| `initialize` | Capabilities: `textDocumentSync=1`, completionProvider with `{` `,` triggers, codeActionProvider always advertised (returns null when no checks enabled, avoiding client "method not supported" errors) |
 | `initialized` | Ignore |
 | `textDocument/didOpen` | Store doc; `publishDiagnostics` |
 | `textDocument/didChange` | Update doc (full sync); `publishDiagnostics` |
