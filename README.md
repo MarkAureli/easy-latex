@@ -355,6 +355,14 @@ Added "Doe2023SomePreprint" to bib cache.
 
 Accepts bare DOIs (`10.…`), `doi.org/` URLs, bare arXiv IDs (`2301.07041`, `2301.07041v2`), old-format arXiv IDs (`hep-th/0401234`), and `arxiv.org/abs/…` URLs. Duplicate entries (by DOI or arXiv ID) are detected and the existing key is returned. For arXiv IDs, if the paper has a published DOI, the entry is automatically upgraded to a full Crossref-validated `@article`.
 
+If the metadata returned by Crossref or arXiv is incomplete (for example Springer's older book DOIs that ship without authors), `el bib add` refuses the entry rather than caching it with a malformed cite key:
+
+```
+$ el bib add 10.1007/b97696
+[bib] tmp: fetching metadata from Crossref...
+[bib] error: "10.1007/b97696": Crossref metadata missing mandatory fields for @book: author
+```
+
 Network requests retry automatically on transient failures (rate limits, server errors, timeouts) with exponential backoff.
 
 The entry will appear in `bibliography.bib` on the next `el compile` when cited.

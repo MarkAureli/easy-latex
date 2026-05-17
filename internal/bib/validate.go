@@ -415,13 +415,13 @@ func transformArxivMiscToUnpublished(e *Entry) {
 	SetField(e, "note", "{"+note+"}")
 }
 
-// warnMissingFields returns a warning string if any mandatory fields are absent,
-// or an empty string when all are present.
+// missingMandatoryFields returns the list of mandatory field names that are
+// absent (empty) on e, or nil if the entry type is unknown.
 // A mandatory token of the form "a|b" is satisfied when at least one of a or b is non-empty.
-func warnMissingFields(e Entry) string {
+func missingMandatoryFields(e Entry) []string {
 	spec, ok := entrySpecs[e.Type]
 	if !ok {
-		return ""
+		return nil
 	}
 	mandatory := spec.mandatory
 	if spec.arxivMandatory != nil && findArxivID(e) != "" {
@@ -439,10 +439,32 @@ func warnMissingFields(e Entry) string {
 			}
 		}
 	}
-	if len(missing) > 0 {
-		return "missing mandatory fields: " + strings.Join(missing, ", ")
+	return missing
+}
+
+// warnMissingFields returns a warning string if any mandatory fields are absent,
+// or an empty string when all are present.
+func warnMissingFields(e Entry) string {
+	missing := missingMandatoryFields(e)
+	if len(missing) == 0 {
+		return ""
 	}
-	return ""
+	return "missing mandatory fields: " + strings.Join(missing, ", ")
+}
+
+// checkAPIMandatoryFields normalizes a copy of e (so url derived from doi etc.
+// are reflected) and returns an error if any mandatory fields are missing.
+// source is the name of the metadata provider ("Crossref" / "arXiv") used in
+// the error message.
+func checkAPIMandatoryFields(e Entry, source string) error {
+	eCopy := e
+	normalizeEntryFields(&eCopy, false)
+	missing := missingMandatoryFields(eCopy)
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%s metadata missing mandatory fields for @%s: %s",
+		source, eCopy.Type, strings.Join(missing, ", "))
 }
 
 // normalizeEntryFields drops non-allowed fields, resolves field synonyms,
@@ -701,6 +723,9 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 			e.Type = crType
 		}
 		raw.Fields["doi"] = strings.ToLower(doi)
+		if err := checkAPIMandatoryFields(e, "Crossref"); err != nil {
+			return "", false, err
+		}
 		cEntry := buildCacheEntry(e, raw, "crossref", "")
 		key := disambiguateKey(GenerateKey(e), c)
 		c[key] = cEntry
@@ -745,6 +770,9 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 					e.Type = crType
 				}
 				crRaw.Fields["doi"] = strings.ToLower(doi)
+				if err := checkAPIMandatoryFields(e, "Crossref"); err != nil {
+					return "", false, err
+				}
 				cEntry := buildCacheEntry(e, crRaw, "crossref", "")
 				key := disambiguateKey(GenerateKey(e), c)
 				c[key] = cEntry
@@ -760,6 +788,9 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 			e = *corrected
 		}
 		raw.Fields["eprint"] = arxivID
+		if err := checkAPIMandatoryFields(e, "arXiv"); err != nil {
+			return "", false, err
+		}
 		cEntry := buildCacheEntry(e, raw, "arxiv", "")
 		key := disambiguateKey(GenerateKey(e), c)
 		c[key] = cEntry

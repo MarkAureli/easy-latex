@@ -2226,6 +2226,57 @@ func TestAddEntryFromID_CorruptCache(t *testing.T) {
 	}
 }
 
+// TestAddEntryFromID_DOI_MissingAuthor exercises the case where Crossref
+// returns metadata without authors (e.g. 10.1007/b97696 — Springer never
+// deposited authors for that book). The add must fail and leave the cache
+// untouched rather than caching an entry whose generated key has no author.
+func TestAddEntryFromID_DOI_MissingAuthor(t *testing.T) {
+	type message struct {
+		Title          []string `json:"title"`
+		Author         []any    `json:"author"`
+		ContainerTitle []string `json:"container-title"`
+		Published      struct {
+			DateParts [][]int `json:"date-parts"`
+		} `json:"published"`
+		DOI       string `json:"DOI"`
+		Type      string `json:"type"`
+		Publisher string `json:"publisher"`
+	}
+	type response struct {
+		Status  string  `json:"status"`
+		Message message `json:"message"`
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := response{Status: "ok"}
+		resp.Message.Title = []string{"One-Parameter Semigroups"}
+		resp.Message.ContainerTitle = []string{"Graduate Texts in Mathematics"}
+		resp.Message.Published.DateParts = [][]int{{2000}}
+		resp.Message.DOI = "10.1007/b97696"
+		resp.Message.Type = "book"
+		resp.Message.Publisher = "Springer-Verlag"
+		b, _ := json.Marshal(resp)
+		w.Write(b)
+	}))
+	defer srv.Close()
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	_, _, err := AddEntryFromID("10.1007/b97696", nil)
+	if err == nil {
+		t.Fatal("expected error for missing author, got nil")
+	}
+	if !strings.Contains(err.Error(), "author") {
+		t.Errorf("error should mention missing author field, got: %v", err)
+	}
+	if len(loadCache()) != 0 {
+		t.Errorf("cache must remain empty when validation fails, got %d entries", len(loadCache()))
+	}
+}
+
 func TestAddEntryFromID_DOI_APIFailure(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)

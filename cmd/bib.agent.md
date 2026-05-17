@@ -38,7 +38,7 @@ Per-arg outcomes:
 - `isNew=true` — announces newly added entry with key
 - `isNew=false` — announces entry already cached with existing key
 - `bib.ErrUnrecognizedID` — warns unrecognized format, continues to next arg
-- Other errors — prints to stderr, continues; first error returned at end
+- Other errors — prints to stderr, continues; first error returned at end. Includes "metadata missing mandatory fields for @<type>: …" when the Crossref/arXiv response lacks any field in `entrySpecs[type].mandatory` (e.g. authorless Crossref book records like `10.1007/b97696`); cache is not modified in that case.
 
 Uses `bibLogger` (`cmd/biblog.go`) for colored output. No config load required.
 
