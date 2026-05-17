@@ -301,8 +301,13 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip project check for commands that work outside a project.
 		switch cmd.Name() {
-		case "init", "help", "completion", "lsp":
+		case "init", "help", "lsp":
 			return nil
+		}
+		for c := cmd; c != nil; c = c.Parent() {
+			if c.Name() == "completion" {
+				return nil
+			}
 		}
 		if isConfigCommand(cmd) || isSpellCommand(cmd) {
 			return nil
