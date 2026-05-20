@@ -17,10 +17,12 @@ func TestNormalizeAccents_ProsePipeline(t *testing.T) {
 		{`Universit\"at`, "Universität"},
 		{`Bo\u{g}azi\c{c}i`, "Boğaziçi"},
 		{`\aa ngstr\"om`, "ångström"},
+		{`Bu\ss mann`, "Bußmann"},
+		{`Stra{\ss}e`, "Straße"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.src, func(t *testing.T) {
-			content := NormalizeAccents(NormalizeSharpS(tc.src))
+			content := NormalizeAccents(tc.src)
 			runs := texscan.ProseRuns("f.tex", content, nil)
 			if len(runs) == 0 {
 				t.Fatalf("no prose runs for %q (normalized=%q)", tc.src, content)
@@ -34,33 +36,6 @@ func TestNormalizeAccents_ProsePipeline(t *testing.T) {
 			}(), " ")
 			if !strings.Contains(text, tc.wantContains) {
 				t.Errorf("ProseRuns(%q) = %q, want to contain %q", content, text, tc.wantContains)
-			}
-		})
-	}
-}
-
-func TestNormalizeSharpS(t *testing.T) {
-	cases := []struct {
-		name, in, want string
-	}{
-		{"literal-eszett", "Bußmann", "Bussmann"},
-		{"capital-eszett", "BUẞMANN", "BUSSMANN"},
-		{"ss-braces", `Bu\ss{}mann`, "Bussmann"},
-		{"ss-group", `Bu{\ss}mann`, "Bussmann"},
-		{"ss-group-braces", `Bu{\ss{}}mann`, "Bussmann"},
-		{"ss-space-letter", `Bu\ss mann`, "Bussmann"},
-		{"ss-punct", `foo \ss.`, "foo ss."},
-		{"ss-end", `Bu\ss`, "Buss"},
-		{"SS-braces", `BU\SS{}MANN`, "BUSSMANN"},
-		{"SS-group", `BU{\SS}MANN`, "BUSSMANN"},
-		{"no-touch-longer-macro", `\ssfoo`, `\ssfoo`},
-		{"no-touch-letter-followed", `Bu\ssX`, `Bu\ssX`},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := NormalizeSharpS(tc.in)
-			if got != tc.want {
-				t.Errorf("NormalizeSharpS(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}
@@ -101,6 +76,14 @@ func TestNormalizeAccents(t *testing.T) {
 		{"o-slash", `\o re`, "øre"},
 		{"l", `\l odz`, "łodz"},
 		{"dotless-i", `\i j`, "ıj"},
+		// sharp-s: now maps to ß for consistency with other accents
+		{"ss-space", `Bu\ss mann`, "Bußmann"},
+		{"ss-punct", `foo \ss.`, "foo ß."},
+		{"ss-group", `Bu{\ss}mann`, "Bußmann"},
+		{"ss-group-empty-arg", `Bu{\ss{}}mann`, "Bußmann"},
+		{"SS-group", `BU{\SS}MANN`, "BUẞMANN"},
+		{"raw-eszett-untouched", "Bußmann", "Bußmann"},
+		{"no-touch-longer-macro", `\ssfoo`, `\ssfoo`},
 		// must not match longer macro names
 		{"no-touch-url", `\url{x}`, `\url{x}`},
 		{"no-touch-vspace", `\vspace{1cm}`, `\vspace{1cm}`},

@@ -6,8 +6,9 @@ package texaccent
 import "regexp"
 
 const (
-	nonAlphaCmd = `['"` + "`" + `\^~.=]`
-	alphaCmd    = `[uvHct]`
+	nonAlphaCmd   = `['"` + "`" + `\^~.=]`
+	alphaCmd      = `[uvHct]`
+	standaloneCmd = `ss|SS|ng|dh|DH|th|TH|ae|AE|oe|OE|aa|AA|[oOlLij]`
 )
 
 var (
@@ -35,13 +36,21 @@ var (
 		`\{\\(` + alphaCmd + `)\{([a-zA-Z])\}\}` +
 			`|\\(` + alphaCmd + `)\{([a-zA-Z])\}`)
 
-	// Standalone matches a zero-argument letter command followed by a
-	// boundary token: a single space/tab (TeX control-word terminator,
-	// eaten by the lexer), a non-letter byte, or end-of-string. The
-	// boundary is captured so the callback can decide whether to keep
-	// or drop it.
+	// Standalone matches a zero-argument letter command in any of three forms:
+	//
+	//   {\cmd{}}            (outer-brace, with empty arg suffix)
+	//   {\cmd}              (outer-brace)
+	//   \cmd<boundary>      (control word followed by space/tab, non-letter, or EOL)
+	//
+	// The outer-brace forms consume their enclosing braces, so the boundary
+	// reported to the callback is empty. The control-word form reports the
+	// boundary byte so the callback can decide whether to keep it (preserve
+	// punctuation) or drop it (TeX control-word terminator space).
 	Standalone = regexp.MustCompile(
-		`\\(ss|SS|ng|dh|DH|th|TH|ae|AE|oe|OE|aa|AA|[oOlLij])([ \t]|[^a-zA-Z]|$)`)
+		`\{\\(` + standaloneCmd + `)\{\}\}` +
+			`|\{\\(` + standaloneCmd + `)\}` +
+			`|\\(` + standaloneCmd + `)([ \t]|[^a-zA-Z]|$)`)
+
 )
 
 // AccentFn maps an accent command and its base letter to a replacement.
@@ -87,12 +96,23 @@ func ApplyAlphaAccent(s string, fn AccentFn) string {
 	})
 }
 
-// ApplyStandalone rewrites `\cmd<boundary>` for zero-arg letter commands.
-// The callback receives the boundary and decides whether to keep it.
+// ApplyStandalone rewrites `\cmd<boundary>` and `{\cmd}` / `{\cmd{}}` for
+// zero-arg letter commands. The callback receives cmd plus the trailing
+// boundary byte (empty for outer-brace forms) and decides whether to keep it.
 func ApplyStandalone(s string, fn StandaloneFn) string {
 	return Standalone.ReplaceAllStringFunc(s, func(m string) string {
 		sub := Standalone.FindStringSubmatch(m)
-		if repl, ok := fn(sub[1], sub[2]); ok {
+		var cmd, boundary string
+		switch {
+		case sub[1] != "":
+			cmd = sub[1]
+		case sub[2] != "":
+			cmd = sub[2]
+		default:
+			cmd = sub[3]
+			boundary = sub[4]
+		}
+		if repl, ok := fn(cmd, boundary); ok {
 			return repl
 		}
 		return m

@@ -1,7 +1,6 @@
 package spell
 
 import (
-	"regexp"
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/texaccent"
@@ -115,41 +114,3 @@ func NormalizeAccents(s string) string {
 	return texaccent.Expand(s, unicodeAccent, unicodeStandalone)
 }
 
-// Legacy German sharp-s collapse. Kept separate from NormalizeAccents because
-// it covers raw-glyph forms and TeX command boundaries (e.g. `\ss<space>letter`
-// for the `\ss ` followed by `Bann` pattern) that texaccent does not handle.
-
-var (
-	ssGroupRe    = regexp.MustCompile(`\{\\ss(?:\{\})?\}`)
-	ssBracesRe   = regexp.MustCompile(`\\ss\{\}`)
-	ssSpaceLetRe = regexp.MustCompile(`\\ss[ \t]+([A-Za-z])`)
-	ssBoundRe    = regexp.MustCompile(`\\ss([^A-Za-z@])`)
-	ssEndRe      = regexp.MustCompile(`\\ss\z`)
-
-	bigSSGroupRe    = regexp.MustCompile(`\{\\SS(?:\{\})?\}`)
-	bigSSBracesRe   = regexp.MustCompile(`\\SS\{\}`)
-	bigSSSpaceLetRe = regexp.MustCompile(`\\SS[ \t]+([A-Za-z])`)
-	bigSSBoundRe    = regexp.MustCompile(`\\SS([^A-Za-z@])`)
-	bigSSEndRe      = regexp.MustCompile(`\\SS\z`)
-)
-
-// NormalizeSharpS rewrites every German sharp-s spelling to plain `ss`/`SS`.
-// Applied after NormalizeAccents because hunspell `de_*` dicts commonly key
-// the ss-form (`Bussmann`, `Strasse`), not the ß-form.
-func NormalizeSharpS(s string) string {
-	s = ssGroupRe.ReplaceAllString(s, "ss")
-	s = ssBracesRe.ReplaceAllString(s, "ss")
-	s = ssSpaceLetRe.ReplaceAllString(s, "ss$1")
-	s = ssBoundRe.ReplaceAllString(s, "ss$1")
-	s = ssEndRe.ReplaceAllString(s, "ss")
-
-	s = bigSSGroupRe.ReplaceAllString(s, "SS")
-	s = bigSSBracesRe.ReplaceAllString(s, "SS")
-	s = bigSSSpaceLetRe.ReplaceAllString(s, "SS$1")
-	s = bigSSBoundRe.ReplaceAllString(s, "SS$1")
-	s = bigSSEndRe.ReplaceAllString(s, "SS")
-
-	s = strings.ReplaceAll(s, "ß", "ss")
-	s = strings.ReplaceAll(s, "ẞ", "SS")
-	return s
-}
