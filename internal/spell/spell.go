@@ -12,12 +12,17 @@ import (
 )
 
 // Diagnostic is a spell-check finding. Mirrors pedantic.Diagnostic shape so
-// callers can convert without importing this package into pedantic.
+// callers can convert without importing this package into pedantic. Col is
+// 1-based byte column of Word's first byte on the normalized line; Len is
+// Word's byte length. Suggestions carries hunspell's near-miss list (may be
+// empty); callers may render or ignore it.
 type Diagnostic struct {
-	File    string
-	Line    int
-	Word    string
-	Message string
+	File        string
+	Line        int
+	Col         int
+	Word        string
+	Message     string
+	Suggestions []string
 }
 
 // Paths bundles dict and ignore-file locations to consult. Missing files are
@@ -45,57 +50,76 @@ func DefaultPaths(globalDir, auxDir, lang string) Paths {
 	}
 }
 
-// Run spell-checks all files (path → comment-stripped or raw lines — we use
-// raw text reassembled from lines via "\n" join) in the given lang. auxDir is
-// the project `.el` directory used for the temp personal-dict file.
-//
-// Returns nil if hunspell or its dict for lang is unavailable (warn-once).
-func Run(files map[string][]string, lang, auxDir string, paths Paths, warn io.Writer) []Diagnostic {
-	if !HunspellAvailable(lang, warn) {
-		return nil
-	}
+// Session is a long-lived spell-check handle that owns a running hunspell
+// subprocess and a loaded ignore-macros set. Cheap to call Check repeatedly;
+// avoids the spawn-per-call cost incurred by Run. Callers MUST Close when done.
+type Session struct {
+	hs        *Hunspell
+	ignoreSet map[string]bool
+	warn      io.Writer
+}
 
-	// Build personal dict from layered sources.
+// NewSession launches hunspell and loads the layered ignore lists. Returns
+// (nil, nil) — with a warn-once message — when hunspell or its dict for lang
+// is unavailable. Returns a non-nil error only on filesystem failures the
+// caller should treat as fatal.
+func NewSession(lang, auxDir string, paths Paths, warn io.Writer) (*Session, error) {
+	if !HunspellAvailable(lang, warn) {
+		return nil, nil
+	}
 	if err := os.MkdirAll(filepath.Join(auxDir, "spell"), 0755); err != nil {
-		fmt.Fprintf(warn, "warning: spell-check: cannot create %s/spell: %v\n", auxDir, err)
-		return nil
+		return nil, fmt.Errorf("spell: cannot create %s/spell: %w", auxDir, err)
 	}
 	personalPath := filepath.Join(auxDir, "spell", "personal-"+lang+".dic")
 	if _, err := MergeDicts(personalPath,
 		paths.GlobalCommonDict, paths.GlobalLangDict,
 		paths.LocalCommonDict, paths.LocalLangDict,
 	); err != nil {
-		fmt.Fprintf(warn, "warning: spell-check: cannot merge dicts: %v\n", err)
-		return nil
+		return nil, fmt.Errorf("spell: cannot merge dicts: %w", err)
 	}
-
-	ignoreSet := LoadIgnoreMacros(paths.GlobalIgnore, paths.LocalIgnore)
-
 	hs, err := StartHunspell(lang, personalPath)
 	if err != nil {
 		hunspellMissingWarned.Do(func() {
 			fmt.Fprintf(warn, "warning: spell-check skipped: cannot start hunspell for %q (dictionary likely missing): %v\n", lang, err)
 		})
+		return nil, nil
+	}
+	return &Session{
+		hs:        hs,
+		ignoreSet: LoadIgnoreMacros(paths.GlobalIgnore, paths.LocalIgnore),
+		warn:      warn,
+	}, nil
+}
+
+// Close releases the hunspell subprocess.
+func (s *Session) Close() error {
+	if s == nil || s.hs == nil {
 		return nil
 	}
-	defer hs.Close()
+	return s.hs.Close()
+}
 
-	// Stable iteration order over files for deterministic diagnostics.
-	paths2 := make([]string, 0, len(files))
-	for p := range files {
-		paths2 = append(paths2, p)
+// Check spell-checks the given files (path → raw lines). Files are joined,
+// accents normalised, prose extracted, then each prose line checked.
+// Diagnostics use stable file order.
+func (s *Session) Check(files map[string][]string) []Diagnostic {
+	if s == nil {
+		return nil
 	}
-	sort.Strings(paths2)
+	paths := make([]string, 0, len(files))
+	for p := range files {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
 
 	var out []Diagnostic
-	for _, path := range paths2 {
-		content := strings.Join(files[path], "\n")
-		content = NormalizeAccents(content)
-		runs := texscan.ProseRuns(path, content, ignoreSet)
+	for _, path := range paths {
+		content := NormalizeAccents(strings.Join(files[path], "\n"))
+		runs := texscan.ProseRuns(path, content, s.ignoreSet)
 		for _, r := range runs {
-			misses, err := hs.CheckLine(r.Text)
+			misses, err := s.hs.CheckLine(r.Text)
 			if err != nil {
-				fmt.Fprintf(warn, "warning: spell-check: hunspell pipe broken: %v\n", err)
+				fmt.Fprintf(s.warn, "warning: spell-check: hunspell pipe broken: %v\n", err)
 				return out
 			}
 			for _, m := range misses {
@@ -107,9 +131,34 @@ func Run(files map[string][]string, lang, auxDir string, paths Paths, warn io.Wr
 					}
 					msg = fmt.Sprintf("%s (suggest: %s)", msg, strings.Join(show, ", "))
 				}
-				out = append(out, Diagnostic{File: r.File, Line: r.Line, Word: m.Word, Message: msg})
+				out = append(out, Diagnostic{
+					File:        r.File,
+					Line:        r.Line,
+					Col:         m.Col,
+					Word:        m.Word,
+					Message:     msg,
+					Suggestions: m.Suggestions,
+				})
 			}
 		}
 	}
 	return out
+}
+
+// Run is a convenience wrapper: open a Session, check, close. For one-shot
+// CLI use (el check, el compile). For long-running processes (el lsp), use
+// NewSession directly.
+//
+// Returns nil if hunspell or its dict for lang is unavailable (warn-once).
+func Run(files map[string][]string, lang, auxDir string, paths Paths, warn io.Writer) []Diagnostic {
+	sess, err := NewSession(lang, auxDir, paths, warn)
+	if err != nil {
+		fmt.Fprintf(warn, "warning: spell-check: %v\n", err)
+		return nil
+	}
+	if sess == nil {
+		return nil
+	}
+	defer sess.Close()
+	return sess.Check(files)
 }

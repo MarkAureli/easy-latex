@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/pedantic"
+	"github.com/MarkAureli/easy-latex/internal/spell"
 )
 
 const codeMethodNotFound = -32601
@@ -20,15 +21,27 @@ const codeMethodNotFound = -32601
 type Config struct {
 	Items         []completionItem // cite-key items
 	EnabledChecks []string         // static pedantic check names; empty = no linting
+	SpellLang     string           // hunspell lang (e.g. "en_GB"); empty disables spell
+	SpellAuxDir   string           // project .el dir for personal-dict scratch file
+	SpellPaths    spell.Paths      // layered dict + ignore-file locations
 }
 
 // Serve starts the LSP server, reading JSON-RPC from r and writing to w.
+// If cfg.SpellLang is non-empty, a long-lived hunspell session is opened and
+// reused across didChange events; it is closed on shutdown.
 func Serve(cfg Config, r io.Reader, w io.Writer) error {
 	s := &server{
 		docs:          make(map[string]string),
 		items:         cfg.Items,
 		enabledChecks: cfg.EnabledChecks,
 		w:             w,
+	}
+	if cfg.SpellLang != "" {
+		sess, err := spell.NewSession(cfg.SpellLang, cfg.SpellAuxDir, cfg.SpellPaths, io.Discard)
+		if err == nil && sess != nil {
+			s.spellSess = sess
+			defer s.spellSess.Close()
+		}
 	}
 	br := bufio.NewReader(r)
 	for {
@@ -49,6 +62,7 @@ type server struct {
 	docs          map[string]string // uri → full text
 	items         []completionItem
 	enabledChecks []string
+	spellSess     *spell.Session // nil = spell disabled
 	w             io.Writer
 	shuttingDown  bool
 }
@@ -122,11 +136,12 @@ func (s *server) handle(req *request) (stop bool) {
 	return false
 }
 
-// publishDiagnostics runs static pedantic checks on the document at uri and
-// pushes a textDocument/publishDiagnostics notification to the client. Always
-// emits, even when empty, so previously-shown diagnostics clear.
+// publishDiagnostics runs static pedantic checks and (if enabled) spell-check
+// on the document at uri and pushes a textDocument/publishDiagnostics
+// notification to the client. Always emits, even when empty, so previously
+// shown diagnostics clear.
 func (s *server) publishDiagnostics(uri string) {
-	if len(s.enabledChecks) == 0 {
+	if len(s.enabledChecks) == 0 && s.spellSess == nil {
 		return
 	}
 	text, ok := s.docs[uri]
@@ -134,28 +149,55 @@ func (s *server) publishDiagnostics(uri string) {
 		return
 	}
 	path := uriToPath(uri)
-	pedDiags := pedantic.RunSourceChecksText(s.enabledChecks, path, text)
-	lspDiags := make([]lspDiagnostic, 0, len(pedDiags))
 	rawLines := strings.Split(text, "\n")
-	for _, d := range pedDiags {
-		line := d.Line - 1
-		if line < 0 {
-			line = 0
+	lspDiags := []lspDiagnostic{}
+
+	// Pedantic: whole-line range.
+	if len(s.enabledChecks) > 0 {
+		for _, d := range pedantic.RunSourceChecksText(s.enabledChecks, path, text) {
+			line := max(d.Line-1, 0)
+			lineText := ""
+			if line < len(rawLines) {
+				lineText = rawLines[line]
+			}
+			lspDiags = append(lspDiags, lspDiagnostic{
+				Range: lspRange{
+					Start: position{Line: line, Character: 0},
+					End:   position{Line: line, Character: byteToUTF16(lineText, len(lineText))},
+				},
+				Severity: 2, // Warning
+				Source:   "el-pedantic",
+				Message:  d.Message,
+			})
 		}
-		end := 0
-		if line < len(rawLines) {
-			end = len(rawLines[line])
-		}
-		lspDiags = append(lspDiags, lspDiagnostic{
-			Range: lspRange{
-				Start: position{Line: line, Character: 0},
-				End:   position{Line: line, Character: end},
-			},
-			Severity: 2, // Warning
-			Source:   "el-pedantic",
-			Message:  d.Message,
-		})
 	}
+
+	// Spell: word-level range. spell.Diagnostic.Col is 1-based byte column
+	// on the normalised line; we map to UTF-16 units against the raw line.
+	// Accent normalisation is not length-preserving, so columns may drift on
+	// lines containing TeX accent macros — known limit.
+	if s.spellSess != nil {
+		files := map[string][]string{path: rawLines}
+		for _, d := range s.spellSess.Check(files) {
+			line := d.Line - 1
+			if line < 0 || line >= len(rawLines) {
+				continue
+			}
+			lineText := rawLines[line]
+			startByte := max(d.Col-1, 0)
+			endByte := startByte + len(d.Word)
+			lspDiags = append(lspDiags, lspDiagnostic{
+				Range: lspRange{
+					Start: position{Line: line, Character: byteToUTF16(lineText, startByte)},
+					End:   position{Line: line, Character: byteToUTF16(lineText, endByte)},
+				},
+				Severity: 3, // Information
+				Source:   "el-spell",
+				Message:  d.Message,
+			})
+		}
+	}
+
 	s.notify("textDocument/publishDiagnostics", publishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: lspDiags,
@@ -215,13 +257,14 @@ func uriToPath(uri string) string {
 	return u.Path
 }
 
-// wholeDocRange returns a range covering the entire document text.
+// wholeDocRange returns a range covering the entire document text. Character
+// offsets are LSP-spec UTF-16 code units.
 func wholeDocRange(text string) lspRange {
 	lines := strings.Split(text, "\n")
 	last := len(lines) - 1
 	return lspRange{
 		Start: position{Line: 0, Character: 0},
-		End:   position{Line: last, Character: len(lines[last])},
+		End:   position{Line: last, Character: byteToUTF16(lines[last], len(lines[last]))},
 	}
 }
 

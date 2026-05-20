@@ -5,17 +5,19 @@ Minimal LSP server for `el lsp`. Hand-rolled JSON-RPC over stdio, no external LS
 Surfaces:
 - Cite-key completion (read from the global bib cache — see `internal/bib/global.go`).
 - Static pedantic diagnostics (push on didOpen / didChange).
-- Code actions (autofix) for fixable static checks.
+- Spell-check diagnostics (push on didOpen / didChange) when `cfg.SpellLang` set.
+- Code actions (autofix) for fixable static checks. Spell-check produces diagnostics only — no quickfix.
 
 ## Entry point
 
-`Serve(cfg Config, r io.Reader, w io.Writer) error` — called from `cmd/lsp.go`. `Config` carries cite-key items and the list of enabled static check names.
+`Serve(cfg Config, r io.Reader, w io.Writer) error` — called from `cmd/lsp.go`. `Config` carries cite-key items, the list of enabled static check names, and optional spell-check wiring (`SpellLang`, `SpellAuxDir`, `SpellPaths`). When `SpellLang != ""`, a long-lived `*spell.Session` is opened and reused across every `didChange`; it is closed when `Serve` returns.
 
 ## Files
 
 | File | Contents |
 |---|---|
 | `protocol.go` | LSP wire types: capabilities, completion, diagnostics, code action, workspace edit |
+| `position.go` | `byteToUTF16(line, byteOff)` — convert byte offset to LSP-spec UTF-16 code units |
 | `index.go` | `BuildItems()` — reads keys from the global bib cache |
 | `server.go` | JSON-RPC loop, dispatch, completion, diagnostics, code action handlers |
 
@@ -36,7 +38,12 @@ Surfaces:
 
 ## Diagnostics
 
-`publishDiagnostics(uri)` runs `pedantic.RunSourceChecksText` over the in-memory doc, maps each `pedantic.Diagnostic` to an `lspDiagnostic` (severity=Warning, source=`el-pedantic`, range = full line). Always pushes — empty list clears stale state.
+`publishDiagnostics(uri)` runs:
+
+1. `pedantic.RunSourceChecksText` → `lspDiagnostic` per finding (severity=Warning, source=`el-pedantic`, range = whole line).
+2. `s.spellSess.Check` (if spell enabled) → `lspDiagnostic` per misspelling (severity=Information, source=`el-spell`, range = word — `Col` and `len(Word)` mapped through `byteToUTF16` against the raw line).
+
+Always pushes a single combined list — empty list clears stale state. Spell column offsets may drift on lines containing TeX accent macros because `spell.NormalizeAccents` is not length-preserving (known limit, shared with the CLI spell pass).
 
 ## Code actions
 
@@ -52,6 +59,7 @@ Reads all keys from the global bib cache via `bib.LoadCacheKeys()`. No bib file 
 
 ## Known limitations
 
-- LSP positions are byte offsets, not UTF-16 code units. ASCII-safe; multi-byte characters may misposition diagnostics.
+- `complete()` interprets the client's `Position.Character` as a byte offset rather than a UTF-16 unit. ASCII-safe for cite-command lines; multi-byte chars before the cursor on the same line could misalign prefix detection. Outbound positions (diagnostics, code-action ranges) ARE converted via `byteToUTF16`.
 - Code action returns whole-document edit. Editors handle this but cursor position may shift on non-trivial diffs.
 - No incremental sync — every change re-lints the whole document. Cheap for typical project sizes.
+- Spell column offsets drift slightly on lines containing TeX accent macros (`NormalizeAccents` is not length-preserving).
