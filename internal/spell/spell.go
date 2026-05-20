@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
@@ -53,10 +54,18 @@ func DefaultPaths(globalDir, auxDir, lang string) Paths {
 // Session is a long-lived spell-check handle that owns a running hunspell
 // subprocess and a loaded ignore-macros set. Cheap to call Check repeatedly;
 // avoids the spawn-per-call cost incurred by Run. Callers MUST Close when done.
+//
+// Construction args are stashed so Reopen() can rebuild the session after an
+// external `el spell add` mutated the dict files (detected via Stale()).
 type Session struct {
 	hs        *Hunspell
 	ignoreSet map[string]bool
 	warn      io.Writer
+
+	lang    string
+	auxDir  string
+	paths   Paths
+	mtimes  map[string]time.Time // path → mtime at last (re)open; zero = absent
 }
 
 // NewSession launches hunspell and loads the layered ignore lists. Returns
@@ -88,7 +97,65 @@ func NewSession(lang, auxDir string, paths Paths, warn io.Writer) (*Session, err
 		hs:        hs,
 		ignoreSet: LoadIgnoreMacros(paths.GlobalIgnore, paths.LocalIgnore),
 		warn:      warn,
+		lang:      lang,
+		auxDir:    auxDir,
+		paths:     paths,
+		mtimes:    snapshotMtimes(paths),
 	}, nil
+}
+
+// trackedFiles returns the six on-disk files whose mutation should invalidate
+// the session: layered dicts + ignore lists.
+func trackedFiles(p Paths) []string {
+	return []string{
+		p.GlobalLangDict, p.GlobalCommonDict,
+		p.LocalLangDict, p.LocalCommonDict,
+		p.GlobalIgnore, p.LocalIgnore,
+	}
+}
+
+// snapshotMtimes records mtimes for tracked files. Missing files are recorded
+// as the zero time so a later appearance counts as a change.
+func snapshotMtimes(p Paths) map[string]time.Time {
+	out := make(map[string]time.Time, 6)
+	for _, f := range trackedFiles(p) {
+		if fi, err := os.Stat(f); err == nil {
+			out[f] = fi.ModTime()
+		} else {
+			out[f] = time.Time{}
+		}
+	}
+	return out
+}
+
+// Stale reports whether any tracked dict / ignore file has changed since the
+// session was opened (or last refreshed). nil receiver returns false.
+func (s *Session) Stale() bool {
+	if s == nil {
+		return false
+	}
+	for _, f := range trackedFiles(s.paths) {
+		var now time.Time
+		if fi, err := os.Stat(f); err == nil {
+			now = fi.ModTime()
+		}
+		if !now.Equal(s.mtimes[f]) {
+			return true
+		}
+	}
+	return false
+}
+
+// Reopen tears down the current hunspell subprocess and rebuilds the session
+// using the same lang/auxDir/paths. Returns the new session (which may be nil
+// if hunspell or its dict became unavailable in the meantime); the caller
+// should replace its reference. The old session is always closed.
+func (s *Session) Reopen() (*Session, error) {
+	if s == nil {
+		return nil, nil
+	}
+	_ = s.Close()
+	return NewSession(s.lang, s.auxDir, s.paths, s.warn)
 }
 
 // Close releases the hunspell subprocess.

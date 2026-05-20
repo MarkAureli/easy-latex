@@ -177,6 +177,14 @@ func (s *server) publishDiagnostics(uri string) {
 	// Accent normalisation is not length-preserving, so columns may drift on
 	// lines containing TeX accent macros — known limit.
 	if s.spellSess != nil {
+		// Pick up external `el spell add` edits without restarting the server.
+		if s.spellSess.Stale() {
+			if next, err := s.spellSess.Reopen(); err == nil {
+				s.spellSess = next
+			}
+		}
+	}
+	if s.spellSess != nil {
 		files := map[string][]string{path: rawLines}
 		for _, d := range s.spellSess.Check(files) {
 			line := d.Line - 1
