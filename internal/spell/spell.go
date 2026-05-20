@@ -90,7 +90,7 @@ func Run(files map[string][]string, lang, auxDir string, paths Paths, warn io.Wr
 	var out []Diagnostic
 	for _, path := range paths2 {
 		content := strings.Join(files[path], "\n")
-		content = NormalizeUmlauts(NormalizeSharpS(content))
+		content = NormalizeAccents(NormalizeSharpS(content))
 		runs := texscan.ProseRuns(path, content, ignoreSet)
 		for _, r := range runs {
 			misses, err := hs.CheckLine(r.Text)

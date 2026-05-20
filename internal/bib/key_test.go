@@ -2,7 +2,7 @@ package bib
 
 import "testing"
 
-// ── resolveAccent ─────────────────────────────────────────────────────────────
+// ── asciiAccent ─────────────────────────────────────────────────────────────
 
 func TestResolveAccent_UmlautExpansion(t *testing.T) {
 	cases := []struct{ cmd, letter, want string }{
@@ -15,8 +15,8 @@ func TestResolveAccent_UmlautExpansion(t *testing.T) {
 		{`"`, "e", "e"}, // no expansion for non-umlaut letters
 	}
 	for _, c := range cases {
-		if got := resolveAccent(c.cmd, c.letter); got != c.want {
-			t.Errorf("resolveAccent(%q, %q) = %q, want %q", c.cmd, c.letter, got, c.want)
+		if got := asciiAccentImpl(c.cmd, c.letter); got != c.want {
+			t.Errorf("asciiAccent(%q, %q) = %q, want %q", c.cmd, c.letter, got, c.want)
 		}
 	}
 }
@@ -32,8 +32,8 @@ func TestResolveAccent_OtherAccentsDropped(t *testing.T) {
 		{"c", "c", "c"}, // cedilla
 	}
 	for _, c := range cases {
-		if got := resolveAccent(c.cmd, c.letter); got != c.want {
-			t.Errorf("resolveAccent(%q, %q) = %q, want %q", c.cmd, c.letter, got, c.want)
+		if got := asciiAccentImpl(c.cmd, c.letter); got != c.want {
+			t.Errorf("asciiAccent(%q, %q) = %q, want %q", c.cmd, c.letter, got, c.want)
 		}
 	}
 }

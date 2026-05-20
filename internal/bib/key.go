@@ -4,25 +4,16 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/MarkAureli/easy-latex/internal/texaccent"
 )
 
 var (
-	reMath = regexp.MustCompile(`\$\$[^$]*\$\$|\$[^$]*\$`)
-
-	// Non-alphabetic accent commands ('  " ` ^ ~ . =) are always single-char
-	// command names and are safe to match in both braced and unbraced form.
-	reNonAlphaAccent = regexp.MustCompile(`\\(['"` + "`" + `\^~.=])(?:\{([a-zA-Z])\}|([a-zA-Z]))`)
-
-	// Alphabetic accent commands (u v H c t) share their single letter with
-	// the start of longer command names (\url, \vspace, \Huge, \centering,
-	// \textbf). Only match the braced form to avoid false positives.
-	reAlphaAccent = regexp.MustCompile(`\\([uvHct])\{([a-zA-Z])\}`)
-
-	reStandalone = regexp.MustCompile(`\\(ss|SS|ng|dh|DH|th|TH|ae|AE|oe|OE|aa|AA|[oOlLij])([^a-zA-Z]|$)`)
-	reCmdArg     = regexp.MustCompile(`\\[a-zA-Z]+\*?\{([^{}]*)\}`)
-	reCmdNoArg   = regexp.MustCompile(`\\[a-zA-Z]+\*?`)
-	reBraces     = regexp.MustCompile(`[{}]`)
-	reSplit      = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	reMath     = regexp.MustCompile(`\$\$[^$]*\$\$|\$[^$]*\$`)
+	reCmdArg   = regexp.MustCompile(`\\[a-zA-Z]+\*?\{([^{}]*)\}`)
+	reCmdNoArg = regexp.MustCompile(`\\[a-zA-Z]+\*?`)
+	reBraces   = regexp.MustCompile(`[{}]`)
+	reSplit    = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 )
 
 // standaloneMap maps zero-argument LaTeX letter commands to their ASCII equivalents.
@@ -75,9 +66,14 @@ var unicodeMap = map[rune]string{
 	'ĺ': "l", 'ľ': "l", 'ļ': "l", 'Ĺ': "L", 'Ľ': "L", 'Ļ': "L",
 }
 
-// resolveAccent converts a LaTeX accent command and base letter to ASCII.
+// asciiAccent converts a LaTeX accent command and base letter to ASCII.
 // Umlauts (cmd == `"`) on a, o, u expand to ae, oe, ue; all others strip the accent.
-func resolveAccent(cmd, letter string) string {
+// Always succeeds (returns ok=true) — falls back to the bare letter on unknown combos.
+func asciiAccent(cmd, letter string) (string, bool) {
+	return asciiAccentImpl(cmd, letter), true
+}
+
+func asciiAccentImpl(cmd, letter string) string {
 	isUpper := letter != strings.ToLower(letter)
 	lower := strings.ToLower(letter)
 
@@ -103,18 +99,14 @@ func resolveAccent(cmd, letter string) string {
 	return base
 }
 
-// accentFunc returns a ReplaceAllStringFunc handler for the given compiled
-// accent regex. group2 and group3 are the capture group indices for the letter
-// (braced and unbraced respectively; pass -1 if the regex has no unbraced group).
-func accentFunc(re *regexp.Regexp, bracedGroup, unbracedGroup int) func(string) string {
-	return func(m string) string {
-		sub := re.FindStringSubmatch(m)
-		letter := sub[bracedGroup]
-		if unbracedGroup > 0 && letter == "" {
-			letter = sub[unbracedGroup]
-		}
-		return resolveAccent(sub[1], letter)
+// asciiStandalone resolves a zero-arg letter command to ASCII. Preserves the
+// trailing boundary byte (matching the pre-extraction behavior).
+func asciiStandalone(cmd, boundary string) (string, bool) {
+	repl, ok := standaloneMap[cmd]
+	if !ok {
+		return "", false
 	}
+	return repl + boundary, true
 }
 
 // latexToASCII converts a LaTeX string to plain ASCII for key generation.
@@ -138,18 +130,12 @@ func latexToASCII(s string) string {
 	s = reMath.ReplaceAllString(s, " ")
 
 	// 2. Non-alphabetic accent commands (braced or unbraced).
-	s = reNonAlphaAccent.ReplaceAllStringFunc(s, accentFunc(reNonAlphaAccent, 2, 3))
+	s = texaccent.ApplyNonAlphaAccent(s, asciiAccent)
 
 	// 3. Zero-argument letter commands (\ss → ss, \ae → ae, etc.).
 	// Must run before reCmdArg so that \ss{} is not swallowed as a generic
-	// command with empty content. The terminating non-alpha character is re-appended.
-	s = reStandalone.ReplaceAllStringFunc(s, func(m string) string {
-		sub := reStandalone.FindStringSubmatch(m)
-		if repl, ok := standaloneMap[sub[1]]; ok {
-			return repl + sub[2]
-		}
-		return m
-	})
+	// command with empty content.
+	s = texaccent.ApplyStandalone(s, asciiStandalone)
 
 	// 4. Strip \cmd{content} → content (loop handles nested braces inside-out).
 	for {
@@ -161,7 +147,7 @@ func latexToASCII(s string) string {
 	}
 
 	// 5. Alphabetic accent commands, braced form only.
-	s = reAlphaAccent.ReplaceAllStringFunc(s, accentFunc(reAlphaAccent, 2, -1))
+	s = texaccent.ApplyAlphaAccent(s, asciiAccent)
 
 	// 6. Strip remaining \cmd.
 	s = reCmdNoArg.ReplaceAllString(s, " ")
