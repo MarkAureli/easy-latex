@@ -81,6 +81,7 @@ func TestNormalizeAccents(t *testing.T) {
 		{"ss-punct", `foo \ss.`, "foo ß."},
 		{"ss-group", `Bu{\ss}mann`, "Bußmann"},
 		{"ss-group-empty-arg", `Bu{\ss{}}mann`, "Bußmann"},
+		{"ss-empty-arg", `Bu\ss{}mann`, "Bußmann"},
 		{"SS-group", `BU{\SS}MANN`, "BUẞMANN"},
 		{"raw-eszett-untouched", "Bußmann", "Bußmann"},
 		{"no-touch-longer-macro", `\ssfoo`, `\ssfoo`},

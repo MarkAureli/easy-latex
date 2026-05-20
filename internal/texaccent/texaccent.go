@@ -36,19 +36,21 @@ var (
 		`\{\\(` + alphaCmd + `)\{([a-zA-Z])\}\}` +
 			`|\\(` + alphaCmd + `)\{([a-zA-Z])\}`)
 
-	// Standalone matches a zero-argument letter command in any of three forms:
+	// Standalone matches a zero-argument letter command in any of four forms:
 	//
 	//   {\cmd{}}            (outer-brace, with empty arg suffix)
 	//   {\cmd}              (outer-brace)
+	//   \cmd{}              (LaTeX idiom: empty-arg terminator, no space inserted)
 	//   \cmd<boundary>      (control word followed by space/tab, non-letter, or EOL)
 	//
-	// The outer-brace forms consume their enclosing braces, so the boundary
-	// reported to the callback is empty. The control-word form reports the
-	// boundary byte so the callback can decide whether to keep it (preserve
-	// punctuation) or drop it (TeX control-word terminator space).
+	// The outer-brace and empty-arg forms consume their enclosing tokens, so
+	// the boundary reported to the callback is empty. The control-word form
+	// reports the boundary byte so the callback can decide whether to keep it
+	// (preserve punctuation) or drop it (TeX control-word terminator space).
 	Standalone = regexp.MustCompile(
 		`\{\\(` + standaloneCmd + `)\{\}\}` +
 			`|\{\\(` + standaloneCmd + `)\}` +
+			`|\\(` + standaloneCmd + `)\{\}` +
 			`|\\(` + standaloneCmd + `)([ \t]|[^a-zA-Z]|$)`)
 
 )
@@ -108,9 +110,11 @@ func ApplyStandalone(s string, fn StandaloneFn) string {
 			cmd = sub[1]
 		case sub[2] != "":
 			cmd = sub[2]
-		default:
+		case sub[3] != "":
 			cmd = sub[3]
-			boundary = sub[4]
+		default:
+			cmd = sub[4]
+			boundary = sub[5]
 		}
 		if repl, ok := fn(cmd, boundary); ok {
 			return repl
