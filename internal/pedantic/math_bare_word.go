@@ -22,7 +22,7 @@ func init() {
 //   - spacing lengths: \hspace{…}, \hspace*{…}, \vspace{…}, \vspace*{…}
 func isArgSkipCmd(name string) bool {
 	switch name {
-	case "mbox", "hbox", "intertext",
+	case "raisebox", "mbox", "hbox", "intertext",
 		"mathrm", "mathsf", "mathtt", "mathit",
 		"label", "begin", "end", "tag",
 		"hspace", "vspace":
