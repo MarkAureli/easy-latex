@@ -103,12 +103,21 @@ var proseVerbatimEnvs = map[string]bool{
 	"loglogaxis":   true,
 }
 
+// twoArgIgnoreMacros lists macros in ignoreMacros whose first *two*
+// brace-balanced arguments are skipped instead of just the first. Currently
+// only `\DeclareMathOperator`/`\DeclareMathOperator*` (readMacroName strips
+// the star, so both map to the same name): the first arg is the new command
+// name, the second is the operator's rendered text, neither of which is prose.
+var twoArgIgnoreMacros = map[string]bool{
+	"DeclareMathOperator": true,
+}
+
 // ProseRuns extracts prose text from tex content. Returns one ProseRun per
 // source line that contains at least one prose byte. Skipped (blanked):
 // comments (via StripComment), math regions ($, $$, \(, \[, math envs),
 // verbatim envs, macro names (`\foo`, `\foo*`), braces/brackets, and the first
 // brace-balanced argument of any macro in ignoreMacros (plus its leading
-// optional `[...]` args).
+// optional `[...]` args) — or the first two arguments for twoArgIgnoreMacros.
 func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 	rawLines := strings.Split(content, "\n")
 	lines := make([]string, len(rawLines))
@@ -121,18 +130,19 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 		stText state = iota
 		stInlineMath
 		stDisplayMath
-		stMathParen  // \( ... \)
-		stMathBrack  // \[ ... \]
-		stMathEnv    // \begin{<envMath>} ... \end{...}
-		stVerbEnv    // verbatim env
-		stIgnoreArg  // skipping first {...} of an ignored macro
+		stMathParen // \( ... \)
+		stMathBrack // \[ ... \]
+		stMathEnv   // \begin{<envMath>} ... \end{...}
+		stVerbEnv   // verbatim env
+		stIgnoreArg // skipping first {...} of an ignored macro
 	)
 
 	st := stText
-	envName := ""    // for stMathEnv / stVerbEnv
-	braceDepth := 0  // for stIgnoreArg
-	awaitingArg := false // ignored macro consumed; expecting `[opt]*` then `{`
-	awaitOptDepth := 0   // bracket depth while consuming `[opt]` args
+	envName := ""            // for stMathEnv / stVerbEnv
+	braceDepth := 0          // for stIgnoreArg
+	awaitingArg := false     // ignored macro consumed; expecting `[opt]*` then `{`
+	awaitOptDepth := 0       // bracket depth while consuming `[opt]` args
+	remainingIgnoreArgs := 0 // further {...} args to skip after the current one
 
 	out := make([]ProseRun, 0, len(lines))
 
@@ -261,6 +271,10 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 						i = blankOptArgs(line, buf, i)
 						if ignoreMacros[name] {
 							awaitingArg = true
+							remainingIgnoreArgs = 0
+							if twoArgIgnoreMacros[name] {
+								remainingIgnoreArgs = 1
+							}
 						}
 						continue
 					}
@@ -393,7 +407,13 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 				case '}':
 					braceDepth--
 					if braceDepth == 0 {
-						st = stText
+						if remainingIgnoreArgs > 0 {
+							remainingIgnoreArgs--
+							st = stText
+							awaitingArg = true
+						} else {
+							st = stText
+						}
 						i++
 						continue
 					}

@@ -94,6 +94,28 @@ Post.`
 	}
 }
 
+func TestProseRuns_DeclareMathOperatorTwoArgs(t *testing.T) {
+	src := `\DeclareMathOperator{\esssup}{esssup}
+\DeclareMathOperator*{\argmax}{arg\,max}
+Text follows.`
+	ign := map[string]bool{"DeclareMathOperator": true}
+	runs := ProseRuns("f.tex", src, ign)
+	for _, r := range runs {
+		if strings.Contains(r.Text, "esssup") || strings.Contains(r.Text, "argmax") || strings.Contains(r.Text, "max") {
+			t.Errorf("DeclareMathOperator arg leaked on line %d: %q", r.Line, r.Text)
+		}
+	}
+	found := false
+	for _, r := range runs {
+		if strings.Contains(r.Text, "Text follows") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("trailing prose dropped: %#v", runs)
+	}
+}
+
 func TestProseRuns_VerbatimEnv(t *testing.T) {
 	src := `Outside.
 \begin{verbatim}

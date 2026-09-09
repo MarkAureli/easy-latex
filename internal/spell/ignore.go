@@ -10,6 +10,11 @@ import (
 // skipped during spell-checking (citations, refs, file paths, package names,
 // URLs, image paths, …). Always-on; extensible via global/local ignore.txt
 // (additive). To remove an entry, prefix with `!` in an ignore.txt line.
+//
+// DeclareMathOperator (and its starred variant) is special-cased in
+// texscan.ProseRuns to skip its first *two* brace args (see
+// texscan.twoArgIgnoreMacros) — both the new command name and the operator's
+// rendered text are non-prose.
 var DefaultIgnoreMacros = []string{
 	// Citation
 	"cite", "citep", "citet", "citeauthor", "citeyear", "citeyearpar",
