@@ -53,6 +53,10 @@ var theoremEnvNames = map[string]bool{
 	"example": true, "assumption": true,
 }
 
+// lookaheadTransparentEnvs are layout wrappers the lookahead looks past
+// ("we obtain" + \begin{widetext} + \begin{align}).
+var lookaheadTransparentEnvs = map[string]bool{"widetext": true}
+
 // preambleOnlyTokens can only appear in a preamble; a file containing one but
 // no \begin{document} is an \input-ed preamble fragment (packages.tex, ...).
 var preambleOnlyTokens = []string{"\\usepackage", "\\RequirePackage", "\\documentclass"}
@@ -402,8 +406,9 @@ func endsWithTerminator(s string) bool {
 }
 
 // nextLineContinuesSentence looks ahead (skipping blank and command-only
-// lines such as \vspace or \label, bounded) for a line opening a list, display
-// math or a theorem-like environment. The current line's sentence then
+// lines such as \vspace or \label, and lookaheadTransparentEnvs openers such
+// as \begin{widetext}, bounded) for a line opening a list, display math or a
+// theorem-like environment. The current line's sentence then
 // continues through that block, so it needs no terminator of its own.
 func nextLineContinuesSentence(lines []string, from int) bool {
 	for i := from; i < len(lines) && i < from+5; i++ {
@@ -415,6 +420,9 @@ func nextLineContinuesSentence(lines []string, from int) bool {
 			return true
 		}
 		if name, n := matchBeginEnd(body, 0, "begin"); n > 0 {
+			if lookaheadTransparentEnvs[name] {
+				continue
+			}
 			return listEnvNames[name] || displayMathEnvs[name] ||
 				strings.HasSuffix(name, "subequations") ||
 				theoremEnvNames[strings.ToLower(strings.TrimSuffix(name, "*"))]

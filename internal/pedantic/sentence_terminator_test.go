@@ -116,6 +116,11 @@ func TestSentenceTerminator_ContinuesIntoListOrMath(t *testing.T) {
 		`\]`,
 		`This line is followed by prose`,
 		`More prose.`,
+		`In two-column layout we obtain`,
+		`\begin{widetext}`,
+		`\begin{align}`,
+		`\end{align}`,
+		`\end{widetext}`,
 	}
 	assertSentenceTerminatorLines(t, lines, []int{17})
 }
