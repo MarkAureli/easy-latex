@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -183,7 +184,7 @@ func queryCrossref(e Entry, doi string, log Logger) (*Entry, cacheEntry, string,
 		}
 	}
 	if page := cmp.Or(m.Page, m.ArticleNumber); page != "" {
-		v := html.UnescapeString(page)
+		v := collapsePageRange(html.UnescapeString(page))
 		raw.Fields["pages"] = v
 		if applyField(&updated, "pages", v) {
 			corrections = append(corrections, "pages")
@@ -240,4 +241,17 @@ func formatCrossrefAuthors(authors []crossrefAuthor) string {
 		}
 	}
 	return strings.Join(parts, " and ")
+}
+
+// rePageRange matches a page range "X-Y" / "X--Y" / "X–Y".
+var rePageRange = regexp.MustCompile(`^\s*(\S+?)\s*(?:-{1,2}|\x{2013})\s*(\S+)\s*$`)
+
+// collapsePageRange reduces a degenerate range whose endpoints are equal
+// (e.g. Crossref's "331-331") to the single page "331". Other values are
+// returned unchanged.
+func collapsePageRange(p string) string {
+	if m := rePageRange.FindStringSubmatch(p); m != nil && m[1] == m[2] {
+		return m[1]
+	}
+	return p
 }

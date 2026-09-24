@@ -128,10 +128,15 @@ func TestNormalizeAllCapsName(t *testing.T) {
 		{"JEAN-PIERRE", "Jean-Pierre"},
 		{"O'BRIAN", "O'Brian"},
 		{"A. J.", "A. J."},
+		{"I.M.", "I.M."},
+		{"I.\u2009M.", "I. M."},
+		{"JOHN  FRANK ", "John Frank"},
+		{"D'ALEMBERT", "D'Alembert"},
 		// Mixed case → unchanged
 		{"Smith", "Smith"},
 		{"McDonald", "McDonald"},
 		{"de Bruijn", "de Bruijn"},
+		{"Ian\u2009M.", "Ian M."},
 		// Single letter → unchanged (still uppercase)
 		{"J", "J"},
 		// Empty → unchanged
