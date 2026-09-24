@@ -135,6 +135,16 @@ func TestCleanCrossrefTitle(t *testing.T) {
 			want: `($d$)`,
 		},
 		{
+			name: "embedded newline collapsed",
+			in:   "guarantees for \n<mml:math xmlns:mml=\"http://www.w3.org/1998/Math/MathML\"><mml:mrow><mml:mi>p</mml:mi><mml:mo>&gt;</mml:mo><mml:mn>1</mml:mn></mml:mrow></mml:math>",
+			want: `guarantees for $p>1$`,
+		},
+		{
+			name: "plain title whitespace collapsed",
+			in:   "  A  title\nwith\tbreaks ",
+			want: "A title with breaks",
+		},
+		{
 			name: "without namespace prefix",
 			in:   `<math><mi>x</mi></math>`,
 			want: `$x$`,

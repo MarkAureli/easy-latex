@@ -2296,3 +2296,26 @@ func TestAddEntryFromID_DOI_APIFailure(t *testing.T) {
 		t.Error("API failure should not return ErrUnrecognizedID")
 	}
 }
+
+func TestQueryCrossref_ArticleNumberAsPages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok","message":{"title":["T"],"author":[{"family":"Smith","given":"J"}],` +
+			`"container-title":["Physical Review A"],"published":{"date-parts":[[2021]]},` +
+			`"volume":"103","issue":"4","article-number":"042612","DOI":"10.1103/x","type":"journal-article"}}`))
+	}))
+	defer srv.Close()
+
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	e := Entry{Key: "k", Fields: []Field{{Name: "doi", Value: "{10.1103/x}"}}}
+	_, raw, _, err := queryCrossref(e, "10.1103/x", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := raw.Fields["pages"]; got != "042612" {
+		t.Errorf("pages = %q, want 042612", got)
+	}
+}

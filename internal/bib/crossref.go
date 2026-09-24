@@ -1,6 +1,7 @@
 package bib
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -52,10 +53,13 @@ type crossrefResponse struct {
 		} `json:"published"`
 		Volume string `json:"volume"`
 		Issue  string `json:"issue"`
-		Page      string `json:"page"`
-		DOI       string `json:"DOI"`
-		Type      string `json:"type"`
-		Publisher string `json:"publisher"`
+		Page   string `json:"page"`
+		// ArticleNumber is set by publishers (e.g. APS, IOP) that use
+		// article numbers instead of page ranges.
+		ArticleNumber string `json:"article-number"`
+		DOI           string `json:"DOI"`
+		Type          string `json:"type"`
+		Publisher     string `json:"publisher"`
 	} `json:"message"`
 }
 
@@ -178,8 +182,8 @@ func queryCrossref(e Entry, doi string, log Logger) (*Entry, cacheEntry, string,
 			corrections = append(corrections, "number")
 		}
 	}
-	if m.Page != "" {
-		v := html.UnescapeString(m.Page)
+	if page := cmp.Or(m.Page, m.ArticleNumber); page != "" {
+		v := html.UnescapeString(page)
 		raw.Fields["pages"] = v
 		if applyField(&updated, "pages", v) {
 			corrections = append(corrections, "pages")

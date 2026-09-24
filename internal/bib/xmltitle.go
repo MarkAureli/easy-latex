@@ -7,15 +7,16 @@ import (
 )
 
 // cleanCrossrefTitle converts MathML and Crossref face markup in a title
-// string to LaTeX equivalents, then strips any remaining XML tags.
+// string to LaTeX equivalents, strips any remaining XML tags, and collapses
+// whitespace runs (Crossref titles may contain embedded newlines).
 func cleanCrossrefTitle(title string) string {
-	if !strings.Contains(title, "<") {
-		return title
+	s := title
+	if strings.Contains(s, "<") {
+		s = convertMathML(s)
+		s = convertFaceMarkup(s)
+		s = reAnyTag.ReplaceAllString(s, "")
 	}
-	s := convertMathML(title)
-	s = convertFaceMarkup(s)
-	s = reAnyTag.ReplaceAllString(s, "")
-	return s
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // ── MathML → LaTeX ──────────────────────────────────────────────────────────
