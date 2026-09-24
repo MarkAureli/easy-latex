@@ -22,6 +22,7 @@ Spelling is **not** part of this registry. It is a parameterised pass keyed by l
 | `no-trailing-whitespace` | Source | yes | Spaces or tabs at end of any raw line. `WantRaw` so detection sees post-comment WS. Pre-comment alignment WS (`code   % foo`) is preserved (single-spaces' domain); only the tail past the last non-WS byte is stripped. Fixed via `TrimRight(line, " \t")` on raw lines. |
 | `block-on-newline` | Source | yes | Block-level token misplaced on its source line. **Leading** tokens (env begin/end, sectioning, `\item`, `\[`/`\]`, page/space breaks, file inclusion, front matter, preamble decls, tabular rules) must start the line. **Trailing** tokens (`\\`, `\newline`) must end the line. Math/verbatim regions skipped. Leading tokens preceded only by `{`/whitespace are allowed (covers `\NewDocumentEnvironment` brace-wrapped bodies). |
 | `sentence-on-newline` | Source | yes | Sentence boundary `[.?!] <space> <Capital>` mid-line in text region; abbreviations and digit-only words excluded |
+| `sentence-terminator` | Source | no | Each text-region line must end with `.`/`?`/`!` (or `:` when the next line opens a list/display-math, or an ellipsis). Complements `sentence-on-newline`/`block-on-newline`'s one-sentence/block-per-line convention: a line ending is either a sentence end or one of the special cases below. |
 | `env-indent` | Source | yes | Each line indented `(envDepth + braceDepth)*4` spaces. All `\begin{...}`/`\end{...}` and `\[`/`\]` events on a line update the env stack in source order, allowing inline math envs (`\begin{cases}`, `\begin{aligned}`, …) and brace-wrapped end-bodies (`{\end{env}}` from `\newenvironment`). The line's own depth de-dents by the count of consecutive leading-end events at its leading-content position (after WS and any `{` wrappers). Unmatched `{`/`[` carried across lines push brace depth; leading `}`/`]` on a line de-dent that line, then total `{[` vs `}]` advance the running depth. Comments stripped before counting; `\{`/`\}`/`\[`/`\]` ignored (escape-aware). `document` transparent (depth 0 inside). Verbatim envs (`verbatim`, `lstlisting`, `minted`, `comment`, `alltt`, …) preserved untouched and don't update brace depth. Math envs are indented. Fix overwrites leading WS — tabs vanish so order vs `no-tabs` is irrelevant. Comment-only lines re-indented; blank lines untouched. |
 | `unused-labels` | ProjectSource | no | `\label{name}` never referenced across the project. Refs scanned: `\ref`/`\Ref`/`\eqref`/`\autoref`/`\Autoref`/`\cref`/`\Cref`/`\crefrange`/`\Crefrange`/`\labelcref`/`\pageref`/`\nameref`/`\vref`/`\Vref`/`\vpageref`/`\autopageref` (curly-brace, comma-list, starred variants) plus `\hyperref[...]`. Verbatim envs skipped; math regions tracked. Hardcoded ignore set silences prophylactic prefixes (see below). |
 | `math-bare-word` | Source | no | 2+ consecutive ASCII letters in math mode not inside a text/font wrapper or forming a command |
@@ -40,6 +41,24 @@ Labels whose name (before the first `:`) matches one of these spelled-out prefix
 - Textbook style: `exercise`, `problem`, `solution`, `case`
 
 All other prefixes — including bare labels, `eq:`/`fig:`/`tab:`/etc. abbreviations, and project-defined prefixes — are flagged when unreferenced. Escape hatches: rename to a standard prefix or disable the check.
+
+## sentence-terminator implementation
+
+Convention: a source line ending is either a sentence end (must carry terminal punctuation) or one of a fixed set of special cases (handled separately, exempt). No paragraph-level lookahead — purely per-line, reusing `regionMask` + `blockTokens` from `block-on-newline`.
+
+Exempt (no check performed on the line):
+- Blank/comment-only lines (empty after strip)
+- Line's last non-whitespace byte falls outside `regText` (line ends mid-math/mid-verbatim — the region continues as its own unit)
+- Leading token is `\begin`/`\end`, or is one of `blockTokens`' `blockLeading` entries **except `\caption`/`\caption*`** (titles, `\item`, tabular rules, front/back matter, preamble decls, page/space breaks, `\[`/`\]`) — see `sentenceExemptLeading` (`buildSentenceExemptLeading`)
+- Leading token `\label` or `\index` (pure metadata, never prose — added on top of `blockTokens`)
+- Line ends with `\\` or `\newline` (forced break; sentence continues on next line) — `hasTrailingLineBreakToken`
+- Line sits strictly inside a `tabular`/`tabular*`/`tabularx`/`longtable`/`array` environment (row/cell content, not prose) — `tabularLines`, a lightweight env-depth scan independent of `regionMask`
+
+`\caption{...}` is deliberately **not** exempt — its argument is prose and is checked like any other sentence line.
+
+Terminal-punctuation search (`stripTrailingDecorations`): repeatedly strips trailing decoration commands (`\footnote{...}`, `\label{...}`, `\cite{...}` family, `\index{...}`, `\marginpar{...}`, `\qedhere`, star variants; `trailingDecoratorRe`) *only when non-empty content remains before them* (otherwise the decoration's own argument is the line's actual content — e.g. a standalone `\footnote{...}` or `\caption{...}` line — and stripping falls through to the generic-closer path instead, descending into the argument). Also strips a trailing run of closing brackets/quotes/braces (`)]"'}’”`). Allowed terminators on what remains: `.`, `?`, `!`, `…`, `\ldots`, or `:` when `nextLineOpensListOrMath` (bounded 3-line lookahead, skipping blanks) finds `\[` or `\begin{itemize|enumerate|description|<displayMathEnvs>}` next.
+
+Known limitation: a trailing decoration's own argument can coincidentally end in punctuation that masks a missing terminator before it (e.g. `\footnote{See ref.}` trailing real prose is stripped as a unit so this doesn't happen — but nested/unusual constructs aren't exhaustively handled). Not autofixable (Fix is nil) — inserting the "right" punctuation mark is ambiguous.
 
 ## no-orphan-line implementation
 
@@ -88,6 +107,7 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 | `no_tabs.go` | `no-tabs` check + fix impl, column-aware tab expansion (`tabWidth=4`) |
 | `block_on_newline.go` | `block-on-newline` check + fix impl, `blockTokens` (leading/trailing kinds), `nextTokenAt` parser |
 | `sentence_on_newline.go` | `sentence-on-newline` check + fix impl, `sentenceAbbrevs` set |
+| `sentence_terminator.go` | `sentence-terminator` check impl, `sentenceExemptLeading`, `tabularLines`, `stripTrailingDecorations`, `nextLineOpensListOrMath` |
 | `env_indent.go` | `env-indent` check + fix impl, `noIndentBodyEnvs`, `transparentEnvs`, `scanLineEvents` (per-line begin/end token list), `leadingContentPos`, `countBraces`, `nextDecision` state machine (env depth + brace depth) |
 | `unused_labels.go` | `unused-labels` check impl, `reLabelCall`/`reRefCall`/`reHyperref`, `ignoredLabelPrefixes` set, project-source phase |
 | `math_bare_word.go` | `math-bare-word` check impl, `isTextMathCmd`, `isASCIILetter` |
