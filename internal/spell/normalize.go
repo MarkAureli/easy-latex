@@ -54,8 +54,17 @@ var accentTable = map[string]map[byte]rune{
 	},
 }
 
-// unicodeAccent resolves a TeX accent macro to its precomposed Unicode form.
-// On unknown combinations (e.g. `\'q`), returns ok=false so the macro is left
+// combiningMarks maps each accent command to its Unicode combining mark, used
+// for letters without a precomposed form (`\u{c}` → `c` + U+0306).
+var combiningMarks = map[string]rune{
+	"'": '\u0301', "`": '\u0300', "^": '\u0302', `"`: '\u0308',
+	"~": '\u0303', "=": '\u0304', ".": '\u0307', "u": '\u0306',
+	"v": '\u030C', "H": '\u030B', "c": '\u0327', "t": '\u0361',
+}
+
+// unicodeAccent resolves a TeX accent macro to its precomposed Unicode form,
+// or to the letter followed by the accent's combining mark when no precomposed
+// form is tabled. Unknown commands return ok=false so the macro is left
 // untouched rather than being silently dropped to the bare letter.
 func unicodeAccent(cmd, letter string) (string, bool) {
 	if letter == "" {
@@ -63,13 +72,13 @@ func unicodeAccent(cmd, letter string) (string, bool) {
 	}
 	lc := strings.ToLower(letter)[0]
 	upper := letter[0] != lc
-	tbl, ok := accentTable[cmd]
+	mark, ok := combiningMarks[cmd]
 	if !ok {
 		return "", false
 	}
-	r, ok := tbl[lc]
+	r, ok := accentTable[cmd][lc]
 	if !ok {
-		return "", false
+		return letter + string(mark), true
 	}
 	if upper {
 		return strings.ToUpper(string(r)), true

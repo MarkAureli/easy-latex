@@ -53,7 +53,7 @@ func TestNormalizeAccents(t *testing.T) {
 		{"umlaut-capital", `\"Uber`, "Über"},
 		{"umlaut-multiple", `\"u\"o\"a`, "üöä"},
 		{"umlaut-already-utf8", "für", "für"},
-		{"no-touch-non-vowel", `\"x`, `\"x`},
+		{"diaeresis-x-combining", `\"x`, "x\u0308"},
 		// acute (the user-reported case)
 		{"acute-braces", `Ren\'{e}`, "René"},
 		{"acute-bare", `Ren\'e`, "René"},
@@ -69,6 +69,10 @@ func TestNormalizeAccents(t *testing.T) {
 		{"breve", `Bo\u{g}azi`, "Boğazi"},
 		{"cedilla", `gar\c{c}on`, "garçon"},
 		{"double-acute", `Erd\H{o}s`, "Erdős"},
+		// no precomposed form: letter + combining mark
+		{"breve-c-combining", `Mare\u{c}ek`, "Marec\u0306ek"},
+		{"breve-C-combining", `\u{C}`, "C\u0306"},
+		{"acute-q-combining", `\'q`, "q\u0301"},
 		// standalone letter commands
 		{"aa", `\aa ngstr\"om`, "ångström"},
 		{"AE", `\AE on`, "Æon"},

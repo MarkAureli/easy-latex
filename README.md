@@ -279,7 +279,7 @@ ${XDG_CONFIG_HOME:-~/.config}/easy-latex/spell/
     common.txt       # project-local language-agnostic additions
 ```
 
-One word per line. Blank lines and `#` comments are ignored. Files that do not exist are silently skipped — start with whichever subset you need.
+One word per line. Blank lines and `#` comments are ignored. TeX accent macros in the source are resolved to Unicode before checking (`Ren\'e` → `René`), so dictionary entries should be written in Unicode. Accent/letter pairs without a precomposed character become the letter plus a combining mark (`Mare\u{c}ek` → `Marec̆ek`). Files that do not exist are silently skipped — start with whichever subset you need.
 
 Manage these files via the `el spell` subcommand instead of editing by hand:
 
