@@ -83,23 +83,101 @@ func TestSentenceTerminator_TrailingFootnoteAndCite(t *testing.T) {
 	}
 }
 
-func TestSentenceTerminator_ColonBeforeListOrMath(t *testing.T) {
+func TestSentenceTerminator_ColonAllowed(t *testing.T) {
 	lines := []string{
 		`We conclude the following:`,
 		`\begin{itemize}`,
 		`\item Point one`,
 		`\end{itemize}`,
 		``,
-		`The result is given by:`,
-		`\[`,
-		`x = y`,
-		`\]`,
-		``,
-		`This colon is not allowed:`,
+		`This colon introduces a sentence:`,
 		`This is just regular text after it.`,
 	}
+	assertSentenceTerminatorLines(t, lines, nil)
+}
+
+func TestSentenceTerminator_ContinuesIntoListOrMath(t *testing.T) {
+	lines := []string{
+		`Therefore, it holds that`,
+		`\begin{align}`,
+		`x = y`,
+		`\end{align}`,
+		`The constraints are captured in`,
+		`\vspace{-6pt}`,
+		`\begin{subequations}`,
+		`\end{subequations}`,
+		`The map fulfills the conditions`,
+		``,
+		`\begin{enumerate}`,
+		`\end{enumerate}`,
+		`We have`,
+		`\[`,
+		`x`,
+		`\]`,
+		`This line is followed by prose`,
+		`More prose.`,
+	}
+	assertSentenceTerminatorLines(t, lines, []int{17})
+}
+
+func TestSentenceTerminator_PreambleSkipped(t *testing.T) {
+	lines := []string{
+		`\documentclass{article}`,
+		`\DeclarePairedDelimiter{\abs}{\lvert}{\rvert}`,
+		`\SetArgSty{textnormal}`,
+		`\begin{document}`,
+		`Body prose without terminator`,
+		`\end{document}`,
+		`trailing junk`,
+	}
+	assertSentenceTerminatorLines(t, lines, []int{5})
+}
+
+func TestSentenceTerminator_NonProseEnvsSkipped(t *testing.T) {
+	lines := []string{
+		`\begin{tikzpicture}`,
+		`\draw (0,0) -- (1,1)`,
+		`level distance=2.8cm,`,
+		`\end{tikzpicture}`,
+		`\begin{algorithm}`,
+		`\For{$i$}{`,
+		`compute $x$\;`,
+		`}`,
+		`\end{algorithm}`,
+		`\begin{thebibliography}{9}`,
+		`\bibitem{a} A. Author`,
+		`\newblock Some title`,
+		`\end{thebibliography}`,
+		`\includegraphics[width=\linewidth]{fig}`,
+		`\centering`,
+		`\bibliographystyle{IEEEtran}`,
+	}
+	assertSentenceTerminatorLines(t, lines, nil)
+}
+
+func TestSentenceTerminator_MultiLineBraceGroups(t *testing.T) {
+	lines := []string{
+		`\author{`,
+		`    \IEEEauthorblockN{`,
+		`        Jane Doe,`,
+		`        John Doe`,
+		`    }`,
+		`    \IEEEauthorblockA{`,
+		`        Leibniz University, Germany`,
+		`    }`,
+		`}`,
+		`\caption{\label{fig:x}`,
+		`    Caption text without terminator}`,
+		`A claim holds.\footnote{`,
+		`    Footnote prose without terminator`,
+		`}`,
+	}
+	assertSentenceTerminatorLines(t, lines, []int{11, 13})
+}
+
+func assertSentenceTerminatorLines(t *testing.T, lines []string, wantLines []int) {
+	t.Helper()
 	diags := checkSentenceTerminator("t.tex", lines)
-	wantLines := []int{11}
 	if len(diags) != len(wantLines) {
 		t.Fatalf("got %d diags, want %d: %+v", len(diags), len(wantLines), diags)
 	}
@@ -161,4 +239,47 @@ func TestSentenceTerminator_EllipsisAllowed(t *testing.T) {
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags, got %d: %+v", len(diags), diags)
 	}
+}
+
+func TestSentenceTerminator_CommandOnlyAndOptionGroups(t *testing.T) {
+	lines := []string{
+		`\hypersetup{hidelinks}`,
+		`\def\arraystretch{1.5}`,
+		`\hspace*{0.45pt}`,
+		`[1em]`,
+		`\cite[Lemma 2.1]{key}`,
+		`\tikzset{`,
+		`    grow=down,`,
+		`    level distance=2.8cm`,
+		`}`,
+		`\begin{tcolorbox}[`,
+		`    colback=white,`,
+		`    title={Box 1}]`,
+		`\end{tcolorbox}`,
+		`\emph{A prose argument}`,
+	}
+	assertSentenceTerminatorLines(t, lines, []int{14})
+}
+
+func TestSentenceTerminator_ContinuesIntoTheorem(t *testing.T) {
+	lines := []string{
+		`Thus, we have concluded`,
+		`\begin{Theorem}[\cite{key}]`,
+		`The action is transitive.`,
+		`\end{Theorem}`,
+		`We further use`,
+		`\label{x}`,
+		`\begin{figure}`,
+		`\end{figure}`,
+	}
+	assertSentenceTerminatorLines(t, lines, []int{5})
+}
+
+func TestSentenceTerminator_PreambleFragmentSkipped(t *testing.T) {
+	lines := []string{
+		`\usepackage{amsmath}`,
+		`\makeatletter`,
+		`\hfuzz=2pt`,
+	}
+	assertSentenceTerminatorLines(t, lines, nil)
 }
