@@ -141,7 +141,11 @@ func AbbreviateISO4(title string) string {
 	}
 
 	var parts []string
-	for _, word := range words {
+	for i, word := range words {
+		if isSectionDesignator(words, i) {
+			parts = append(parts, word)
+			continue
+		}
 		part := abbreviateToken(word)
 		if part != "" {
 			parts = append(parts, part)
@@ -152,6 +156,29 @@ func AbbreviateISO4(title string) string {
 		return title
 	}
 	return strings.Join(parts, " ")
+}
+
+// isSectionDesignator reports whether words[i] is a single uppercase letter
+// naming a journal section or series (e.g. the "A" in "Physical Review A" or
+// "Series A"). Such letters must be kept even when they collide with a stop
+// word ("a", "e", "y"). A designator is never the first word and is not
+// followed by another word starting with a letter, which distinguishes it from
+// a title-cased conjunction such as "Ciencia E Investigación".
+func isSectionDesignator(words []string, i int) bool {
+	if i == 0 {
+		return false
+	}
+	r, size := utf8.DecodeRuneInString(words[i])
+	if size != len(words[i]) || !unicode.IsUpper(r) {
+		return false
+	}
+	if i+1 < len(words) {
+		next, _ := utf8.DecodeRuneInString(words[i+1])
+		if unicode.IsLetter(next) {
+			return false
+		}
+	}
+	return true
 }
 
 // abbreviateToken returns the abbreviated form of a single whitespace-delimited

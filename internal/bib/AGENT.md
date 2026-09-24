@@ -158,7 +158,7 @@ Keep `entrySpecs` in `validate.go` and `canonicalOrder` in `format.go` in sync.
 - Lookup: exact first, then longest-prefix (LTWA entries ending `-` = prefix patterns)
 - Language priority when multiple entries match: `"multiple languages"` > `"english"` > first record
 - First letter of abbrev mirrors original case
-- Stop words (articles, prepositions, conjunctions, EN/FR/DE/IT/ES/LA) omitted
+- Stop words (articles, prepositions, conjunctions, EN/FR/DE/IT/ES/LA) omitted; exception: `isSectionDesignator` keeps a single uppercase letter that is not the first word and not followed by a letter-initial word (`Physical Review A` → `Phys. Rev. A`, `Series E`)
 - Single-word titles returned unchanged
 - Trailing parentheticals stripped before processing: `"Lancet (London)"` → `"Lancet"`
 - Hyphenated tokens split on `-`, each segment processed, rejoined

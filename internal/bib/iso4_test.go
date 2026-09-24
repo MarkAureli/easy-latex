@@ -19,6 +19,17 @@ func TestAbbreviateISO4(t *testing.T) {
 		{"Physical Review Letters", "Phys. Rev. Lett."},
 		{"Proceedings of the National Academy of Sciences", "Proc. Natl. Acad. Sci."},
 
+		// Single-letter section designators kept even when they collide
+		// with a stop word ("a", "e").
+		{"Physical Review A", "Phys. Rev. A"},
+		{"Physical Review E", "Phys. Rev. E"},
+		{"Physical Review B", "Phys. Rev. B"},
+		{"Physical Review A (Atomic, Molecular, and Optical Physics)", "Phys. Rev. A"},
+		{"Journal of Physics A: Mathematical and Theoretical", "J. Phys. A: Math. Theor."},
+		{"Philosophical Transactions of the Royal Society A", "Philos. Trans. R. Soc. A"},
+		// Title-cased conjunction followed by a word is still dropped.
+		{"Ciencia E Investigacion", "Cienc. Investig."},
+
 		// Leading article stripped.
 		{"The Lancet", "Lancet"},
 
