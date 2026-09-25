@@ -182,6 +182,9 @@ func readLines(path string) []string {
 	for sc.Scan() {
 		lines = append(lines, sc.Text())
 	}
+	if sc.Err() != nil {
+		return nil
+	}
 	return lines
 }
 

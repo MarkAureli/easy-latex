@@ -156,6 +156,7 @@ func findTitleLine(path string) int {
 			return n
 		}
 	}
+	_ = sc.Err() // unreadable/truncated file: fall through to "not found"
 	return 0
 }
 

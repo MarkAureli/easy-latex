@@ -231,5 +231,8 @@ func readSource(path string) (raw, stripped []string) {
 		raw = append(raw, line)
 		stripped = append(stripped, texscan.StripComment(line))
 	}
+	if sc.Err() != nil {
+		return nil, nil
+	}
 	return raw, stripped
 }
