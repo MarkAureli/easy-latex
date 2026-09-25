@@ -110,6 +110,20 @@ func checkMathBareWord(path string, lines []string) []Diagnostic {
 				continue
 			}
 
+			// TikZ node.anchor reference (e.g. "a1.south west" inside a
+			// calc-library coordinate expression such as
+			// "($(a1.south west)-(0.1,0.1)$)"): the anchor name is not a
+			// math bare word, so skip letters/spaces following a literal
+			// dot rather than flagging them.
+			if line[i] == '.' {
+				i++
+				for i < len(line) && i < len(m) && m[i] == regMath &&
+					(isASCIILetter(line[i]) || line[i] == ' ') {
+					i++
+				}
+				continue
+			}
+
 			// Letter sequence: flag runs of 2+.
 			if isASCIILetter(line[i]) {
 				start := i

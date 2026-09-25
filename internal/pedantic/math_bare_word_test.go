@@ -66,6 +66,12 @@ func TestCheckMathBareWord(t *testing.T) {
 		{"hspace star", `$x \hspace*{2cm} y$`, 0},
 		{"vspace cm", `$x \vspace{2cm} y$`, 0},
 		{"vspace star", `$x \vspace*{1ex} y$`, 0},
+		// tikz node.anchor references exempt (calc-library coordinate exprs)
+		{"tikz anchor single word", `($(a1.south)-(0.1,0.1)$)`, 0},
+		{"tikz anchor two words", `($(a1.south west)-(0.1,0.1)$)`, 0},
+		{"tikz anchor two coords", `($(a1.south west)-(a3.south east)$)`, 0},
+		// bare word right before a dot is still flagged
+		{"bare word before dot", `$foo.south$`, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
