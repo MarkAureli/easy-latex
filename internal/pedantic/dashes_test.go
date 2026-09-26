@@ -177,6 +177,23 @@ func TestDashes_Fixer_SkipMacroArgs(t *testing.T) {
 	}
 }
 
+func TestDashes_Fixer_SkipCommandOptions(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"\\includegraphics[width=5cm-10cm]{img}", "\\includegraphics[width=5cm-10cm]{img}"},
+		{"\\cite[p. 12-14]{key}", "\\cite[p. 12-14]{key}"},
+		{"\\begin{tabular}[t]{cc}", "\\begin{tabular}[t]{cc}"},
+		{"\\sqrt[3]{x}", "\\sqrt[3]{x}"},
+		// rule still fires outside the option range
+		{"\\cite[p. 12-14]{key} pp. 10-20", "\\cite[p. 12-14]{key} pp. 10--20"},
+	}
+	for _, c := range cases {
+		out, _ := fixDashes("t.tex", []string{c.in})
+		if out[0] != c.want {
+			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
+		}
+	}
+}
+
 func TestDashes_NoOpClean(t *testing.T) {
 	in := []string{
 		"well-known compound",

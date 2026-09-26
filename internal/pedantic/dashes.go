@@ -3,6 +3,7 @@ package pedantic
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -203,14 +204,86 @@ func findSkipRanges(s string) [][2]int {
 	return out
 }
 
+// findOptionSkipRanges returns half-open byte ranges of `[...]` option-block
+// contents immediately following any LaTeX command, interleaved with any
+// number of `{...}` argument groups (e.g. the `[t]` in
+// `\begin{tabular}[t]{cc}`, or `[p. 12-14]` in `\cite[p. 12-14]{key}`). Dash
+// rules ignore these ranges entirely, since option content (dimensions, page
+// ranges, positioning keys) is not prose or math.
+func findOptionSkipRanges(s string) [][2]int {
+	var out [][2]int
+	i := 0
+	for i < len(s) {
+		if s[i] != '\\' {
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(s) && isASCIILetter(s[j]) {
+			j++
+		}
+		if j == i+1 {
+			i++
+			continue
+		}
+		k := j
+		for k < len(s) {
+			switch s[k] {
+			case '[':
+				start := k + 1
+				end := start
+				depth := 1
+				for end < len(s) && depth > 0 {
+					switch s[end] {
+					case '[':
+						depth++
+					case ']':
+						depth--
+					}
+					end++
+				}
+				if depth == 0 {
+					out = append(out, [2]int{start, end - 1})
+				}
+				k = end
+			case '{':
+				depth := 1
+				k++
+				for k < len(s) && depth > 0 {
+					switch s[k] {
+					case '{':
+						depth++
+					case '}':
+						depth--
+					}
+					k++
+				}
+			default:
+				k = -1
+			}
+			if k < 0 {
+				break
+			}
+		}
+		if k < 0 {
+			i = j
+			continue
+		}
+		i = k
+	}
+	return out
+}
+
 // rewriteTextSpan applies rules 1,2,3b,4,5,6,7,8,9 with a fixpoint loop so
 // chained dashes (e.g. `1-2-3`, `a -- b -- c`) all collapse. Bodies of
-// argSkipMacros are passed through unchanged.
+// argSkipMacros, and `[...]` command option blocks, are passed through
+// unchanged.
 func rewriteTextSpan(s string) string {
-	skips := findSkipRanges(s)
+	skips := append(findSkipRanges(s), findOptionSkipRanges(s)...)
 	if len(skips) == 0 {
 		return rewriteTextChunk(s)
 	}
+	sort.Slice(skips, func(a, b int) bool { return skips[a][0] < skips[b][0] })
 	var b strings.Builder
 	b.Grow(len(s))
 	last := 0
