@@ -100,18 +100,50 @@ func formatEntry(e Entry) string {
 	return buf.String()
 }
 
-// stripNonEscapedBraces removes all { and } characters from s that are not
-// immediately preceded by a backslash. Used to normalise title field values.
+// stripNonEscapedBraces removes { and } characters from s that are not
+// immediately preceded by a backslash and do not delimit the argument of a
+// LaTeX control word (e.g. the braces in \textit{n} are kept, since dropping
+// them turns valid markup into an undefined control sequence). Used to
+// normalise title field values, stripping bare case-protection braces like
+// {QAOA} while preserving semantic markup.
 func stripNonEscapedBraces(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
+	var keep []bool // per currently-open, non-escaped brace: whether to keep it
 	for i := 0; i < len(s); i++ {
-		if (s[i] == '{' || s[i] == '}') && (i == 0 || s[i-1] != '\\') {
-			continue
+		switch {
+		case s[i] == '{' && (i == 0 || s[i-1] != '\\'):
+			k := precededByControlWord(s, i)
+			keep = append(keep, k)
+			if k {
+				b.WriteByte(s[i])
+			}
+		case s[i] == '}' && (i == 0 || s[i-1] != '\\'):
+			if len(keep) > 0 {
+				k := keep[len(keep)-1]
+				keep = keep[:len(keep)-1]
+				if k {
+					b.WriteByte(s[i])
+				}
+			}
+		default:
+			b.WriteByte(s[i])
 		}
-		b.WriteByte(s[i])
 	}
 	return b.String()
+}
+
+// precededByControlWord reports whether s[pos] (a '{') directly follows a
+// LaTeX control word, e.g. the '{' in "\textit{n}".
+func precededByControlWord(s string, pos int) bool {
+	j := pos - 1
+	for j >= 0 && ((s[j] >= 'a' && s[j] <= 'z') || (s[j] >= 'A' && s[j] <= 'Z')) {
+		j--
+	}
+	if j == pos-1 {
+		return false
+	}
+	return j >= 0 && s[j] == '\\'
 }
 
 // unicodeToLaTeX maps Unicode accented characters to their LaTeX equivalents.

@@ -309,6 +309,8 @@ func TestStripNonEscapedBraces(t *testing.T) {
 		{"Mixed {inner} and \\{escaped\\}", "Mixed inner and \\{escaped\\}"},
 		{"", ""},
 		{"{}", ""},
+		{`su(\textit{N})`, `su(\textit{N})`},
+		{`Some \emph{title} {here}`, `Some \emph{title} here`},
 	}
 	for _, c := range cases {
 		if got := stripNonEscapedBraces(c.in); got != c.want {
