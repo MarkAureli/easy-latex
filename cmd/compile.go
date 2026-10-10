@@ -357,6 +357,9 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		sortDiagnostics(spellDiags)
 	}
 
+	// Best effort: expose diagnostics to editors (VimTeX) via the engine log.
+	_ = appendDiagsToLog(filepath.Join(auxDir, stem+".log"), pedDiags, spellDiags)
+
 	hasWarnLines := len(compileWarnLines) > 0 && lineType(compileWarnLines[0]) == "warning"
 	printCompileSections(fixedPedDiags, pedDiags, spellDiags, compileWarnLines, hasWarnLines, compileFix)
 

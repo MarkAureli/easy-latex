@@ -71,6 +71,10 @@ Use `-o` / `--open` to open the PDF immediately after compilation:
 $ el compile -o
 ```
 
+#### Editor integration (VimTeX)
+
+Pedantic and spelling findings are also appended to `.el/<name>.log` as `file:line: [el] message` entries, so VimTeX's error list (`:VimtexErrors`) shows them next to the usual LaTeX errors and warnings, jumping to the right file and line.
+
 #### Bib processing
 
 `el` keeps a single **global bib cache** for the entire user account — every project on your machine shares the same validation store. The cache lives at:
