@@ -46,6 +46,7 @@ func parseOrphan(path string) (starts map[int]orphanStart, ends map[int]orphanEn
 	starts = make(map[int]orphanStart)
 	ends = make(map[int]orphanEnd)
 	currentPage := 0
+	lastPage := make(map[int]int)
 
 	sc := bufio.NewScanner(f)
 	buf := make([]byte, 0, 64*1024)
@@ -75,6 +76,10 @@ func parseOrphan(path string) (starts map[int]orphanStart, ends map[int]orphanEn
 				continue
 			}
 			starts[id] = orphanStart{YPos: y, Line: lineNo, Page: currentPage}
+		case "L":
+			if id, e1 := strconv.Atoi(fields[1]); e1 == nil {
+				lastPage[id] = currentPage
+			}
 		case "E":
 			if len(fields) < 3 {
 				continue
@@ -85,6 +90,14 @@ func parseOrphan(path string) (starts map[int]orphanStart, ends map[int]orphanEn
 				continue
 			}
 			ends[id] = orphanEnd{LineCount: lc, Page: currentPage}
+		}
+	}
+	// The E whatsit may be carried onto the next page; the L whatsit inside the
+	// last line gives the true end page.
+	for id, e := range ends {
+		if p, ok := lastPage[id]; ok {
+			e.Page = p
+			ends[id] = e
 		}
 	}
 	return starts, ends, sc.Err()

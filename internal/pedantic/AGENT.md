@@ -70,6 +70,7 @@ Uses `el-orphan.sty` (embedded, auto-injected via `\RequirePackage`):
 - End hook installed by wrapping `\par` at `\AtBeginDocument`: `\protected\def\par{\el@orig@par\el@orphan@end}`. The kernel `para/end` hook fires too early — `\prevgraf` is still 0 in horizontal mode. Wrapping `\par` places the hook in vertical mode after `\par` finalises, where `\prevgraf` is the just-built paragraph's line count. Records `E <id> <prevgraf>`.
 - `\par` is called many times beyond user paragraph ends (section headings, environment exits, repeated `\par`); `\ifel@orphan@inpar` flag ensures exactly one E per matching S.
 - Page boundary records via `\AddToHook{shipout/before}`: `\immediate\write` of `P <pageno>` lands in the file before that page's deferred S/E writes.
+- `L <id>` written from `para/end` hook (horizontal mode, so the whatsit sits inside the last line and ships on its page). The vertical-mode E whatsit can be carried onto the next page by the page builder (false orphan), so Go uses L's page as end page when present.
 - Requires LaTeX 2021-06+ (for `\AddToHook`).
 - Go check pairs S/E by id, assigns S.page / E.page from the most recent P record seen in file order, flags when `S.page != E.page AND prevgraf == 2`. Longer-paragraph orphans need per-line position data, which pdfTeX doesn't expose; flagged only the unambiguous case.
 

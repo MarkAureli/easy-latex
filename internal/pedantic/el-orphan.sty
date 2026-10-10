@@ -4,7 +4,8 @@
 %% Output format (records in <jobname>.orphan):
 %%   P <pageno>                       page boundary marker (immediate, at shipout)
 %%   S <id> <y-sp> <source-line>      paragraph start (deferred; y from \pdflastypos)
-%%   E <id> <y-sp> <linecount>        paragraph end with \prevgraf (deferred)
+%%   E <id> <linecount>               paragraph end with \prevgraf (deferred; page unreliable)
+%%   L <id>                           whatsit in paragraph's last line (deferred; gives end page)
 %%
 %% A paragraph whose S and E records span a P boundary AND whose linecount == 2
 %% is a definite orphan: line 1 is alone on the start page.
@@ -54,6 +55,16 @@
   \fi
 }
 
+%% Last-line marker — runs in horizontal mode (para/end hook), so the write
+%% whatsit sits inside the paragraph's last line and ships out on that line's
+%% page.  The E whatsit (vertical mode, after the last line) can be carried
+%% onto the next page by the page builder, so E's page is not reliable.
+\protected\def\el@orphan@last{%
+  \ifel@orphan@inpar
+    \write\elorphanfile{L \el@orphan@pendingpid}%
+  \fi
+}
+
 %% Hook installation.  Start hook goes through the kernel para/begin hook
 %% (LaTeX 2021+) — \everypar would be unreliable here, since \@startsection
 %% and other commands clobber it without restoring our addition.  End hook
@@ -64,6 +75,7 @@
   \PackageError{el-orphan}{Requires LaTeX2e 2021-06 or newer (for \string\AddToHook)}\@ehc
 }{%
   \AddToHook{para/begin}{\el@orphan@start}%
+  \AddToHook{para/end}{\el@orphan@last}%
   \AddToHook{shipout/before}{%
     \immediate\write\elorphanfile{P \the\c@page}%
   }%

@@ -54,3 +54,24 @@ func TestOrphanLineNoFile(t *testing.T) {
 		t.Errorf("want nil, got %v", diags)
 	}
 }
+
+// E whatsit carried onto the next page must not count as a split when the L
+// marker inside the last line shows the paragraph ended on the start page.
+func TestOrphanLineLastLineMarkerWins(t *testing.T) {
+	dir := t.TempDir()
+	stem := "main"
+	if err := os.WriteFile(filepath.Join(dir, stem+".tex"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	content := "P 1\n" +
+		"S 1 5000000 10\n" +
+		"L 1\n" +
+		"P 2\n" +
+		"E 1 2\n"
+	if err := os.WriteFile(filepath.Join(dir, stem+".orphan"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if diags := checkOrphanLine(dir); len(diags) != 0 {
+		t.Fatalf("want 0 diags, got %+v", diags)
+	}
+}
