@@ -557,10 +557,13 @@ func runEngine(enginePath string, cfg *Config, injectStys []string, draft bool) 
 	}
 	args = append(args, input)
 	c := exec.Command(enginePath, args...)
+	// Avoid hard-wrapping log lines at 79 columns so warnings (and their
+	// "on input line N") stay on one line for editors parsing the log (VimTeX).
+	c.Env = append(os.Environ(), "max_print_line=1000")
 	if len(injectStys) > 0 {
 		// Add aux dir to TEXINPUTS so the engine finds the injected .sty files.
 		absAux, _ := filepath.Abs(auxDir)
-		c.Env = append(os.Environ(), "TEXINPUTS="+absAux+string(os.PathListSeparator))
+		c.Env = append(c.Env, "TEXINPUTS="+absAux+string(os.PathListSeparator))
 	}
 	output, runErr := c.CombinedOutput()
 	lines := filterLines(output)
