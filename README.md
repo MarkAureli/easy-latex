@@ -73,7 +73,7 @@ $ el compile -o
 
 #### Editor integration (VimTeX)
 
-Pedantic and spelling findings are also appended to `.el/<name>.log` as `file:line: [el] message` entries, so VimTeX's error list (`:VimtexErrors`) shows them next to the usual LaTeX errors and warnings, jumping to the right file and line.
+Pedantic and spelling findings are also appended to `.el/<name>.log` as `Package el Warning: file: [el] message on input line N.` entries, so VimTeX's error list (`:VimtexErrors`) shows them as warnings next to the usual LaTeX ones without marking the compilation as failed. VimTeX cannot attach a file to warnings, so the file name is in the message text.
 
 #### Bib processing
 

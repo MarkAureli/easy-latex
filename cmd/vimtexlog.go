@@ -9,9 +9,11 @@ import (
 )
 
 // appendDiagsToLog appends pedantic and spelling diagnostics to the engine log
-// in `file:line: message` form (like -file-line-error), so VimTeX's latexlog
-// parser lists them in :VimtexErrors with the correct source file. (Its
-// LaTeX Warning entries cannot carry a file; they fall back to the main file.)
+// as `Package el Warning: ... on input line N.` so VimTeX's latexlog parser
+// lists them in :VimtexErrors as warnings. (`file:line:` form would parse as an
+// error and make VimTeX report the compilation as failed.) The parser cannot
+// attach a file to warnings, so the file name is part of the message and the
+// entry's location falls back to the main file.
 func appendDiagsToLog(logPath string, ped, spell []pedantic.Diagnostic) error {
 	if len(ped)+len(spell) == 0 {
 		return nil
@@ -22,7 +24,7 @@ func appendDiagsToLog(logPath string, ped, spell []pedantic.Diagnostic) error {
 		for _, d := range diags {
 			line := max(d.Line, 1)
 			msg := strings.ReplaceAll(d.Message, "\n", " ")
-			fmt.Fprintf(&b, "%s:%d: [%s] %s\n\n", d.File, line, tag, msg)
+			fmt.Fprintf(&b, "Package el Warning: %s: [%s] %s on input line %d.\n\n", d.File, tag, msg, line)
 		}
 	}
 	emit("el", ped)

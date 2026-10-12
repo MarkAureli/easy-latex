@@ -20,7 +20,7 @@ func TestAppendDiagsToLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(p)
-	for _, want := range []string{"orig\n", "a.tex:3: [el] bad (col 2)\n", "a.tex:4: [el:spell] misspelled\n"} {
+	for _, want := range []string{"orig\n", "Package el Warning: a.tex: [el] bad (col 2) on input line 3.\n", "Package el Warning: a.tex: [el:spell] misspelled on input line 4.\n"} {
 		if !strings.Contains(string(got), want) {
 			t.Errorf("missing %q in %q", want, got)
 		}
