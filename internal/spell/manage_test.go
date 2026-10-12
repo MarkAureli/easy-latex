@@ -57,11 +57,11 @@ func TestValidateToken(t *testing.T) {
 func TestAddTokens_Dict_DedupAndSort(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "lang.txt")
-	n, err := AddTokens(p, []string{"foo", "bar", "foo"}, false)
+	n, err := AddTokens(p, []string{"foo", "bar", "foo"})
 	if err != nil || n != 2 {
 		t.Fatalf("first add: n=%d err=%v", n, err)
 	}
-	n2, _ := AddTokens(p, []string{"baz", "bar"}, false)
+	n2, _ := AddTokens(p, []string{"baz", "bar"})
 	if n2 != 1 {
 		t.Errorf("redundant add: n=%d want 1", n2)
 	}
@@ -75,13 +75,13 @@ func TestAddTokens_Dict_DedupAndSort(t *testing.T) {
 func TestRemoveTokens_Dict(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "lang.txt")
-	_, _ = AddTokens(p, []string{"foo", "bar", "baz"}, false)
-	rm, neg, err := RemoveTokens(p, []string{"bar", "missing"}, false)
+	_, _ = AddTokens(p, []string{"foo", "bar", "baz"})
+	rm, err := RemoveTokens(p, []string{"bar", "missing"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rm != 1 || neg != 0 {
-		t.Errorf("rm=%d neg=%d", rm, neg)
+	if rm != 1 {
+		t.Errorf("rm=%d want 1", rm)
 	}
 	got, _ := ListTokens(p)
 	if !slices.Equal(got, []string{"baz", "foo"}) {
@@ -89,67 +89,14 @@ func TestRemoveTokens_Dict(t *testing.T) {
 	}
 }
 
-func TestAddTokens_Ignore_DefaultCovered(t *testing.T) {
+func TestCompletionCandidates(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "ig.txt")
-	// `cite` is in DefaultIgnoreMacros — adding it should be a no-op (no
-	// redundant line written).
-	n, _ := AddTokens(p, []string{"cite"}, true)
-	if n != 0 {
-		t.Errorf("default add expected 0, got %d", n)
-	}
-	got, _ := ListTokens(p)
-	if len(got) != 0 {
-		t.Errorf("file should stay empty, got %v", got)
-	}
-}
-
-func TestRemoveTokens_Ignore_NegatesDefault(t *testing.T) {
-	dir := t.TempDir()
-	p := filepath.Join(dir, "ig.txt")
-	rm, neg, _ := RemoveTokens(p, []string{"cite"}, true)
-	if rm != 0 || neg != 1 {
-		t.Errorf("rm=%d neg=%d want 0,1", rm, neg)
-	}
-	got, _ := ListTokens(p)
-	if !slices.Equal(got, []string{"!cite"}) {
-		t.Errorf("got %v want [!cite]", got)
-	}
-}
-
-func TestAddTokens_Ignore_DropsNegation(t *testing.T) {
-	dir := t.TempDir()
-	p := filepath.Join(dir, "ig.txt")
-	// Pre-populate with negation.
-	if err := os.WriteFile(p, []byte("!cite\n"), 0644); err != nil {
+	if err := os.WriteFile(p, []byte("mycustom\nother\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	n, _ := AddTokens(p, []string{"cite"}, true)
-	if n != 1 {
-		t.Errorf("re-add expected 1 op, got %d", n)
-	}
-	got, _ := ListTokens(p)
-	if len(got) != 0 {
-		t.Errorf("file should be empty after un-negate, got %v", got)
-	}
-}
-
-func TestCompletionCandidates_Ignore(t *testing.T) {
-	dir := t.TempDir()
-	p := filepath.Join(dir, "ig.txt")
-	if err := os.WriteFile(p, []byte("mycustom\n!cite\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	got := CompletionCandidates(p, true)
-	// Must contain user entry, default-but-negated as completable, and other
-	// defaults.
-	if !slices.Contains(got, "mycustom") {
-		t.Error("missing user entry")
-	}
-	if !slices.Contains(got, "cite") {
-		t.Error("missing negated default (should still be completable)")
-	}
-	if !slices.Contains(got, "ref") {
-		t.Error("missing other default")
+	got := CompletionCandidates(p)
+	if !slices.Equal(got, []string{"mycustom", "other"}) {
+		t.Errorf("got %v", got)
 	}
 }

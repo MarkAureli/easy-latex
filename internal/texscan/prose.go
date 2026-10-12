@@ -103,22 +103,77 @@ var proseVerbatimEnvs = map[string]bool{
 	"loglogaxis":   true,
 }
 
-// twoArgIgnoreMacros lists macros in ignoreMacros whose first *two*
-// brace-balanced arguments are skipped instead of just the first. Currently
-// only `\DeclareMathOperator`/`\DeclareMathOperator*` (readMacroName strips
-// the star, so both map to the same name): the first arg is the new command
-// name, the second is the operator's rendered text, neither of which is prose.
-var twoArgIgnoreMacros = map[string]bool{
-	"DeclareMathOperator": true,
+// DefaultTextMacros is the built-in whitelist of macros whose brace arguments
+// carry prose. The value is the number of leading brace arguments to skip
+// (e.g. `\textcolor{red}{text}` skips the colour name, keeps `text`); `[opt]`
+// arguments are always skipped. Every macro NOT in the effective whitelist has
+// all of its `[...]` / `{...}` arguments skipped (see ProseRuns).
+var DefaultTextMacros = map[string]int{
+	// Font / emphasis
+	"emph": 0, "textbf": 0, "textit": 0, "textrm": 0, "textsf": 0, "texttt": 0,
+	"textsc": 0, "textsl": 0, "textup": 0, "textmd": 0, "textnormal": 0,
+	"textsuperscript": 0, "textsubscript": 0, "underline": 0, "uline": 0,
+	"sout": 0, "hl": 0, "highlight": 0, "enquote": 0,
+	// Boxes
+	"mbox": 0, "hbox": 0, "fbox": 0, "makebox": 0, "framebox": 0,
+	"parbox": 1, "raisebox": 1, "scalebox": 1, "rotatebox": 1,
+	"colorbox": 1, "fcolorbox": 2, "resizebox": 2,
+	// Colour / links / language
+	"textcolor": 1, "href": 1, "hyperlink": 1, "hypertarget": 1,
+	"foreignlanguage": 1,
+	// Structure
+	"part": 0, "chapter": 0, "section": 0, "subsection": 0, "subsubsection": 0,
+	"paragraph": 0, "subparagraph": 0, "caption": 0, "captionof": 1,
+	"footnote": 0, "footnotetext": 0, "marginpar": 0, "item": 0, "bibitem": 1,
+	// Front matter
+	"title": 0, "subtitle": 0, "author": 0, "date": 0, "thanks": 0,
+	"institute": 0, "affiliation": 0, "keywords": 0,
+	// Tables
+	"multicolumn": 2, "multirow": 2,
+}
+
+// defMacros introduce a new command name (`\newcommand\foo`, `\def\foo#1`).
+// The unbraced name that follows is part of the skipped definition, so it must
+// not be scanned as a macro of its own (it is whitelisted by DefinedMacros,
+// which would otherwise expose the body as prose). The bool is true for the
+// TeX primitives that take `#1#2…` parameter tokens before the body.
+var defMacros = map[string]bool{
+	"newcommand": false, "renewcommand": false, "providecommand": false,
+	"DeclareRobustCommand": false, "NewDocumentCommand": false,
+	"RenewDocumentCommand": false, "ProvideDocumentCommand": false,
+	"DeclareDocumentCommand": false,
+	"def": true, "gdef": true, "edef": true, "xdef": true,
+}
+
+var definedMacroRe = regexp.MustCompile(`\\(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def)\*?\s*\{?\s*\\([A-Za-z@]+)`)
+
+// DefinedMacros returns the names of commands defined in content via
+// `\newcommand`, `\renewcommand`, `\providecommand`, `\DeclareRobustCommand`,
+// `\NewDocumentCommand` (and friends) or `\def`-style primitives. Comments are
+// stripped first. Order of first appearance, duplicates removed.
+func DefinedMacros(content string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, l := range strings.Split(content, "\n") {
+		for _, m := range definedMacroRe.FindAllStringSubmatch(StripComment(l), -1) {
+			if !seen[m[1]] {
+				seen[m[1]] = true
+				out = append(out, m[1])
+			}
+		}
+	}
+	return out
 }
 
 // ProseRuns extracts prose text from tex content. Returns one ProseRun per
 // source line that contains at least one prose byte. Skipped (blanked):
 // comments (via StripComment), math regions ($, $$, \(, \[, math envs),
-// verbatim envs, macro names (`\foo`, `\foo*`), braces/brackets, and the first
-// brace-balanced argument of any macro in ignoreMacros (plus its leading
-// optional `[...]` args) — or the first two arguments for twoArgIgnoreMacros.
-func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
+// verbatim envs, macro names (`\foo`, `\foo*`), braces/brackets, and the
+// arguments of every macro not in textMacros: all consecutive `[...]` / `{...}`
+// groups (at any position) are skipped. Macros in textMacros keep their brace
+// arguments as prose, except the first textMacros[name] ones; their `[opt]`
+// arguments are skipped.
+func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 	rawLines := strings.Split(content, "\n")
 	lines := make([]string, len(rawLines))
 	for i, l := range rawLines {
@@ -140,15 +195,22 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 	st := stText
 	envName := ""            // for stMathEnv / stVerbEnv
 	braceDepth := 0          // for stIgnoreArg
-	awaitingArg := false     // ignored macro consumed; expecting `[opt]*` then `{`
+	awaitingArg := false     // arg-skipping macro consumed; expecting `[opt]*` then `{`
 	awaitOptDepth := 0       // bracket depth while consuming `[opt]` args
 	remainingIgnoreArgs := 0 // further {...} args to skip after the current one
+	skipAllArgs := false     // non-text macro: keep skipping groups until a non-group token
+	defName := false         // definition macro consumed; unbraced `\name` may follow
+	defParams := false       // ...and `#1#2` parameter tokens after that name
 
 	out := make([]ProseRun, 0, len(lines))
 
 	for li, line := range lines {
 		buf := []byte(line)
 		blank := func(i int) { buf[i] = ' ' }
+		if strings.TrimSpace(line) == "" {
+			// Paragraph break: pending argument skips cannot span it.
+			awaitingArg, skipAllArgs, defName = false, false, false
+		}
 
 		i := 0
 		for i < len(line) {
@@ -161,6 +223,27 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 					if c == ' ' || c == '\t' {
 						i++
 						continue
+					}
+					if defName {
+						defName = false
+						if c == '\\' {
+							// `\newcommand\foo` / `\def\foo#1`: the name belongs to
+							// the skipped definition, not to the text.
+							_, n := readMacroName(line, i)
+							if n == 0 {
+								n = 1
+							}
+							for j := range n {
+								blank(i + j)
+							}
+							i += n
+							for defParams && i+1 < len(line) && line[i] == '#' && line[i+1] >= '0' && line[i+1] <= '9' {
+								blank(i)
+								blank(i + 1)
+								i += 2
+							}
+							continue
+						}
 					}
 					if c == '[' {
 						blank(i)
@@ -179,6 +262,7 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 						if awaitOptDepth > 0 {
 							// Unclosed `[`; abandon arg-skip.
 							awaitingArg = false
+							skipAllArgs = false
 						}
 						continue
 					}
@@ -190,8 +274,9 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 						i++
 						continue
 					}
-					// Anything else: macro had no `{` arg; resume normal text.
+					// Anything else: no further `{` arg; resume normal text.
 					awaitingArg = false
+					skipAllArgs = false
 					continue
 				}
 
@@ -269,12 +354,17 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 						i += n
 						// Blank any immediately-following `[...]` option args.
 						i = blankOptArgs(line, buf, i)
-						if ignoreMacros[name] {
+						skip, isText := textMacros[name]
+						switch {
+						case !isText:
 							awaitingArg = true
+							skipAllArgs = true
 							remainingIgnoreArgs = 0
-							if twoArgIgnoreMacros[name] {
-								remainingIgnoreArgs = 1
-							}
+							defParams, defName = defMacros[name]
+						case skip > 0:
+							awaitingArg = true
+							skipAllArgs = false
+							remainingIgnoreArgs = skip - 1
 						}
 						continue
 					}
@@ -407,12 +497,12 @@ func ProseRuns(file, content string, ignoreMacros map[string]bool) []ProseRun {
 				case '}':
 					braceDepth--
 					if braceDepth == 0 {
+						st = stText
 						if remainingIgnoreArgs > 0 {
 							remainingIgnoreArgs--
-							st = stText
 							awaitingArg = true
-						} else {
-							st = stText
+						} else if skipAllArgs {
+							awaitingArg = true
 						}
 						i++
 						continue

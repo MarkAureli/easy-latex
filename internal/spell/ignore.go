@@ -4,56 +4,38 @@ import (
 	"bufio"
 	"os"
 	"strings"
+
+	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
 
-// DefaultIgnoreMacros lists tex macros whose first brace argument should be
-// skipped during spell-checking (citations, refs, file paths, package names,
-// URLs, image paths, …). Always-on; extensible via global/local ignore.txt
-// (additive). To remove an entry, prefix with `!` in an ignore.txt line.
-//
-// DeclareMathOperator (and its starred variant) is special-cased in
-// texscan.ProseRuns to skip its first *two* brace args (see
-// texscan.twoArgIgnoreMacros) — both the new command name and the operator's
-// rendered text are non-prose.
-var DefaultIgnoreMacros = []string{
-	// Citation
-	"cite", "citep", "citet", "citeauthor", "citeyear", "citeyearpar",
-	"parencite", "textcite", "autocite", "fullcite", "footcite", "smartcite",
-	"Cite", "Citep", "Citet", "Citeauthor", "Parencite", "Textcite", "Autocite",
-	// References / labels
-	"ref", "Ref", "eqref", "autoref", "Autoref",
-	"cref", "Cref", "crefrange", "Crefrange",
-	"labelcref", "pageref", "nameref", "vref", "Vref",
-	"vpageref", "autopageref", "hyperref", "label",
-	// URLs / files / packages
-	"url", "href", "nolinkurl", "urlstyle",
-	"input", "include", "includeonly", "InputIfFileExists", "IfFileExists",
-	"bibliography", "addbibresource", "bibliographystyle",
-	"usepackage", "RequirePackage", "documentclass", "LoadClass",
-	"PassOptionsToClass", "PassOptionsToPackage", "WarningFilter",
-	"ProvidesPackage", "ProvidesClass", "ProvidesFile",
-	"includegraphics", "graphicspath",
-	// Counters / commands often arg-only
-	"setcounter", "addtocounter", "stepcounter", "refstepcounter",
-	"newcounter", "newcommand", "renewcommand", "providecommand",
-	"DeclareMathOperator", "newenvironment", "renewenvironment",
-	"NewDocumentCommand", "RenewDocumentCommand", "ProvideDocumentCommand",
-	"NewDocumentEnvironment", "RenewDocumentEnvironment",
-}
-
-// LoadIgnoreMacros builds the active ignore set: code-baked defaults, plus
-// additive entries from the given files (later files apply on top of earlier),
-// minus entries prefixed with `!` in any of those files. Files that do not
-// exist are skipped. Lines starting with `#` and blank lines are ignored.
+// LoadIgnoreMacros returns the set of macro names listed in the given ignore
+// files (global first, then local). A listed macro is removed from the text
+// whitelist (see TextMacros), so all of its arguments are skipped. Files that
+// do not exist are skipped. Blank lines, `#` comments and legacy `!negation`
+// lines are ignored.
 func LoadIgnoreMacros(files ...string) map[string]bool {
-	set := make(map[string]bool, len(DefaultIgnoreMacros)*2)
-	for _, m := range DefaultIgnoreMacros {
-		set[m] = true
-	}
+	set := map[string]bool{}
 	for _, path := range files {
 		applyIgnoreFile(set, path)
 	}
 	return set
+}
+
+// TextMacros builds the effective text-macro whitelist for ProseRuns:
+// texscan.DefaultTextMacros plus every macro defined in the project (value 0:
+// all brace args are prose), minus the macros in ignore.
+func TextMacros(defined []string, ignore map[string]bool) map[string]int {
+	out := make(map[string]int, len(texscan.DefaultTextMacros)+len(defined))
+	for _, m := range defined {
+		out[m] = 0
+	}
+	for m, skip := range texscan.DefaultTextMacros {
+		out[m] = skip
+	}
+	for m := range ignore {
+		delete(out, m)
+	}
+	return out
 }
 
 func applyIgnoreFile(set map[string]bool, path string) {
@@ -68,8 +50,7 @@ func applyIgnoreFile(set map[string]bool, path string) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if rest, ok := strings.CutPrefix(line, "!"); ok {
-			delete(set, rest)
+		if strings.HasPrefix(line, "!") {
 			continue
 		}
 		set[line] = true

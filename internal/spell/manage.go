@@ -48,11 +48,9 @@ func ValidateToken(tok string) error {
 
 // AddTokens appends tokens to path, then rewrites the file as sorted-unique.
 // Returns the number of tokens that were not previously present (i.e. truly
-// added). For ignore files, adding a token that is already covered by a
-// `DefaultIgnoreMacros` entry or already present results in no-op for that
-// token; if the file contains a `!token` negation line, that line is dropped
-// (un-negate) instead of appending.
-func AddTokens(path string, tokens []string, isIgnore bool) (int, error) {
+// added). Legacy `!token` negation lines left over from the old default-ignore
+// scheme are kept untouched.
+func AddTokens(path string, tokens []string) (int, error) {
 	for _, t := range tokens {
 		if err := ValidateToken(t); err != nil {
 			return 0, err
@@ -69,28 +67,8 @@ func AddTokens(path string, tokens []string, isIgnore bool) (int, error) {
 	for _, l := range lines {
 		set[l] = true
 	}
-	defaults := map[string]bool{}
-	if isIgnore {
-		for _, m := range DefaultIgnoreMacros {
-			defaults[m] = true
-		}
-	}
 	added := 0
 	for _, t := range tokens {
-		if isIgnore {
-			neg := "!" + t
-			if set[neg] {
-				delete(set, neg)
-				added++
-				continue
-			}
-			if defaults[t] || set[t] {
-				continue
-			}
-			set[t] = true
-			added++
-			continue
-		}
 		if set[t] {
 			continue
 		}
@@ -100,50 +78,33 @@ func AddTokens(path string, tokens []string, isIgnore bool) (int, error) {
 	return added, writeLinesSorted(path, set)
 }
 
-// RemoveTokens removes tokens from path. For dict files: deletes any matching
-// line. For ignore files: if the token is a `DefaultIgnoreMacros` entry and not
-// already negated, writes `!token` (negate default); if a user-added line
-// matches, deletes it; both may apply (user added a duplicate of a default).
-// Returns (removedFromFile, negatedDefaults).
-func RemoveTokens(path string, tokens []string, isIgnore bool) (int, int, error) {
+// RemoveTokens deletes any line of path matching a token. Returns the number
+// of tokens that were present and removed.
+func RemoveTokens(path string, tokens []string) (int, error) {
 	for _, t := range tokens {
 		if err := ValidateToken(t); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 	}
 	lines, err := readLinesIfExists(path)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 	set := map[string]bool{}
 	for _, l := range lines {
 		set[l] = true
 	}
-	defaults := map[string]bool{}
-	if isIgnore {
-		for _, m := range DefaultIgnoreMacros {
-			defaults[m] = true
-		}
-	}
-	removed, negated := 0, 0
+	removed := 0
 	for _, t := range tokens {
-		userLine := set[t]
-		if userLine {
+		if set[t] {
 			delete(set, t)
 			removed++
 		}
-		if isIgnore && defaults[t] {
-			neg := "!" + t
-			if !set[neg] {
-				set[neg] = true
-				negated++
-			}
-		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return removed, negated, err
+		return removed, err
 	}
-	return removed, negated, writeLinesSorted(path, set)
+	return removed, writeLinesSorted(path, set)
 }
 
 // ListTokens returns the sorted-unique non-comment, non-blank lines of path.
@@ -158,20 +119,13 @@ func ListTokens(path string) ([]string, error) {
 	return out, nil
 }
 
-// CompletionCandidates returns sort-unique entries suitable for shell
-// completion of `el spell remove`. For ignore targets, the union of file
-// entries and DefaultIgnoreMacros is returned (so users can negate defaults).
-func CompletionCandidates(path string, isIgnore bool) []string {
+// CompletionCandidates returns the sorted-unique lines of path, suitable for
+// shell completion of `el spell remove`.
+func CompletionCandidates(path string) []string {
 	lines, _ := readLinesIfExists(path)
 	set := map[string]bool{}
 	for _, l := range lines {
-		// Strip leading `!` so "!cite" surfaces as completable "cite".
-		set[strings.TrimPrefix(l, "!")] = true
-	}
-	if isIgnore {
-		for _, m := range DefaultIgnoreMacros {
-			set[m] = true
-		}
+		set[l] = true
 	}
 	out := make([]string, 0, len(set))
 	for k := range set {

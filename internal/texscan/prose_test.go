@@ -1,6 +1,7 @@
 package texscan
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -8,7 +9,7 @@ import (
 func TestProseRuns_KeepsTextDropsCommentsMacrosBraces(t *testing.T) {
 	src := `Hello world. % a comment
 This \textbf{bold} text.`
-	runs := ProseRuns("f.tex", src, nil)
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
 	if len(runs) != 2 {
 		t.Fatalf("want 2 runs, got %d: %#v", len(runs), runs)
 	}
@@ -32,7 +33,7 @@ This \textbf{bold} text.`
 
 func TestProseRuns_BlanksMath(t *testing.T) {
 	src := `Let $x = y$ be the root.`
-	runs := ProseRuns("f.tex", src, nil)
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
 	if len(runs) != 1 {
 		t.Fatalf("want 1 run, got %d", len(runs))
 	}
@@ -50,7 +51,7 @@ func TestProseRuns_BlanksDisplayMathEnv(t *testing.T) {
   E = mc^2
 \end{equation}
 After.`
-	runs := ProseRuns("f.tex", src, nil)
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
 	// Lines 1 and 5 carry prose; lines 2-4 are math env (no prose bytes).
 	var prose []string
 	for _, r := range runs {
@@ -63,56 +64,106 @@ After.`
 	}
 }
 
-func TestProseRuns_IgnoreMacroArg(t *testing.T) {
+func TestProseRuns_NonTextMacroSkipsArgs(t *testing.T) {
 	src := `See \cite{Smith2020} for details.`
-	ign := map[string]bool{"cite": true}
-	runs := ProseRuns("f.tex", src, ign)
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
 	if len(runs) != 1 {
 		t.Fatalf("want 1 run, got %d", len(runs))
 	}
 	if strings.Contains(runs[0].Text, "Smith2020") {
-		t.Errorf("ignored macro arg leaked: %q", runs[0].Text)
+		t.Errorf("non-text macro arg leaked: %q", runs[0].Text)
 	}
 	if !strings.Contains(runs[0].Text, "details") {
 		t.Errorf("trailing prose dropped: %q", runs[0].Text)
 	}
 }
 
-func TestProseRuns_IgnoreMacroArgMultiline(t *testing.T) {
-	src := `Pre.
-\bibliography{
-  refs1,
-  refs2
+func TestProseRuns_NonTextMacroSkipsArgsAtAnyPosition(t *testing.T) {
+	src := `Pre \foo[opt]{one}{two} {three}
+\bar{
+  four
 }
-Post.`
-	ign := map[string]bool{"bibliography": true}
-	runs := ProseRuns("f.tex", src, ign)
+{five} post.`
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
+	var all string
 	for _, r := range runs {
-		if strings.Contains(r.Text, "refs1") || strings.Contains(r.Text, "refs2") {
-			t.Errorf("multiline arg leaked on line %d: %q", r.Line, r.Text)
+		all += r.Text + "\n"
+	}
+	for _, w := range []string{"opt", "one", "two", "three", "four", "five"} {
+		if strings.Contains(all, w) {
+			t.Errorf("arg %q leaked: %q", w, all)
+		}
+	}
+	if !strings.Contains(all, "Pre") || !strings.Contains(all, "post") {
+		t.Errorf("prose dropped: %q", all)
+	}
+}
+
+func TestProseRuns_TextMacroKeepsArgs(t *testing.T) {
+	src := `A \emph{keep} and \textcolor{red}{shown} and \multicolumn{2}{c}{cell}.`
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
+	if len(runs) != 1 {
+		t.Fatalf("want 1 run, got %d", len(runs))
+	}
+	got := runs[0].Text
+	for _, w := range []string{"keep", "shown", "cell"} {
+		if !strings.Contains(got, w) {
+			t.Errorf("text arg %q dropped: %q", w, got)
+		}
+	}
+	for _, w := range []string{"red", "2", "c}"} {
+		if strings.Contains(got, w) {
+			t.Errorf("skipped arg %q leaked: %q", w, got)
 		}
 	}
 }
 
-func TestProseRuns_DeclareMathOperatorTwoArgs(t *testing.T) {
-	src := `\DeclareMathOperator{\esssup}{esssup}
-\DeclareMathOperator*{\argmax}{arg\,max}
-Text follows.`
-	ign := map[string]bool{"DeclareMathOperator": true}
-	runs := ProseRuns("f.tex", src, ign)
+func TestProseRuns_ArgSkipStopsAtParagraphBreak(t *testing.T) {
+	src := "\\maketitle\n\nFresh {paragraph} text."
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
+	if len(runs) != 1 || !strings.Contains(runs[0].Text, "paragraph") {
+		t.Errorf("paragraph after blank line was skipped: %#v", runs)
+	}
+}
+
+func TestProseRuns_CustomMacroWhitelisted(t *testing.T) {
+	src := `\newcommand\todo[1]{\textbf{TODO: #1}}
+\newcommand{\note}[1]{note}
+\def\gap#1#2{body}
+Use \todo{fix tihs} here.`
+	text := map[string]int{"todo": 0}
+	for _, m := range DefinedMacros(src) {
+		text[m] = 0
+	}
+	runs := ProseRuns("f.tex", src, text)
+	var all string
 	for _, r := range runs {
-		if strings.Contains(r.Text, "esssup") || strings.Contains(r.Text, "argmax") || strings.Contains(r.Text, "max") {
-			t.Errorf("DeclareMathOperator arg leaked on line %d: %q", r.Line, r.Text)
+		all += r.Text + "\n"
+	}
+	if !strings.Contains(all, "fix tihs") {
+		t.Errorf("custom macro arg dropped: %q", all)
+	}
+	for _, w := range []string{"TODO", "note", "body"} {
+		if strings.Contains(all, w) {
+			t.Errorf("definition body %q leaked: %q", w, all)
 		}
 	}
-	found := false
-	for _, r := range runs {
-		if strings.Contains(r.Text, "Text follows") {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("trailing prose dropped: %#v", runs)
+}
+
+func TestDefinedMacros(t *testing.T) {
+	src := `\newcommand{\a}{x}
+\renewcommand*\b[1]{x}
+\providecommand{ \c }{x}
+\NewDocumentCommand\d{m}{x}
+\DeclareRobustCommand{\e}{x}
+\def\f#1{x} \gdef\g{x}
+% \newcommand{\commented}{x}
+\newcommand{\a}{again}
+\default \newenvironment{env}{}{}`
+	got := DefinedMacros(src)
+	want := []string{"a", "b", "c", "d", "e", "f", "g"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v want %v", got, want)
 	}
 }
 
@@ -122,7 +173,7 @@ func TestProseRuns_VerbatimEnv(t *testing.T) {
 recieve teh
 \end{verbatim}
 Done.`
-	runs := ProseRuns("f.tex", src, nil)
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
 	for _, r := range runs {
 		if strings.Contains(r.Text, "recieve") || strings.Contains(r.Text, "teh") {
 			t.Errorf("verbatim leaked on line %d: %q", r.Line, r.Text)
@@ -132,7 +183,7 @@ Done.`
 
 func TestProseRuns_AtSignInMacroName(t *testing.T) {
 	src := `\@oddfoot{stuff} text \foo@bar baz`
-	runs := ProseRuns("f.tex", src, nil)
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
 	if len(runs) != 1 {
 		t.Fatalf("want 1 run")
 	}
@@ -161,7 +212,7 @@ func TestProseRuns_BlanksLengthLiterals(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			runs := ProseRuns("f.tex", tc.src, nil)
+			runs := ProseRuns("f.tex", tc.src, DefaultTextMacros)
 			if len(runs) != 1 {
 				t.Fatalf("want 1 run")
 			}
@@ -175,7 +226,7 @@ func TestProseRuns_BlanksLengthLiterals(t *testing.T) {
 func TestProseRuns_PreservesNonLengthIdentifiers(t *testing.T) {
 	// "5cmore" must NOT be blanked; only the boundary-terminated form is a length.
 	src := `keep 5cmore please`
-	runs := ProseRuns("f.tex", src, nil)
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
 	if len(runs) != 1 || !strings.Contains(runs[0].Text, "5cmore") {
 		t.Errorf("over-blanked: %q", runs[0].Text)
 	}
@@ -194,7 +245,7 @@ func TestProseRuns_OrdinalSuffixesAfterMath(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			runs := ProseRuns("f.tex", tc.src, nil)
+			runs := ProseRuns("f.tex", tc.src, DefaultTextMacros)
 			for _, r := range runs {
 				for w := range strings.FieldsSeq(r.Text) {
 					if w == tc.leak {
@@ -210,7 +261,7 @@ func TestProseRuns_PreservesNonOrdinalThWords(t *testing.T) {
 	// Words that contain `th` but aren't ordinal suffixes after math must
 	// pass through.
 	src := `the path has width and birth dates`
-	runs := ProseRuns("f.tex", src, nil)
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
 	if len(runs) != 1 {
 		t.Fatalf("want 1 run")
 	}
@@ -223,7 +274,7 @@ func TestProseRuns_PreservesNonOrdinalThWords(t *testing.T) {
 
 func TestProseRuns_LineLengthPreserved(t *testing.T) {
 	src := `Hello \emph{world} here.`
-	runs := ProseRuns("f.tex", src, nil)
+	runs := ProseRuns("f.tex", src, DefaultTextMacros)
 	if len(runs) != 1 {
 		t.Fatalf("want 1 run")
 	}

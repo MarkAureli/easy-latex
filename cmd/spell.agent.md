@@ -1,6 +1,6 @@
 # el spell (`spell.go`)
 
-Manage spell-check dictionaries and the macro-arg ignore list. Subcommands
+Manage spell-check dictionaries and the macro ignore list (macros removed from the text whitelist). Subcommands
 write/read flat token files; `cmd/root.go:runSpellCheck` consumes them at
 compile/check time via `internal/spell`.
 
@@ -35,11 +35,9 @@ unset.
   User comments (`#`) and blank lines are NOT preserved.
 - **Add to dict** — appends new tokens; duplicates are no-ops.
 - **Remove from dict** — drops matching lines; missing tokens are no-ops.
-- **Add to ignore** — for a token already covered by `DefaultIgnoreMacros` (or
-  already present in the file) → no-op. For a token whose negation `!token` is
-  in the file → the negation is dropped (un-negate). Otherwise → append.
-- **Remove from ignore** — drops a matching user-added line if present, AND
-  writes `!token` to negate any matching default. Both may apply.
+- **Ignore file** — plain token list, same add/remove semantics as dicts. A
+  listed macro is removed from the text whitelist (`spell.TextMacros`), so all
+  its args are skipped. Legacy `!token` lines are ignored by the loader.
 - Writes auto-create parent directories.
 
 ## Flow
@@ -52,8 +50,7 @@ unset.
 
 ## Auto-completion
 
-`spellRemoveCompletion` uses `spell.CompletionCandidates(path, isIgnore)`:
-file lines (with `!` prefix stripped) ∪ `DefaultIgnoreMacros` (when `isIgnore`).
+`spellRemoveCompletion` uses `spell.CompletionCandidates(path)`: the file's lines.
 Tokens already in `args` are filtered out so a second TAB doesn't repeat.
 
 `spellAddCompletion` reads the per-project misspellings cache via

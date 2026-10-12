@@ -179,10 +179,17 @@ func (s *Session) Check(files map[string][]string) []Diagnostic {
 	}
 	sort.Strings(paths)
 
+	contents := make(map[string]string, len(paths))
+	var defined []string
+	for _, path := range paths {
+		contents[path] = NormalizeAccents(strings.Join(files[path], "\n"))
+		defined = append(defined, texscan.DefinedMacros(contents[path])...)
+	}
+	textMacros := TextMacros(defined, s.ignoreSet)
+
 	var out []Diagnostic
 	for _, path := range paths {
-		content := NormalizeAccents(strings.Join(files[path], "\n"))
-		runs := texscan.ProseRuns(path, content, s.ignoreSet)
+		runs := texscan.ProseRuns(path, contents[path], textMacros)
 		for _, r := range runs {
 			misses, err := s.hs.CheckLine(r.Text)
 			if err != nil {

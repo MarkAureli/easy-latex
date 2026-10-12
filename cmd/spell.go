@@ -33,7 +33,7 @@ var spellAddCmd = &cobra.Command{
 
 var spellRemoveCmd = &cobra.Command{
 	Use:               "remove <token>...",
-	Short:             "Remove words from a dict, or un-ignore macros",
+	Short:             "Remove words from a dict, or macros from the ignore list",
 	Args:              cobra.MinimumNArgs(1),
 	RunE:              runSpellRemove,
 	ValidArgsFunction: spellRemoveCompletion,
@@ -50,7 +50,7 @@ var spellListCmd = &cobra.Command{
 func init() {
 	for _, c := range []*cobra.Command{spellAddCmd, spellRemoveCmd, spellListCmd} {
 		c.Flags().BoolVar(&spellGlobal, "global", false, "Operate on the global file (instead of project-local)")
-		c.Flags().BoolVar(&spellIgnore, "ignore", false, "Operate on the macro-arg ignore file")
+		c.Flags().BoolVar(&spellIgnore, "ignore", false, "Operate on the macro ignore file (macros whose arguments are not spell-checked)")
 		c.Flags().BoolVar(&spellCommon, "common", false, "Operate on the language-agnostic common dict")
 	}
 	spellCmd.AddCommand(spellAddCmd)
@@ -103,7 +103,7 @@ func runSpellAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	isIgnore, _ := cmd.Flags().GetBool("ignore")
-	added, err := spell.AddTokens(path, args, isIgnore)
+	added, err := spell.AddTokens(path, args)
 	if err != nil {
 		return err
 	}
@@ -121,16 +121,11 @@ func runSpellRemove(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	isIgnore, _ := cmd.Flags().GetBool("ignore")
-	removed, negated, err := spell.RemoveTokens(path, args, isIgnore)
+	removed, err := spell.RemoveTokens(path, args)
 	if err != nil {
 		return err
 	}
-	if isIgnore {
-		fmt.Printf("%s: removed %d, negated %d default(s)\n", path, removed, negated)
-	} else {
-		fmt.Printf("%s: removed %d (of %d)\n", path, removed, len(args))
-	}
+	fmt.Printf("%s: removed %d (of %d)\n", path, removed, len(args))
 	return nil
 }
 
@@ -173,8 +168,7 @@ func spellRemoveCompletion(cmd *cobra.Command, args []string, _ string) ([]strin
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	isIgnore, _ := cmd.Flags().GetBool("ignore")
-	cands := spell.CompletionCandidates(path, isIgnore)
+	cands := spell.CompletionCandidates(path)
 	out := cands[:0]
 	for _, c := range cands {
 		if !slices.Contains(args, c) {

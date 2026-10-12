@@ -300,27 +300,27 @@ $ el spell list --global                        # print global <lang>.txt sorted
 
 Files are sorted and deduplicated on every write; user comments are not preserved.
 
-##### Macro-arg ignore list
+##### Macro ignore list
 
-By default `el` skips spell-checking the first brace argument of common citation, reference, file-include, package, and graphics macros (`\cite`, `\ref`, `\label`, `\input`, `\usepackage`, `\includegraphics`, …). Extend or override the defaults via:
+Spell-checking is **whitelist-based**: only the arguments of known text commands (`\emph`, `\textbf`, `\section`, `\caption`, `\footnote`, `\item`, `\title`, `\author`, `\textcolor` (text arg only), `\href` (text arg only), …) are checked. The arguments of every other command — `\cite`, `\ref`, `\label`, `\input`, `\usepackage`, `\includegraphics`, `\newcommand`, `\rowcolor`, … — are skipped at any position, so new or unknown commands never cause false positives.
+
+Commands you define yourself (`\newcommand`, `\renewcommand`, `\providecommand`, `\DeclareRobustCommand`, `\NewDocumentCommand`, `\def`, …) are added to the whitelist automatically, so their arguments are checked. To exclude one (or a built-in text command), list it in:
 
 ```
 ${XDG_CONFIG_HOME:-~/.config}/easy-latex/spell/ignore.txt
 <repo>/.el/spell/ignore.txt
 ```
 
-One macro name per line (without the leading `\`). Comments (`#`) and blank lines are ignored. Prefix a name with `!` to remove a default — e.g. `!url` re-enables spell-check inside `\url{…}` arguments.
+One macro name per line (without the leading `\`). Comments (`#`) and blank lines are ignored.
 
 Manage via `el spell` with `--ignore`:
 
 ```
-$ el spell add --ignore usetikzlibrary           # extend ignore list
-$ el spell remove --ignore cite                  # negate a built-in default
+$ el spell add --ignore norm                     # skip arguments of \norm{…}
+$ el spell remove --ignore norm                  # check them again
 $ el spell list --ignore                         # show local ignore.txt
 $ el spell list --global --ignore                # show global ignore.txt
 ```
-
-`remove --ignore` automatically writes `!macro` for built-in defaults and drops the negation again on a subsequent `add --ignore`.
 
 #### Strict mode
 
