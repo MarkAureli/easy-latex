@@ -185,6 +185,9 @@ func TestDashes_Fixer_SkipCommandOptions(t *testing.T) {
 		{"\\sqrt[3]{x}", "\\sqrt[3]{x}"},
 		// rule still fires outside the option range
 		{"\\cite[p. 12-14]{key} pp. 10-20", "\\cite[p. 12-14]{key} pp. 10--20"},
+		// option range nested in a skipped macro argument must not panic
+		{"\\input{a-1[x]-2} pp. 10-20", "\\input{a-1[x]-2} pp. 10--20"},
+		{"\\foo[\\input{a-1}]{b} pp. 10-20", "\\foo[\\input{a-1}]{b} pp. 10--20"},
 	}
 	for _, c := range cases {
 		out, _ := fixDashes("t.tex", []string{c.in})

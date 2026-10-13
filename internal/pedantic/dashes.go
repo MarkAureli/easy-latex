@@ -288,6 +288,12 @@ func rewriteTextSpan(s string) string {
 	b.Grow(len(s))
 	last := 0
 	for _, sk := range skips {
+		if sk[1] <= last {
+			continue // fully nested in an earlier skip range
+		}
+		if sk[0] < last {
+			sk[0] = last // partial overlap: keep only the uncovered tail
+		}
 		b.WriteString(rewriteTextChunk(s[last:sk[0]]))
 		b.WriteString(s[sk[0]:sk[1]])
 		last = sk[1]
