@@ -52,7 +52,6 @@ var (
 			`|\{\\(` + standaloneCmd + `)\}` +
 			`|\\(` + standaloneCmd + `)\{\}` +
 			`|\\(` + standaloneCmd + `)([ \t]|[^a-zA-Z]|$)`)
-
 )
 
 // AccentFn maps an accent command and its base letter to a replacement.

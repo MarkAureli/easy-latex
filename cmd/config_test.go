@@ -195,7 +195,6 @@ func TestMaxAuthors_ZeroValue(t *testing.T) {
 	}
 }
 
-
 // ── mergeConfig tests ────────────────────────────────────────────────────────
 
 func TestMergeConfig_LocalOverridesGlobal(t *testing.T) {

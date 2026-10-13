@@ -188,13 +188,13 @@ func TestEnvIndent_BlankLinesUntouched(t *testing.T) {
 
 func TestEnvIndent_Detector(t *testing.T) {
 	lines := []string{
-		`\begin{document}`,           // line 1: depth 0, ok
-		`\begin{itemize}`,            // line 2: depth 0, ok
-		`\item one`,                  // line 3: should be 4 spaces, got 0 → flag
-		`    \item two`,              // line 4: ok
+		`\begin{document}`,            // line 1: depth 0, ok
+		`\begin{itemize}`,             // line 2: depth 0, ok
+		`\item one`,                   // line 3: should be 4 spaces, got 0 → flag
+		`    \item two`,               // line 4: ok
 		`        \item over-indented`, // line 5: should be 4, got 8 → flag
-		`\end{itemize}`,              // line 6: depth 0, ok
-		`\end{document}`,             // line 7: ok
+		`\end{itemize}`,               // line 6: depth 0, ok
+		`\end{document}`,              // line 7: ok
 	}
 	diags := checkEnvIndent("t.tex", lines)
 	wantLines := []int{3, 5}

@@ -104,10 +104,10 @@ func TestCodeActions_NoFixWhenClean(t *testing.T) {
 
 func TestUriToPath(t *testing.T) {
 	cases := map[string]string{
-		"file:///foo/bar.tex":         "/foo/bar.tex",
-		"file:///Users/me/main.tex":   "/Users/me/main.tex",
-		"untitled:Untitled-1":         "untitled:Untitled-1",
-		"":                            "",
+		"file:///foo/bar.tex":       "/foo/bar.tex",
+		"file:///Users/me/main.tex": "/Users/me/main.tex",
+		"untitled:Untitled-1":       "untitled:Untitled-1",
+		"":                          "",
 	}
 	for in, want := range cases {
 		if got := uriToPath(in); got != want {

@@ -142,7 +142,7 @@ var defMacros = map[string]bool{
 	"DeclareRobustCommand": false, "NewDocumentCommand": false,
 	"RenewDocumentCommand": false, "ProvideDocumentCommand": false,
 	"DeclareDocumentCommand": false,
-	"def": true, "gdef": true, "edef": true, "xdef": true,
+	"def":                    true, "gdef": true, "edef": true, "xdef": true,
 }
 
 var definedMacroRe = regexp.MustCompile(`\\(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def)\*?\s*\{?\s*\\([A-Za-z@]+)`)

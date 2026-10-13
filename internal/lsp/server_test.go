@@ -65,10 +65,10 @@ func TestDetectCitePrefix(t *testing.T) {
 
 func TestReadMessage(t *testing.T) {
 	tests := []struct {
-		name      string
-		body      string
+		name       string
+		body       string
 		wantMethod string
-		wantErr   bool
+		wantErr    bool
 	}{
 		{
 			name:       "valid message",
@@ -270,12 +270,12 @@ func TestLineAt(t *testing.T) {
 
 func TestServerComplete(t *testing.T) {
 	tests := []struct {
-		name     string
-		items    []completionItem
-		text     string
-		line     int
-		char     int
-		expected int // number of expected items
+		name        string
+		items       []completionItem
+		text        string
+		line        int
+		char        int
+		expected    int // number of expected items
 		checkLabels func(t *testing.T, items []completionItem)
 	}{
 		{

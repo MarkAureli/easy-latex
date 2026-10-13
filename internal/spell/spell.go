@@ -62,10 +62,10 @@ type Session struct {
 	ignoreSet map[string]bool
 	warn      io.Writer
 
-	lang    string
-	auxDir  string
-	paths   Paths
-	mtimes  map[string]time.Time // path → mtime at last (re)open; zero = absent
+	lang   string
+	auxDir string
+	paths  Paths
+	mtimes map[string]time.Time // path → mtime at last (re)open; zero = absent
 }
 
 // NewSession launches hunspell and loads the layered ignore lists. Returns

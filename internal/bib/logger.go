@@ -24,4 +24,3 @@ type nopLogger struct{}
 func (nopLogger) Info(string, string)     {}
 func (nopLogger) Warn(string, string)     {}
 func (nopLogger) Progress(string, string) {}
-

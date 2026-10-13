@@ -1303,7 +1303,6 @@ func TestBraceTitles_Disabled_LeavesTitle(t *testing.T) {
 	}
 }
 
-
 // ── transformArxivMiscToUnpublished ───────────────────────────────────────────
 
 func TestTransformArxivMiscToUnpublished_TypeChanged(t *testing.T) {

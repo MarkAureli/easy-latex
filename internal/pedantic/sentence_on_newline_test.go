@@ -7,7 +7,7 @@ import (
 
 func TestSentenceOnNewline_Detector(t *testing.T) {
 	lines := []string{
-		`Foo. Bar baz.`,                // line 1: violation
+		`Foo. Bar baz.`,                 // line 1: violation
 		`We use Mr. Smith and Dr. Who.`, // line 2: abbrevs → no flag
 		`Number 1. Foo`,                 // line 3: digit-only word → no flag
 		`See e.g. Foo`,                  // line 4: abbrev `e.g` → no flag
@@ -30,7 +30,7 @@ func TestSentenceOnNewline_Detector(t *testing.T) {
 func TestSentenceOnNewline_MathSkipped(t *testing.T) {
 	lines := []string{
 		`Inline $f(x). G(x)$ stays inline`, // mid-math sentence → skip
-		`Display \[ a. B \] outside`,        // mid-display sentence → skip
+		`Display \[ a. B \] outside`,       // mid-display sentence → skip
 	}
 	diags := checkSentenceOnNewline("t.tex", lines)
 	if len(diags) != 0 {

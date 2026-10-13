@@ -122,4 +122,3 @@ func unicodeStandalone(cmd, boundary string) (string, bool) {
 func NormalizeAccents(s string) string {
 	return texaccent.Expand(s, unicodeAccent, unicodeStandalone)
 }
-

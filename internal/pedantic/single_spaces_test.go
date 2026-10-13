@@ -8,13 +8,13 @@ import (
 
 func TestSingleSpaces_Detector(t *testing.T) {
 	lines := []string{
-		"Hello  world.",          // 1: violation
-		"Hello world.",           // 2: ok
-		"  indented",             // 3: leading whitespace ignored
-		"Hello   world  foo.",    // 4: violation (first run reported)
-		"",                       // 5: empty
-		"\t\tindented with tab",  // 6: leading tab ignored
-		"\\definecolor{x}     ",  // 7: trailing alignment WS ignored
+		"Hello  world.",         // 1: violation
+		"Hello world.",          // 2: ok
+		"  indented",            // 3: leading whitespace ignored
+		"Hello   world  foo.",   // 4: violation (first run reported)
+		"",                      // 5: empty
+		"\t\tindented with tab", // 6: leading tab ignored
+		"\\definecolor{x}     ", // 7: trailing alignment WS ignored
 	}
 	diags := checkSingleSpaces("t.tex", lines)
 	if len(diags) != 2 {

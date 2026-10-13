@@ -8,14 +8,14 @@ import (
 
 func TestNoTabs_Detector(t *testing.T) {
 	lines := []string{
-		"\thello",                // 1: leading tab
-		"hello world",            // 2: clean
-		"hello\tworld",           // 3: mid-line tab
-		"",                       // 4: empty
-		"\\begin{verbatim}",      // 5
-		"foo\tbar",               // 6: tab inside verbatim — ignored
-		"\\end{verbatim}",        // 7
-		"after\tverbatim",        // 8: tab outside again
+		"\thello",           // 1: leading tab
+		"hello world",       // 2: clean
+		"hello\tworld",      // 3: mid-line tab
+		"",                  // 4: empty
+		"\\begin{verbatim}", // 5
+		"foo\tbar",          // 6: tab inside verbatim — ignored
+		"\\end{verbatim}",   // 7
+		"after\tverbatim",   // 8: tab outside again
 	}
 	diags := checkNoTabs("t.tex", lines)
 	if len(diags) != 3 {

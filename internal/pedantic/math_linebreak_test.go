@@ -266,8 +266,8 @@ func TestLineHasInlineMath(t *testing.T) {
 		{2, true},
 		{3, true},
 		{4, false},
-		{0, false},  // out of bounds
-		{5, false},  // out of bounds
+		{0, false}, // out of bounds
+		{5, false}, // out of bounds
 	}
 	for _, tt := range tests {
 		got := lineHasInlineMath(lines, tt.lineNo)

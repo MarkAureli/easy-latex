@@ -337,4 +337,3 @@ func TestFormatIdempotent(t *testing.T) {
 		t.Errorf("formatting not idempotent.\nfirst:\n%s\nsecond:\n%s", first, second)
 	}
 }
-

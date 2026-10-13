@@ -4,10 +4,10 @@ import "testing"
 
 func TestSentenceTerminator_Basic(t *testing.T) {
 	lines := []string{
-		`This sentence ends properly.`,         // ok
-		`This one is missing punctuation`,       // flag
-		`Is this a question`,                    // flag
-		`Great, it works!`,                      // ok
+		`This sentence ends properly.`,    // ok
+		`This one is missing punctuation`, // flag
+		`Is this a question`,              // flag
+		`Great, it works!`,                // ok
 	}
 	diags := checkSentenceTerminator("t.tex", lines)
 	wantLines := []int{2, 3}
@@ -64,12 +64,12 @@ func TestSentenceTerminator_CaptionWithTrailingLabel(t *testing.T) {
 
 func TestSentenceTerminator_TrailingFootnoteAndCite(t *testing.T) {
 	lines := []string{
-		`This claim needs support\footnote{See ref.}`,           // flag: outer sentence unterminated
-		`This claim is supported.\footnote{See ref.}`,           // ok
-		`As shown in prior work\cite{smith2020}`,                // flag
-		`As shown in prior work\cite{smith2020}.`,                // ok
-		`\footnote{This standalone footnote lacks a period}`,     // flag: checks inside
-		`\footnote{This standalone footnote has a period.}`,      // ok
+		`This claim needs support\footnote{See ref.}`,        // flag: outer sentence unterminated
+		`This claim is supported.\footnote{See ref.}`,        // ok
+		`As shown in prior work\cite{smith2020}`,             // flag
+		`As shown in prior work\cite{smith2020}.`,            // ok
+		`\footnote{This standalone footnote lacks a period}`, // flag: checks inside
+		`\footnote{This standalone footnote has a period.}`,  // ok
 	}
 	diags := checkSentenceTerminator("t.tex", lines)
 	wantLines := []int{1, 3, 5}

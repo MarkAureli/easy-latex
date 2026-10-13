@@ -9,11 +9,11 @@ import (
 
 func TestResolveTarget(t *testing.T) {
 	cases := []struct {
-		name                              string
-		globalDir, auxDir, lang           string
-		isGlobal, isIgnore, isCommon      bool
-		want                              string
-		wantErr                           bool
+		name                         string
+		globalDir, auxDir, lang      string
+		isGlobal, isIgnore, isCommon bool
+		want                         string
+		wantErr                      bool
 	}{
 		{"local lang", "/g", "/p/.el", "en_US", false, false, false, "/p/.el/spell/en_US.txt", false},
 		{"global lang", "/g", "/p/.el", "en_US", true, false, false, "/g/spell/en_US.txt", false},

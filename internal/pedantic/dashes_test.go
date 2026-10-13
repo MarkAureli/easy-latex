@@ -6,10 +6,10 @@ func TestDashes_Fixer_Unicode(t *testing.T) {
 	cases := []struct {
 		in, want string
 	}{
-		{"a–b", "a---b"},              // en-dash, then rule 8 promotes to em
-		{"a—b", "a---b"},              // em-dash → ---
-		{"value − 5", "value $-$ 5"},  // unicode minus in text → $-$
-		{"$− 5$", "$- 5$"},            // unicode minus in math → -
+		{"a–b", "a---b"},             // en-dash, then rule 8 promotes to em
+		{"a—b", "a---b"},             // em-dash → ---
+		{"value − 5", "value $-$ 5"}, // unicode minus in text → $-$
+		{"$− 5$", "$- 5$"},           // unicode minus in math → -
 	}
 	for _, c := range cases {
 		out, _ := fixDashes("t.tex", []string{c.in})
@@ -67,13 +67,13 @@ func TestDashes_Fixer_EmDashSpacing(t *testing.T) {
 
 func TestDashes_Fixer_EnDashBetweenWords(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{"foo--bar", "foo---bar"},     // tight en between lower → em
-		{"foo -- bar", "foo---bar"},   // spaced en between lower → em
-		{"Foo--Bar", "Foo--Bar"},      // both cap → keep
-		{"Foo -- Bar", "Foo -- Bar"},  // both cap spaced → keep
-		{"foo--Bar", "foo---Bar"},     // mixed → convert
-		{"Foo--bar", "Foo---bar"},     // mixed → convert
-		{"a -- b -- c", "a---b---c"},  // chained
+		{"foo--bar", "foo---bar"},    // tight en between lower → em
+		{"foo -- bar", "foo---bar"},  // spaced en between lower → em
+		{"Foo--Bar", "Foo--Bar"},     // both cap → keep
+		{"Foo -- Bar", "Foo -- Bar"}, // both cap spaced → keep
+		{"foo--Bar", "foo---Bar"},    // mixed → convert
+		{"Foo--bar", "Foo---bar"},    // mixed → convert
+		{"a -- b -- c", "a---b---c"}, // chained
 	}
 	for _, c := range cases {
 		out, _ := fixDashes("t.tex", []string{c.in})
@@ -85,10 +85,10 @@ func TestDashes_Fixer_EnDashBetweenWords(t *testing.T) {
 
 func TestDashes_Fixer_SpacedHyphenWords(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{"foo - bar", "foo---bar"},     // spaced hy → em
-		{"Foo - Bar", "Foo---Bar"},     // both cap still converts (Q2)
-		{"a - b - c", "a---b---c"},     // chained
-		{"well-known", "well-known"},   // tight hyphen kept
+		{"foo - bar", "foo---bar"},   // spaced hy → em
+		{"Foo - Bar", "Foo---Bar"},   // both cap still converts (Q2)
+		{"a - b - c", "a---b---c"},   // chained
+		{"well-known", "well-known"}, // tight hyphen kept
 		{"mother-in-law", "mother-in-law"},
 	}
 	for _, c := range cases {
@@ -146,9 +146,9 @@ func TestDashes_Fixer_SkipComment(t *testing.T) {
 func TestDashes_Detector(t *testing.T) {
 	lines := []string{
 		"clean line",
-		"foo -- bar",      // violation
-		"$a - b$",         // ok (math)
-		"pp. 10-20",       // violation
+		"foo -- bar", // violation
+		"$a - b$",    // ok (math)
+		"pp. 10-20",  // violation
 	}
 	diags := checkDashes("t.tex", lines)
 	if len(diags) != 2 {

@@ -103,11 +103,11 @@ func (h *Hunspell) CheckLine(line string) ([]Miss, error) {
 // parseHunspellLine parses one hunspell pipe-mode response line.
 // Formats of interest:
 //
-//	*                              (correct)
-//	+ ROOT                         (correct, derived from ROOT)
-//	-                              (compound)
-//	& word N off: sug1, sug2, ...  (miss with suggestions)
-//	# word off                     (miss without suggestions)
+//   - (correct)
+//   - ROOT                         (correct, derived from ROOT)
+//   - (compound)
+//     & word N off: sug1, sug2, ...  (miss with suggestions)
+//     # word off                     (miss without suggestions)
 func parseHunspellLine(s string) (Miss, bool) {
 	if s == "" {
 		return Miss{}, false

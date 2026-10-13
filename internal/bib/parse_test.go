@@ -59,7 +59,7 @@ func TestParseFile_MultipleEntries(t *testing.T) {
 
 func TestParseFile_DifferentEntryTypes(t *testing.T) {
 	cases := []struct {
-		input       string
+		input        string
 		expectedType string
 	}{
 		{`@article{k, author = {A}}`, "article"},

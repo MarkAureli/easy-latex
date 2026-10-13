@@ -8,16 +8,16 @@ import (
 
 func TestTrailingWhitespace_Detector(t *testing.T) {
 	lines := []string{
-		"clean",                 // 1: no trailing
-		"trailing spaces   ",    // 2: trailing spaces
-		"trailing tabs\t\t",     // 3: trailing tabs
-		"mixed \t \t",           // 4: mixed
-		"",                      // 5: empty
-		"   ",                   // 6: all-whitespace
-		"code   % comment",      // 7: pre-comment WS, no real trailing
-		"code % comment   ",     // 8: trailing WS in comment tail
-		"% bare comment   ",     // 9: trailing in pure-comment line
-		"x",                     // 10: clean
+		"clean",              // 1: no trailing
+		"trailing spaces   ", // 2: trailing spaces
+		"trailing tabs\t\t",  // 3: trailing tabs
+		"mixed \t \t",        // 4: mixed
+		"",                   // 5: empty
+		"   ",                // 6: all-whitespace
+		"code   % comment",   // 7: pre-comment WS, no real trailing
+		"code % comment   ",  // 8: trailing WS in comment tail
+		"% bare comment   ",  // 9: trailing in pure-comment line
+		"x",                  // 10: clean
 	}
 	diags := checkTrailingWhitespace("t.tex", lines)
 	wantLines := []int{2, 3, 4, 6, 8, 9}
@@ -47,9 +47,9 @@ func TestTrailingWhitespace_Fixer(t *testing.T) {
 		"trailing   ",
 		"tabs\t\t",
 		"mixed \t",
-		"code   % comment",      // pre-comment WS preserved
-		"code % comment   ",     // strip trailing in comment tail
-		"   ",                   // all-WS → empty
+		"code   % comment",  // pre-comment WS preserved
+		"code % comment   ", // strip trailing in comment tail
+		"   ",               // all-WS → empty
 		"",
 	}
 	want := []string{

@@ -18,12 +18,12 @@ import (
 )
 
 var (
-	openAfter        bool
-	compileFix       bool
-	compileNoCheck   bool
-	compileStrict    bool
-	compileNoStrict  bool
-	compileEngine    string
+	openAfter       bool
+	compileFix      bool
+	compileNoCheck  bool
+	compileStrict   bool
+	compileNoStrict bool
+	compileEngine   string
 )
 
 var compileCmd = &cobra.Command{
