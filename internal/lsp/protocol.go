@@ -89,6 +89,8 @@ type completionItem struct {
 	Detail        string `json:"detail,omitempty"`
 	Documentation string `json:"documentation,omitempty"`
 	InsertText    string `json:"insertText,omitempty"`
+	SortText      string `json:"sortText,omitempty"`
+	Preselect     bool   `json:"preselect,omitempty"`
 }
 
 type completionList struct {
