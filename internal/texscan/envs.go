@@ -15,6 +15,7 @@ var (
 	reNewEnv     = regexp.MustCompile(`\\(?:new|renew|provide)environment\*?\s*\{([A-Za-z]+\*?)\}\s*(?:\[(\d+)\])?\s*(\[)?`)
 	reNewDocEnv  = regexp.MustCompile(`\\(?:New|Renew|Provide|Declare)DocumentEnvironment\s*\{([A-Za-z]+\*?)\}\s*\{`)
 	reNewTheorem = regexp.MustCompile(`\\(?:newtheorem|newmdtheoremenv|declaretheorem|spnewtheorem|newtcbtheorem)\*?\s*`)
+	reEnvToken   = regexp.MustCompile(`\\(begin|end)\{([A-Za-z]+\*?)\}|\\caption\b`)
 	reVerbatimEn = regexp.MustCompile(`(?s)\\begin\{(verbatim|Verbatim|lstlisting|minted|comment|alltt)\*?\}.*?\\end\{(?:verbatim|Verbatim|lstlisting|minted|comment|alltt)\*?\}`)
 )
 
@@ -22,6 +23,7 @@ var (
 type EnvInfo struct {
 	Args    int  `json:"args"`    // mandatory arguments
 	Theorem bool `json:"theorem"` // declared via \newtheorem & co.
+	Float   bool `json:"float"`   // \caption used directly inside it
 }
 
 // FindFilesByExt returns the files below dir with one of the given extensions
@@ -50,12 +52,49 @@ type envScan struct {
 	used     map[string]int  // min brace groups after \begin
 	declared map[string]int  // \newenvironment & co.
 	theorems map[string]bool // \newtheorem & co.
+	floats   map[string]bool // \caption used inside
+}
+
+// captionContainers are environments that merely wrap a caption (e.g. a
+// minipage inside a figure); the caption belongs to the enclosing float.
+var captionContainers = map[string]bool{
+	"minipage": true, "center": true, "flushleft": true, "flushright": true,
+	"adjustbox": true, "tabular": true, "tabularx": true, "tabular*": true,
+	"document": true, "tikzpicture": true,
+}
+
+// captionOwners returns the environments that directly own a \caption in
+// text: for each caption, the innermost open environment that is not a plain
+// container.
+func captionOwners(text string, into map[string]bool) {
+	var stack []string
+	for _, m := range reEnvToken.FindAllStringSubmatch(text, -1) {
+		switch {
+		case m[1] == "begin":
+			stack = append(stack, m[2])
+		case m[1] == "end":
+			for i := len(stack) - 1; i >= 0; i-- {
+				if stack[i] == m[2] {
+					stack = stack[:i]
+					break
+				}
+			}
+		default:
+			for i := len(stack) - 1; i >= 0; i-- {
+				if !captionContainers[stack[i]] {
+					into[stack[i]] = true
+					break
+				}
+			}
+		}
+	}
 }
 
 func scanEnvFiles(texFiles []string) envScan {
 	used := map[string]int{}
 	declared := map[string]int{}
 	theorems := map[string]bool{}
+	floats := map[string]bool{}
 	for _, path := range texFiles {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -100,6 +139,7 @@ func scanEnvFiles(texFiles []string) envScan {
 				theorems[name] = true
 			}
 		}
+		captionOwners(text, floats)
 		for _, m := range reEnvBegin.FindAllStringSubmatchIndex(text, -1) {
 			name := text[m[2]:m[3]]
 			n := countArgGroups(text, m[1])
@@ -108,7 +148,7 @@ func scanEnvFiles(texFiles []string) envScan {
 			}
 		}
 	}
-	return envScan{used, declared, theorems}
+	return envScan{used, declared, theorems, floats}
 }
 
 // ScanEnvs collects environments declared or used in texFiles.
@@ -118,6 +158,9 @@ func scanEnvFiles(texFiles []string) envScan {
 // number of consecutive {...} groups directly following \begin{env} over all
 // occurrences (optional [...] groups are skipped), since a body starting with
 // a brace group can only inflate single occurrences.
+//
+// Float: set when a \caption is used directly inside the environment (usage
+// evidence, so it works for environments taking mandatory arguments too).
 //
 // Theorem: set for names declared by \newtheorem, \newmdtheoremenv,
 // \declaretheorem, \spnewtheorem or \newtcbtheorem.
@@ -129,7 +172,7 @@ func ScanEnvs(texFiles []string) map[string]EnvInfo {
 	}
 	out := map[string]EnvInfo{}
 	for name, n := range used {
-		out[name] = EnvInfo{Args: n, Theorem: theorems[name]}
+		out[name] = EnvInfo{Args: n, Theorem: theorems[name], Float: sc.floats[name]}
 	}
 	for name := range theorems {
 		if _, ok := out[name]; !ok {
