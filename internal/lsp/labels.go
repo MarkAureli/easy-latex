@@ -81,9 +81,6 @@ func (s *server) docLabels(uri string) []string {
 func (s *server) completeRef(uri, cmd, prefix string) []completionItem {
 	need := refPrefixFilter[cmd]
 	out := []completionItem{}
-	if need != "" && prefix != need && strings.HasPrefix(need, prefix) {
-		out = append(out, completionItem{Label: need, Kind: 18, SortText: "\x00", Preselect: true})
-	}
 	for _, l := range s.docLabels(uri) {
 		if strings.HasPrefix(l, need) && strings.HasPrefix(l, prefix) {
 			out = append(out, completionItem{Label: l, Kind: 18})

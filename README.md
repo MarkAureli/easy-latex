@@ -425,7 +425,7 @@ Start a Language Server Protocol server over stdio that provides cite-key and la
 
 Typing any cite command (`\cite{`, `\citet{`, `\citep{`, `\citealt{`, `\citeauthor{`, `\citeyear{`, etc.) triggers completion with all known cite keys from the global bib cache. Capitalised (`\Citet{`), starred (`\citet*{`), and optional-argument (`\citep[see]{`) forms are also supported. Keys are loaded once at startup — restart the LSP to pick up new entries.
 
-Reference commands (`\ref{`, `\autoref{`, `\cref{`, `\Cref{`, `\pageref{`, `\nameref{`, …) complete with every `\label{…}` in the current document and the files it `\input`s/`\include`s. `\eqref{` only offers labels starting with `equation:`, and always offers a preselected `equation:` entry first so accepting the top suggestion types the prefix for you. Labels are re-read on every request, so new labels show up immediately.
+Reference commands (`\ref{`, `\autoref{`, `\cref{`, `\Cref{`, `\pageref{`, `\nameref{`, …) complete with every `\label{…}` in the current document and the files it `\input`s/`\include`s. `\eqref{` only offers labels starting with `equation:`. Labels are re-read on every request, so new labels show up immediately.
 
 When the `no-block-citations` check is enabled, selecting a cite key also inserts the closing `}` (unless one already follows the cursor), leaving the cursor after it.
 

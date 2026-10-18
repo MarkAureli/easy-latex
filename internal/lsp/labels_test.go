@@ -14,8 +14,7 @@ func TestCompleteRef(t *testing.T) {
 	}{
 		{"cref all", `\cref{`, []string{"equation:a", "equation:b", "fig:x", "sec:intro"}},
 		{"autoref prefix", `\autoref{fig`, []string{"fig:x"}},
-		{"eqref filters", `\eqref{`, []string{"equation:", "equation:a", "equation:b"}},
-		{"eqref partial prefix", `\eqref{eq`, []string{"equation:", "equation:a", "equation:b"}},
+		{"eqref filters", `\eqref{`, []string{"equation:a", "equation:b"}},
 		{"eqref after comma", `\eqref{equation:a,equation:b`, []string{"equation:b"}},
 		{"cref optional arg", `\cref*[x]{s`, []string{"sec:intro"}},
 	}
