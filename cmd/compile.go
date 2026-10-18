@@ -327,8 +327,9 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	}
 	compileWarnLines = finalLines
 
-	// Best effort: learn environment signatures for editor completion.
+	// Best effort: learn environment and command signatures for editor completion.
 	_ = updateEnvTable(stem, scannedEnvs)
+	_ = updateCmdTable(cfg.Main)
 
 	pdfName := stem + ".pdf"
 	srcPDF := filepath.Join(auxDir, pdfName)

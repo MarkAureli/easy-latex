@@ -51,3 +51,28 @@ func TestUpdateEnvTableOverwritesAndKeeps(t *testing.T) {
 		t.Fatalf("second run: %v", tbl)
 	}
 }
+
+func TestUpdateCmdTable(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := os.MkdirAll(auxDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("main.tex", []byte("\\frac{a}{b}\\frac{c}{d}\\emph{x}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := updateCmdTable("main.tex"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(auxDir, cmdsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tbl map[string]int
+	if err := json.Unmarshal(data, &tbl); err != nil {
+		t.Fatal(err)
+	}
+	if tbl["frac"] != 2 || tbl["emph"] != 1 {
+		t.Fatalf("got %v", tbl)
+	}
+}

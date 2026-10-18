@@ -8,6 +8,7 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 |---|---|
 | `.el/` | Per-project working directory: config, all pdflatex/bibtex/biber intermediates, bib hash, renames |
 | `.el/envs.json` | Env table `{name: {args, theorem, float}}`, rewritten by `el compile` (`cmd/envs.go`) |
+| `.el/cmds.json` | Command table `{name: mandatory-arg count}`, rewritten by `el compile` (`cmd/envs.go`), declared entries refreshed by `el lsp` on save |
 | `.el/config.json` | Config: main tex file, aux dir, bib paths, processing options |
 | Global bib cache | Per-user validation cache shared across all projects. Path via `bib.GlobalBibPath()`: `$EL_GLOBAL_BIB` → `$XDG_DATA_HOME/easy-latex/bib.json` → mac `~/Library/Application Support/easy-latex/bib.json` → linux `~/.local/share/easy-latex/bib.json`. Read-modify-write is serialised via `flock` on a sibling `.lock` file; writes are atomic via tmp+rename. |
 | `cmd/` | Cobra commands (`bib`, `check`, `compile`, `config`, `init`, `lsp`) |

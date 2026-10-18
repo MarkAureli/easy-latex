@@ -6,19 +6,19 @@ import (
 	"os"
 )
 
-// LoadEnvTable reads an env table file; a missing or malformed file yields an
-// empty table.
-func LoadEnvTable(path string) map[string]EnvInfo {
-	table := map[string]EnvInfo{}
+// LoadTable reads a JSON name table (.el/envs.json, .el/cmds.json); a missing
+// or malformed file yields an empty table.
+func LoadTable[T any](path string) map[string]T {
+	table := map[string]T{}
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &table)
 	}
 	return table
 }
 
-// SaveEnvTable writes the table atomically, skipping the write when it equals
+// SaveTable writes the table atomically, skipping the write when it equals
 // before.
-func SaveEnvTable(path string, table, before map[string]EnvInfo) error {
+func SaveTable[T comparable](path string, table, before map[string]T) error {
 	if maps.Equal(before, table) {
 		return nil
 	}
