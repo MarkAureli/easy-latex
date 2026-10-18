@@ -8,14 +8,14 @@ import (
 )
 
 func TestParse(t *testing.T) {
-	log := "itemize|figure,0|figure,1\nminipage|figure,0|figure,0\nfigure|-,0|figure,0\ncenter|-,0|-,0\nwrapfigure|-,0|figure,0\ngarbage\n"
+	log := "itemize|figure|figure\nminipage|figure|figure\nfigure|-|figure\ncenter|-|-\nwrapfigure|-|figure\ngarbage\n"
 	path := filepath.Join(t.TempDir(), "x.elprobe")
 	if err := os.WriteFile(path, []byte(log), 0644); err != nil {
 		t.Fatal(err)
 	}
 	got := Parse(path)
 	want := map[string]Result{
-		"itemize":    {List: true},
+		"itemize":    {},
 		"minipage":   {},
 		"figure":     {Float: true},
 		"center":     {},

@@ -7,13 +7,13 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 | Path | Role |
 |---|---|
 | `.el/` | Per-project working directory: config, all pdflatex/bibtex/biber intermediates, bib hash, renames |
-| `.el/envs.json` | Env table `{name: {args, theorem, float, list}}`, rewritten by `el compile` (`cmd/envs.go`) |
+| `.el/envs.json` | Env table `{name: {args, theorem, float}}`, rewritten by `el compile` (`cmd/envs.go`) |
 | `.el/config.json` | Config: main tex file, aux dir, bib paths, processing options |
 | Global bib cache | Per-user validation cache shared across all projects. Path via `bib.GlobalBibPath()`: `$EL_GLOBAL_BIB` → `$XDG_DATA_HOME/easy-latex/bib.json` → mac `~/Library/Application Support/easy-latex/bib.json` → linux `~/.local/share/easy-latex/bib.json`. Read-modify-write is serialised via `flock` on a sibling `.lock` file; writes are atomic via tmp+rename. |
 | `cmd/` | Cobra commands (`bib`, `check`, `compile`, `config`, `init`, `lsp`) |
 | `internal/bib/` | Bib parsing, key gen, formatting, validation, Logger interface, retry logic |
 | `internal/term/` | Shared terminal detection (`IsTerminal`) + ANSI color codes (`Colors` struct, `Detect()`) |
-| `internal/envprobe/` | Generated `.sty` + parser: hooks env begin/end during the real compile to classify floats/lists via TeX state |
+| `internal/envprobe/` | Generated `.sty` + parser: hooks env begin/end during the real compile to classify floats via TeX state |
 | `internal/texscan/` | Tex file scanner for bib declarations |
 | `internal/texaccent/` | TeX accent / standalone-letter macro regexes + pipeline shared by `bib` (ASCII keys) and `spell` (precomposed Unicode) |
 | `internal/pedantic/` | Pedantic checks: source-level + post-compile (pdfsavepos) |

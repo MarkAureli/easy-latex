@@ -23,7 +23,6 @@ type EnvInfo struct {
 	Args    int  `json:"args"`    // mandatory arguments
 	Theorem bool `json:"theorem"` // declared via \newtheorem & co.
 	Float   bool `json:"float"`   // goes through \@float (set by the compile probe)
-	List    bool `json:"list"`    // goes through \list (set by the compile probe)
 }
 
 // FindFilesByExt returns the files below dir with one of the given extensions

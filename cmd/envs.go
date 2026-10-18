@@ -26,9 +26,9 @@ func writeEnvProbe(scanned map[string]texscan.EnvInfo) error {
 }
 
 // updateEnvTable refreshes .el/envs.json (environment name -> argument count,
-// theorem/float/list flags) after a successful compile. Scanned entries
+// theorem/float flags) after a successful compile. Scanned entries
 // overwrite stored ones, and probe verdicts (TeX's own state during the
-// compile) set the float and list flags. Environments no longer
+// compile) set the float flag. Environments no longer
 // present are kept.
 func updateEnvTable(stem string, scanned map[string]texscan.EnvInfo) error {
 	path := filepath.Join(auxDir, envsFile)
@@ -36,7 +36,7 @@ func updateEnvTable(stem string, scanned map[string]texscan.EnvInfo) error {
 	before := maps.Clone(table)
 	for name, res := range envprobe.Parse(filepath.Join(auxDir, stem+envprobe.Ext)) {
 		info := scanned[name]
-		info.Float, info.List = res.Float, res.List
+		info.Float = res.Float
 		scanned[name] = info
 	}
 	maps.Copy(table, scanned)
