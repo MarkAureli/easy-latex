@@ -88,12 +88,14 @@ func ScanCmdDecls(texFiles []string) map[string]int {
 }
 
 // ScanCmds returns the number of mandatory arguments per command: the declared
-// count where a declaration exists, otherwise the minimum number of
-// consecutive {...} groups directly following the command over all
-// occurrences (optional [...] groups are skipped; a use followed by a body
-// that starts with a brace group can only inflate single occurrences).
+// count where a declaration exists, otherwise the most frequent number of
+// consecutive {...} groups directly following the command (optional [...]
+// groups are skipped; ties go to the smaller count). The mode rather than the
+// minimum is used because brace-less arguments (\mathcal H, \frac12) and bare
+// mentions (\titleformat{\section}) are common and would otherwise pin the
+// count to 0.
 func ScanCmds(texFiles []string) map[string]int {
-	used := map[string]int{}
+	used := map[string]map[int]int{}
 	declared := map[string]int{}
 	for _, path := range texFiles {
 		text, ok := prepareTex(path)
@@ -104,13 +106,24 @@ func ScanCmds(texFiles []string) map[string]int {
 		for _, m := range reCmdUse.FindAllStringSubmatchIndex(text, -1) {
 			name := text[m[2]:m[3]]
 			n := countArgGroups(text, m[1])
-			if cur, ok := used[name]; !ok || n < cur {
-				used[name] = n
+			if used[name] == nil {
+				used[name] = map[int]int{}
 			}
+			used[name][n]++
 		}
 	}
-	for name, n := range declared {
-		used[name] = n
+	out := map[string]int{}
+	for name, hist := range used {
+		best, bestN := -1, 0
+		for n, c := range hist {
+			if c > bestN || (c == bestN && n < best) {
+				best, bestN = n, c
+			}
+		}
+		out[name] = best
 	}
-	return used
+	for name, n := range declared {
+		out[name] = n
+	}
+	return out
 }

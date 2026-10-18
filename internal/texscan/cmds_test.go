@@ -16,7 +16,7 @@ func TestScanCmds(t *testing.T) {
 \DeclarePairedDelimiter\norm{\lVert}{\rVert}
 \frac{a}{b} and \frac{c}{d}
 \sqrt[3]{x} \sqrt{y}
-\mathcal{A} $\R$ \centering
+\mathcal{A} \mathcal{B} \mathcal H $\R$ \centering
 {\small x}
 \hspace*{1cm}
 \section{Intro}
