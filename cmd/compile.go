@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
+	"github.com/MarkAureli/easy-latex/internal/envprobe"
 	"github.com/MarkAureli/easy-latex/internal/pedantic"
 	"github.com/MarkAureli/easy-latex/internal/term"
 	"github.com/MarkAureli/easy-latex/internal/texscan"
@@ -163,6 +164,14 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	if err := os.MkdirAll(auxDir, 0755); err != nil {
 		return fmt.Errorf("cannot create %s: %w", auxDir, err)
 	}
+
+	// Instrument the compile to learn environment kinds (see envprobe).
+	scannedEnvs := scanProjectEnvs(cfg.Main)
+	if err := writeEnvProbe(scannedEnvs); err != nil {
+		return fmt.Errorf("cannot write env probe: %w", err)
+	}
+	injectStys = append(injectStys, envprobe.PkgName)
+	slices.Sort(injectStys)
 
 	engine, err := resolveEngine(cfg, compileEngine)
 	if err != nil {
@@ -319,7 +328,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	compileWarnLines = finalLines
 
 	// Best effort: learn environment signatures for editor completion.
-	_ = updateEnvTable(cfg.Main)
+	_ = updateEnvTable(stem, scannedEnvs)
 
 	pdfName := stem + ".pdf"
 	srcPDF := filepath.Join(auxDir, pdfName)

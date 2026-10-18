@@ -35,7 +35,7 @@ func TestUpdateEnvTableOverwritesAndKeeps(t *testing.T) {
 	}
 
 	write("\\begin{tabular}{c}{d}\n\\end{tabular}\n\\begin{foo}{x}\\end{foo}\n")
-	if err := updateEnvTable("main.tex"); err != nil {
+	if err := updateEnvTable("main", scanProjectEnvs("main.tex")); err != nil {
 		t.Fatal(err)
 	}
 	if tbl := readEnvTable(t); tbl["tabular"].Args != 2 || tbl["foo"].Args != 1 {
@@ -44,7 +44,7 @@ func TestUpdateEnvTableOverwritesAndKeeps(t *testing.T) {
 
 	// A later occurrence with a single group corrects the signature; foo is gone but kept.
 	write("\\begin{tabular}{c}{d}\\end{tabular}\n\\begin{tabular}{c}\\end{tabular}\n")
-	if err := updateEnvTable("main.tex"); err != nil {
+	if err := updateEnvTable("main", scanProjectEnvs("main.tex")); err != nil {
 		t.Fatal(err)
 	}
 	if tbl := readEnvTable(t); tbl["tabular"].Args != 1 || tbl["foo"].Args != 1 {

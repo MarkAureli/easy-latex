@@ -23,7 +23,8 @@ var (
 type EnvInfo struct {
 	Args    int  `json:"args"`    // mandatory arguments
 	Theorem bool `json:"theorem"` // declared via \newtheorem & co.
-	Float   bool `json:"float"`   // \caption used directly inside it
+	Float   bool `json:"float"`   // goes through \@float (probe) or has a \caption directly inside (source)
+	List    bool `json:"list"`    // goes through \list (probe)
 }
 
 // FindFilesByExt returns the files below dir with one of the given extensions
