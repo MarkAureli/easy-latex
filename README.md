@@ -427,6 +427,8 @@ Typing any cite command (`\cite{`, `\citet{`, `\citep{`, `\citealt{`, `\citeauth
 
 Reference commands (`\ref{`, `\autoref{`, `\cref{`, `\Cref{`, `\pageref{`, `\nameref{`, …) complete with every `\label{…}` in the current document and the files it `\input`s/`\include`s. `\eqref{` only offers labels starting with `equation:`. Labels are re-read on every request, so new labels show up immediately.
 
+When the `no-block-citations` check is enabled, selecting a cite key also inserts the closing `}` (unless one already follows the cursor), leaving the cursor after it.
+
 Because the cache is global, completion offers keys added by `el bib add` in any directory. Cited keys that are present in the global cache but not yet in the project's `bibliography.bib` are materialised automatically on the next `el compile`.
 
 ## Installation

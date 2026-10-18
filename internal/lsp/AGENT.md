@@ -4,6 +4,7 @@ Minimal LSP server for `el lsp`. Hand-rolled JSON-RPC over stdio, no external LS
 
 Surfaces:
 - Cite-key completion (read from the global bib cache — see `internal/bib/global.go`).
+- Cite completion sets `insertText = key+"}"` when pedantic check `no-block-citations` is enabled and no `}` follows the cursor (cursor lands after the brace).
 - Label completion for `\ref`-like commands (`labels.go`): `\label{}` keys from the open buffer + files reachable via `\input`/`\include` (disk, or open buffer if tracked). `\eqref` only offers labels starting with `equation:`. Recomputed per request. Commands: `ref eqref autoref cref Cref vref Vref pageref nameref labelcref cpageref Cpageref` (starred/optional args ok). Checked before cite detection in `complete()`.
 - Static pedantic diagnostics (push on didOpen / didChange).
 - Spell-check diagnostics (push on didOpen / didChange) when `cfg.SpellLang` set.

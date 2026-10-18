@@ -34,3 +34,33 @@ func TestCompleteRef(t *testing.T) {
 		})
 	}
 }
+
+func TestCiteCloseBrace(t *testing.T) {
+	tests := []struct {
+		name    string
+		enabled []string
+		text    string
+		char    int
+		want    string
+	}{
+		{"enabled", []string{"no-block-citations"}, `\cite{Sm`, 8, "Smith}"},
+		{"brace already present", []string{"no-block-citations"}, `\cite{Sm}`, 8, ""},
+		{"disabled", nil, `\cite{Sm`, 8, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &server{
+				docs:          map[string]string{"t.tex": tt.text},
+				items:         []completionItem{{Label: "Smith"}},
+				enabledChecks: tt.enabled,
+			}
+			got := s.complete(completionParams{
+				TextDocument: textDocumentIdentifier{URI: "t.tex"},
+				Position:     position{Character: tt.char},
+			})
+			if len(got) != 1 || got[0].InsertText != tt.want {
+				t.Fatalf("got %+v, want InsertText %q", got, tt.want)
+			}
+		})
+	}
+}

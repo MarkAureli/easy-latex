@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -287,16 +288,23 @@ func (s *server) complete(p completionParams) []completionItem {
 	if !ok {
 		return nil
 	}
-	if prefix == "" {
-		return s.items
-	}
+	closeBrace := s.checkEnabled("no-block-citations") && !strings.HasPrefix(line[min(p.Position.Character, len(line)):], "}")
 	out := []completionItem{}
 	for _, item := range s.items {
-		if strings.HasPrefix(item.Label, prefix) {
-			out = append(out, item)
+		if !strings.HasPrefix(item.Label, prefix) {
+			continue
 		}
+		if closeBrace {
+			item.InsertText = item.Label + "}"
+		}
+		out = append(out, item)
 	}
 	return out
+}
+
+// checkEnabled reports whether the named pedantic check is enabled.
+func (s *server) checkEnabled(name string) bool {
+	return slices.Contains(s.enabledChecks, name)
 }
 
 // reCiteTrigger matches a cite command open brace with any content up to

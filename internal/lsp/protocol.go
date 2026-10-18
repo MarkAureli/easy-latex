@@ -88,6 +88,7 @@ type completionItem struct {
 	Kind          int    `json:"kind,omitempty"`
 	Detail        string `json:"detail,omitempty"`
 	Documentation string `json:"documentation,omitempty"`
+	InsertText    string `json:"insertText,omitempty"`
 }
 
 type completionList struct {
