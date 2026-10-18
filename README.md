@@ -421,9 +421,11 @@ Allocated 5 new bib cache entries.
 
 ### `el lsp`
 
-Start a Language Server Protocol server over stdio that provides cite-key completions. Intended for editor integration (VS Code, Neovim, etc.).
+Start a Language Server Protocol server over stdio that provides cite-key and label completions. Intended for editor integration (VS Code, Neovim, etc.).
 
 Typing any cite command (`\cite{`, `\citet{`, `\citep{`, `\citealt{`, `\citeauthor{`, `\citeyear{`, etc.) triggers completion with all known cite keys from the global bib cache. Capitalised (`\Citet{`), starred (`\citet*{`), and optional-argument (`\citep[see]{`) forms are also supported. Keys are loaded once at startup — restart the LSP to pick up new entries.
+
+Reference commands (`\ref{`, `\autoref{`, `\cref{`, `\Cref{`, `\pageref{`, `\nameref{`, …) complete with every `\label{…}` in the current document and the files it `\input`s/`\include`s. `\eqref{` only offers labels starting with `equation:`. Labels are re-read on every request, so new labels show up immediately.
 
 Because the cache is global, completion offers keys added by `el bib add` in any directory. Cited keys that are present in the global cache but not yet in the project's `bibliography.bib` are materialised automatically on the next `el compile`.
 

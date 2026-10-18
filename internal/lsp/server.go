@@ -280,6 +280,9 @@ func wholeDocRange(text string) lspRange {
 func (s *server) complete(p completionParams) []completionItem {
 	text := s.docs[p.TextDocument.URI]
 	line := lineAt(text, p.Position.Line)
+	if cmd, pre, ok := detectRefPrefix(line, p.Position.Character); ok {
+		return s.completeRef(p.TextDocument.URI, cmd, pre)
+	}
 	prefix, ok := detectCitePrefix(line, p.Position.Character)
 	if !ok {
 		return nil

@@ -4,6 +4,7 @@ Minimal LSP server for `el lsp`. Hand-rolled JSON-RPC over stdio, no external LS
 
 Surfaces:
 - Cite-key completion (read from the global bib cache — see `internal/bib/global.go`).
+- Label completion for `\ref`-like commands (`labels.go`): `\label{}` keys from the open buffer + files reachable via `\input`/`\include` (disk, or open buffer if tracked). `\eqref` only offers labels starting with `equation:`. Recomputed per request. Commands: `ref eqref autoref cref Cref vref Vref pageref nameref labelcref cpageref Cpageref` (starred/optional args ok). Checked before cite detection in `complete()`.
 - Static pedantic diagnostics (push on didOpen / didChange).
 - Spell-check diagnostics (push on didOpen / didChange) when `cfg.SpellLang` set.
 - Code actions (autofix) for fixable static checks. Spell-check produces diagnostics only — no quickfix.
@@ -19,6 +20,7 @@ Surfaces:
 | `protocol.go` | LSP wire types: capabilities, completion, diagnostics, code action, workspace edit |
 | `position.go` | `byteToUTF16(line, byteOff)` — convert byte offset to LSP-spec UTF-16 code units |
 | `index.go` | `BuildItems()` — reads keys from the global bib cache |
+| `labels.go` | `detectRefPrefix`, `docLabels`, `completeRef` — label completion |
 | `server.go` | JSON-RPC loop, dispatch, completion, diagnostics, code action handlers |
 
 ## Protocol subset
