@@ -1,7 +1,11 @@
 package texscan
 
 import (
+	"bytes"
+	"encoding/json"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -11,18 +15,62 @@ var (
 	reEnvBegin   = regexp.MustCompile(`\\begin\{([A-Za-z]+\*?)\}`)
 	reNewEnv     = regexp.MustCompile(`\\(?:new|renew|provide)environment\*?\s*\{([A-Za-z]+\*?)\}\s*(?:\[(\d+)\])?\s*(\[)?`)
 	reNewDocEnv  = regexp.MustCompile(`\\(?:New|Renew|Provide|Declare)DocumentEnvironment\s*\{([A-Za-z]+\*?)\}\s*\{`)
+	reNewTheorem = regexp.MustCompile(`\\(?:newtheorem|newmdtheoremenv|declaretheorem|spnewtheorem|newtcbtheorem)\*?\s*`)
 	reVerbatimEn = regexp.MustCompile(`(?s)\\begin\{(verbatim|Verbatim|lstlisting|minted|comment|alltt)\*?\}.*?\\end\{(?:verbatim|Verbatim|lstlisting|minted|comment|alltt)\*?\}`)
 )
 
-// EnvSignatures returns the number of mandatory arguments of environments
-// declared or used in texFiles. Declared environments (\newenvironment,
-// \NewDocumentEnvironment) use their declared count. Other environments take
-// the minimum number of consecutive {...} groups directly following
-// \begin{env} over all occurrences (optional [...] groups are skipped):
-// a body starting with a brace group can only inflate single occurrences.
-func EnvSignatures(texFiles []string) map[string]int {
+// EnvInfo describes an environment found in the project sources.
+type EnvInfo struct {
+	Args    int  `json:"args"`    // mandatory arguments
+	Theorem bool `json:"theorem"` // declared via \newtheorem & co.
+}
+
+// UnmarshalJSON also accepts the legacy bare-number form (argument count only).
+func (e *EnvInfo) UnmarshalJSON(data []byte) error {
+	if n, err := strconv.Atoi(string(bytes.TrimSpace(data))); err == nil {
+		*e = EnvInfo{Args: n}
+		return nil
+	}
+	type plain EnvInfo
+	return json.Unmarshal(data, (*plain)(e))
+}
+
+// FindStyFiles returns the .sty and .cls files below dir, skipping hidden
+// directories (including .el).
+func FindStyFiles(dir string) []string {
+	var out []string
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != dir && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if ext := filepath.Ext(path); ext == ".sty" || ext == ".cls" {
+			out = append(out, path)
+		}
+		return nil
+	})
+	return out
+}
+
+// ScanEnvs collects environments declared or used in texFiles.
+//
+// Mandatory-argument counts: declared environments (\newenvironment,
+// \NewDocumentEnvironment) use their declared count; others take the minimum
+// number of consecutive {...} groups directly following \begin{env} over all
+// occurrences (optional [...] groups are skipped), since a body starting with
+// a brace group can only inflate single occurrences.
+//
+// Theorem: set for names declared by \newtheorem, \newmdtheoremenv,
+// \declaretheorem, \spnewtheorem or \newtcbtheorem.
+func ScanEnvs(texFiles []string) map[string]EnvInfo {
 	used := map[string]int{}
 	declared := map[string]int{}
+	theorems := map[string]bool{}
 	for _, path := range texFiles {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -51,6 +99,22 @@ func EnvSignatures(texFiles []string) map[string]int {
 			}
 			declared[text[m[2]:m[3]]] = documentSpecMandatory(spec)
 		}
+		for _, m := range reNewTheorem.FindAllStringIndex(text, -1) {
+			pos := m[1]
+			if _, end, ok := balanced(text, pos, '[', ']'); ok {
+				pos = end
+				for pos < len(text) && strings.IndexByte(" \t\r\n", text[pos]) >= 0 {
+					pos++
+				}
+			}
+			names, _, ok := balanced(text, pos, '{', '}')
+			if !ok {
+				continue
+			}
+			for _, name := range strings.FieldsFunc(names, func(r rune) bool { return r == ',' || r == ' ' }) {
+				theorems[name] = true
+			}
+		}
 		for _, m := range reEnvBegin.FindAllStringSubmatchIndex(text, -1) {
 			name := text[m[2]:m[3]]
 			n := countArgGroups(text, m[1])
@@ -62,7 +126,16 @@ func EnvSignatures(texFiles []string) map[string]int {
 	for name, n := range declared {
 		used[name] = n
 	}
-	return used
+	out := map[string]EnvInfo{}
+	for name, n := range used {
+		out[name] = EnvInfo{Args: n, Theorem: theorems[name]}
+	}
+	for name := range theorems {
+		if _, ok := out[name]; !ok {
+			out[name] = EnvInfo{Theorem: true}
+		}
+	}
+	return out
 }
 
 // balanced returns the content of the group opening at text[i] and the index

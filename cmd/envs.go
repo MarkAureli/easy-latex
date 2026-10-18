@@ -12,16 +12,17 @@ import (
 const envsFile = "envs.json"
 
 // updateEnvTable refreshes .el/envs.json (environment name -> mandatory
-// argument count) from the project's tex files. Entries found in the sources
+// argument count and theorem flag) from the project's tex files. Entries found in the sources
 // overwrite stored ones; environments no longer present are kept.
 func updateEnvTable(mainTex string) error {
 	path := filepath.Join(auxDir, envsFile)
-	table := map[string]int{}
+	table := map[string]texscan.EnvInfo{}
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &table)
 	}
 	before := maps.Clone(table)
-	maps.Copy(table, texscan.EnvSignatures(texscan.FindTexFiles(mainTex, ".")))
+	files := append(texscan.FindTexFiles(mainTex, "."), texscan.FindStyFiles(".")...)
+	maps.Copy(table, texscan.ScanEnvs(files))
 	if maps.Equal(before, table) {
 		return nil
 	}

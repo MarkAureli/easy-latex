@@ -63,7 +63,7 @@ Detection is based on the auxiliary files produced by the first `pdflatex` pass 
 
 If `el init` was run before any `.bib` files existed, `el compile` discovers them from those same auxiliary files and updates `.el/config.json` automatically.
 
-After each successful compile, `el` also records how many mandatory `{...}` arguments each environment takes (from `\newenvironment`/`\NewDocumentEnvironment` declarations, and from how the environment is used in your sources) in `.el/envs.json`. Editors can use this to complete `\begin{tabular}` with the right number of `{}` groups. Entries are refreshed on every successful compile, so a wrong guess corrects itself once a differing usage compiles.
+After each successful compile, `el` also records every environment in `.el/envs.json`: how many mandatory `{...}` arguments it takes (from `\newenvironment`/`\NewDocumentEnvironment` declarations, and from how it is used in your sources) and whether it is theorem-style (declared via `\newtheorem`, `\declaretheorem`, …; project `.sty`/`.cls` files are scanned too). Editors can use this to complete `\begin{tabular}` with the right number of `{}` groups, or `\begin{lemma}` with a label. Entries are refreshed on every successful compile, so a wrong guess corrects itself once a differing usage compiles.
 
 Up to two additional pdflatex passes run automatically if needed (e.g. when LaTeX reports "rerun"), allowing up to four total passes to stabilize cross-references and citations.
 

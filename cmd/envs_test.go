@@ -5,15 +5,17 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
 
-func readEnvTable(t *testing.T) map[string]int {
+func readEnvTable(t *testing.T) map[string]texscan.EnvInfo {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(auxDir, envsFile))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var tbl map[string]int
+	var tbl map[string]texscan.EnvInfo
 	if err := json.Unmarshal(data, &tbl); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +38,7 @@ func TestUpdateEnvTableOverwritesAndKeeps(t *testing.T) {
 	if err := updateEnvTable("main.tex"); err != nil {
 		t.Fatal(err)
 	}
-	if tbl := readEnvTable(t); tbl["tabular"] != 2 || tbl["foo"] != 1 {
+	if tbl := readEnvTable(t); tbl["tabular"].Args != 2 || tbl["foo"].Args != 1 {
 		t.Fatalf("first run: %v", tbl)
 	}
 
@@ -45,7 +47,7 @@ func TestUpdateEnvTableOverwritesAndKeeps(t *testing.T) {
 	if err := updateEnvTable("main.tex"); err != nil {
 		t.Fatal(err)
 	}
-	if tbl := readEnvTable(t); tbl["tabular"] != 1 || tbl["foo"] != 1 {
+	if tbl := readEnvTable(t); tbl["tabular"].Args != 1 || tbl["foo"].Args != 1 {
 		t.Fatalf("second run: %v", tbl)
 	}
 }
