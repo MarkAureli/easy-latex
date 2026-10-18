@@ -30,9 +30,15 @@ type initializeResult struct {
 }
 
 type serverCapabilities struct {
-	TextDocumentSync   int                `json:"textDocumentSync"`
-	CompletionProvider *completionOptions `json:"completionProvider,omitempty"`
-	CodeActionProvider bool               `json:"codeActionProvider,omitempty"`
+	TextDocumentSync   textDocumentSyncOptions `json:"textDocumentSync"`
+	CompletionProvider *completionOptions      `json:"completionProvider,omitempty"`
+	CodeActionProvider bool                    `json:"codeActionProvider,omitempty"`
+}
+
+type textDocumentSyncOptions struct {
+	OpenClose bool `json:"openClose"`
+	Change    int  `json:"change"` // 1 = full
+	Save      bool `json:"save"`
 }
 
 type completionOptions struct {
@@ -48,6 +54,12 @@ type didOpenParams struct {
 type textDocumentItem struct {
 	URI  string `json:"uri"`
 	Text string `json:"text"`
+}
+
+// textDocument/didSave
+
+type didSaveParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
 }
 
 // textDocument/didChange

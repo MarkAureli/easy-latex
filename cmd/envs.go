@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
 	"maps"
-	"os"
 	"path/filepath"
 
 	"github.com/MarkAureli/easy-latex/internal/texscan"
@@ -12,27 +10,14 @@ import (
 const envsFile = "envs.json"
 
 // updateEnvTable refreshes .el/envs.json (environment name -> mandatory
-// argument count and theorem flag) from the project's tex files. Entries found in the sources
-// overwrite stored ones; environments no longer present are kept.
+// argument count and theorem flag) from the project's tex files. Entries found
+// in the sources overwrite stored ones; environments no longer present are
+// kept.
 func updateEnvTable(mainTex string) error {
 	path := filepath.Join(auxDir, envsFile)
-	table := map[string]texscan.EnvInfo{}
-	if data, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(data, &table)
-	}
+	table := texscan.LoadEnvTable(path)
 	before := maps.Clone(table)
-	files := append(texscan.FindTexFiles(mainTex, "."), texscan.FindStyFiles(".")...)
+	files := append(texscan.FindTexFiles(mainTex, "."), texscan.FindFilesByExt(".", ".sty", ".cls")...)
 	maps.Copy(table, texscan.ScanEnvs(files))
-	if maps.Equal(before, table) {
-		return nil
-	}
-	data, err := json.MarshalIndent(table, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return texscan.SaveEnvTable(path, table, before)
 }

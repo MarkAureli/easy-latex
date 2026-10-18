@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -23,9 +24,9 @@ type EnvInfo struct {
 	Theorem bool `json:"theorem"` // declared via \newtheorem & co.
 }
 
-// FindStyFiles returns the .sty and .cls files below dir, skipping hidden
-// directories (including .el).
-func FindStyFiles(dir string) []string {
+// FindFilesByExt returns the files below dir with one of the given extensions
+// (e.g. ".sty"), skipping hidden directories (including .el).
+func FindFilesByExt(dir string, exts ...string) []string {
 	var out []string
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -37,7 +38,7 @@ func FindStyFiles(dir string) []string {
 			}
 			return nil
 		}
-		if ext := filepath.Ext(path); ext == ".sty" || ext == ".cls" {
+		if slices.Contains(exts, filepath.Ext(path)) {
 			out = append(out, path)
 		}
 		return nil
@@ -45,17 +46,13 @@ func FindStyFiles(dir string) []string {
 	return out
 }
 
-// ScanEnvs collects environments declared or used in texFiles.
-//
-// Mandatory-argument counts: declared environments (\newenvironment,
-// \NewDocumentEnvironment) use their declared count; others take the minimum
-// number of consecutive {...} groups directly following \begin{env} over all
-// occurrences (optional [...] groups are skipped), since a body starting with
-// a brace group can only inflate single occurrences.
-//
-// Theorem: set for names declared by \newtheorem, \newmdtheoremenv,
-// \declaretheorem, \spnewtheorem or \newtcbtheorem.
-func ScanEnvs(texFiles []string) map[string]EnvInfo {
+type envScan struct {
+	used     map[string]int  // min brace groups after \begin
+	declared map[string]int  // \newenvironment & co.
+	theorems map[string]bool // \newtheorem & co.
+}
+
+func scanEnvFiles(texFiles []string) envScan {
 	used := map[string]int{}
 	declared := map[string]int{}
 	theorems := map[string]bool{}
@@ -111,7 +108,23 @@ func ScanEnvs(texFiles []string) map[string]EnvInfo {
 			}
 		}
 	}
-	for name, n := range declared {
+	return envScan{used, declared, theorems}
+}
+
+// ScanEnvs collects environments declared or used in texFiles.
+//
+// Mandatory-argument counts: declared environments (\newenvironment,
+// \NewDocumentEnvironment) use their declared count; others take the minimum
+// number of consecutive {...} groups directly following \begin{env} over all
+// occurrences (optional [...] groups are skipped), since a body starting with
+// a brace group can only inflate single occurrences.
+//
+// Theorem: set for names declared by \newtheorem, \newmdtheoremenv,
+// \declaretheorem, \spnewtheorem or \newtcbtheorem.
+func ScanEnvs(texFiles []string) map[string]EnvInfo {
+	sc := scanEnvFiles(texFiles)
+	used, theorems := sc.used, sc.theorems
+	for name, n := range sc.declared {
 		used[name] = n
 	}
 	out := map[string]EnvInfo{}
@@ -124,6 +137,14 @@ func ScanEnvs(texFiles []string) map[string]EnvInfo {
 		}
 	}
 	return out
+}
+
+// ScanEnvDecls returns only what declarations determine: argument counts of
+// environments declared via \newenvironment & co. and the set of theorem-style
+// environments. Usage-derived argument counts are deliberately left out.
+func ScanEnvDecls(texFiles []string) (args map[string]int, theorems map[string]bool) {
+	sc := scanEnvFiles(texFiles)
+	return sc.declared, sc.theorems
 }
 
 // balanced returns the content of the group opening at text[i] and the index

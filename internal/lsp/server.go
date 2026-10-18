@@ -73,7 +73,7 @@ func (s *server) handle(req *request) (stop bool) {
 	case "initialize":
 		s.reply(req.ID, initializeResult{
 			Capabilities: serverCapabilities{
-				TextDocumentSync: 1, // full
+				TextDocumentSync: textDocumentSyncOptions{OpenClose: true, Change: 1, Save: true},
 				CompletionProvider: &completionOptions{
 					TriggerCharacters: []string{"{", ","},
 				},
@@ -96,6 +96,12 @@ func (s *server) handle(req *request) (stop bool) {
 		if err := json.Unmarshal(req.Params, &p); err == nil && len(p.ContentChanges) > 0 {
 			s.docs[p.TextDocument.URI] = p.ContentChanges[len(p.ContentChanges)-1].Text
 			s.publishDiagnostics(p.TextDocument.URI)
+		}
+
+	case "textDocument/didSave":
+		var p didSaveParams
+		if err := json.Unmarshal(req.Params, &p); err == nil {
+			refreshEnvTable(p.TextDocument.URI)
 		}
 
 	case "textDocument/codeAction":
