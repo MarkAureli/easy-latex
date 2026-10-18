@@ -1,8 +1,6 @@
 package texscan
 
 import (
-	"bytes"
-	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -23,16 +21,6 @@ var (
 type EnvInfo struct {
 	Args    int  `json:"args"`    // mandatory arguments
 	Theorem bool `json:"theorem"` // declared via \newtheorem & co.
-}
-
-// UnmarshalJSON also accepts the legacy bare-number form (argument count only).
-func (e *EnvInfo) UnmarshalJSON(data []byte) error {
-	if n, err := strconv.Atoi(string(bytes.TrimSpace(data))); err == nil {
-		*e = EnvInfo{Args: n}
-		return nil
-	}
-	type plain EnvInfo
-	return json.Unmarshal(data, (*plain)(e))
 }
 
 // FindStyFiles returns the .sty and .cls files below dir, skipping hidden

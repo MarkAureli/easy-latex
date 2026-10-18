@@ -1,7 +1,6 @@
 package texscan
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,15 +60,5 @@ text
 	}
 	if got["tabular"].Theorem {
 		t.Error("tabular is not a theorem")
-	}
-}
-
-func TestEnvInfoLegacyJSON(t *testing.T) {
-	var m map[string]EnvInfo
-	if err := json.Unmarshal([]byte(`{"a":2,"b":{"args":1,"theorem":true}}`), &m); err != nil {
-		t.Fatal(err)
-	}
-	if m["a"] != (EnvInfo{Args: 2}) || m["b"] != (EnvInfo{Args: 1, Theorem: true}) {
-		t.Fatalf("got %v", m)
 	}
 }
