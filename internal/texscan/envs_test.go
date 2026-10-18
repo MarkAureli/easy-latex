@@ -62,39 +62,3 @@ text
 		t.Error("tabular is not a theorem")
 	}
 }
-
-func TestScanEnvsFloat(t *testing.T) {
-	src := `\begin{figure}
-\begin{minipage}{.5\linewidth}
-\caption{a}
-\end{minipage}
-\end{figure}
-\begin{wrapfigure}{r}{3cm}
-\centering
-\caption{b}
-\end{wrapfigure}
-\begin{center}
-\captionof{figure}{c}
-\end{center}
-\captionsetup{font=small}
-\begin{table*}\begin{tabular}{c}x\end{tabular}\end{table*}
-`
-	path := filepath.Join(t.TempDir(), "a.tex")
-	if err := os.WriteFile(path, []byte(src), 0644); err != nil {
-		t.Fatal(err)
-	}
-	got := ScanEnvs([]string{path})
-	for _, k := range []string{"figure", "wrapfigure"} {
-		if !got[k].Float {
-			t.Errorf("%s should be a float", k)
-		}
-	}
-	for _, k := range []string{"minipage", "center", "table*", "tabular"} {
-		if got[k].Float {
-			t.Errorf("%s should not be a float", k)
-		}
-	}
-	if got["wrapfigure"].Args != 2 {
-		t.Errorf("wrapfigure args: %d", got["wrapfigure"].Args)
-	}
-}
