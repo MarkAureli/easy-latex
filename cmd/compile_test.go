@@ -322,6 +322,14 @@ func TestFilterLines_IgnoresErrorInFilePath(t *testing.T) {
 	}
 }
 
+func TestFilterLines_IgnoresErrorInHboxContext(t *testing.T) {
+	input := []byte("Underfull \\hbox (badness 2111) in paragraph at lines 1--2\n\\TU/georgia.ttf(7)/m/n/9 not have symmetries to exploit for error mitigation purposes, the\n []\n")
+	lines := filterLines(input)
+	if len(lines) != 1 || lineType(lines[0]) != "warning" {
+		t.Fatalf("expected 1 warning line, got %v", lines)
+	}
+}
+
 func TestFilterLines_WarningsWhenNoErrors(t *testing.T) {
 	input := []byte("LaTeX Warning: Citation 'foo' undefined.\nOverfull \\hbox in paragraph\n")
 	lines := filterLines(input)
@@ -338,6 +346,8 @@ func TestLineType(t *testing.T) {
 		{"! Undefined control sequence.", "error"},
 		{"pdfTeX error (ext4): cannot open font", "error"},
 		{"(There were 3 errors)", "error"},
+		{"Package foo Error: broken", "error"},
+		{"\\TU/georgia.ttf(7)/m/n/9 exploit for error mitigation purposes, the", "warning"},
 		{"l.4 \\badcommand", "warning"},
 		{"./main.tex:12: Undefined control sequence", "warning"},
 		{"LaTeX Warning: Citation undefined", "warning"},

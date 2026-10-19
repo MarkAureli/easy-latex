@@ -100,7 +100,11 @@ func resolveEngine(cfg *Config, flagVal string) (string, error) {
 
 var errorPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^!`),
-	regexp.MustCompile(`(?i)\berrors?\b`),
+	// Anchored: a bare "error" word also appears in paragraph text echoed as
+	// Over/Underfull hbox context and must not turn warnings into errors.
+	regexp.MustCompile(`\b(?:Error:|error \()`),
+	regexp.MustCompile(`^\(There were \d+ errors?\)`),
+	regexp.MustCompile(`(?i)\bfatal error\b`),
 }
 
 var warningPatterns = []*regexp.Regexp{

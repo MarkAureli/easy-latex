@@ -31,6 +31,6 @@ Flags:
 - `--strict` / `--no-strict` — override `cfg.Strict` for this run. In strict mode any pedantic, spelling, or compile-time warning makes runCompile return a non-zero error after printing all sections and "Compiled successfully".
 - `--engine` — override LaTeX engine for this run (`pdflatex`, `xelatex`, `lualatex`). Highest precedence in `resolveEngine`.
 
-Output filtering (`filterLines`): keeps lines matching `^!`, `^l.\d+`, warning, error, undefined, multiply defined, Over/Underfull.
+Output filtering (`filterLines`): keeps lines matching `^!`, `^l.\d+`, warning, error, undefined, multiply defined, Over/Underfull. Error patterns are anchored (`^!`, `Error:`, `error (`, `(There were N errors)`, `fatal error`); a bare "error" word in echoed hbox context must not count (it used to demote all warnings: errors win in `filterLines`).
 
 `entriesBibFile(bibFiles)` — returns path of `bibliography.bib` from config bib list, or `""` if absent.
