@@ -49,7 +49,7 @@ func Sty(names []string) []byte {
 \def\elprobe@state{\ifdefined\@captype\@captype\else-\fi}
 \newcommand\elprobe[1]{%
   \AddToHook{env/#1/begin}{\edef\elprobe@outer{\elprobe@state}}%
-  \AddToHook{env/#1/end}{\immediate\write\elprobe@file{#1|\elprobe@outer|\elprobe@state}}}
+  \AddToHook{env/#1/end}{\ifnum\currentgrouptype=6 \else\immediate\write\elprobe@file{#1|\elprobe@outer|\elprobe@state}\fi}}
 `)
 	for _, n := range sorted {
 		b.WriteString(`\elprobe{` + n + "}\n")
