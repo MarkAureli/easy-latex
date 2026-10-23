@@ -26,3 +26,19 @@ func TestAppendDiagsToLog(t *testing.T) {
 		}
 	}
 }
+
+func TestAppendDiagsToLogLinelessVbox(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "main.log")
+	in := "Underfull \\vbox (badness 10000) has occurred while \\output is active []\n"
+	if err := os.WriteFile(p, []byte(in), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := appendDiagsToLog(p, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(p)
+	want := "Package el Warning: [vbox] Underfull \\vbox (badness 10000) has occurred while \\output is active on input line 1.\n"
+	if !strings.Contains(string(got), want) {
+		t.Errorf("missing %q in %q", want, got)
+	}
+}

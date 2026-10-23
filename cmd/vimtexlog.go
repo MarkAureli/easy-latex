@@ -15,11 +15,12 @@ import (
 // attach a file to warnings, so the file name is part of the message and the
 // entry's location falls back to the main file.
 func appendDiagsToLog(logPath string, ped, spell []pedantic.Diagnostic) error {
-	if len(ped)+len(spell) == 0 {
-		return nil
-	}
 	var b strings.Builder
 	b.WriteString("\n")
+	emitLinelessBoxes(&b, logPath)
+	if len(ped)+len(spell) == 0 && b.Len() == 1 {
+		return nil
+	}
 	emit := func(tag string, diags []pedantic.Diagnostic) {
 		for _, d := range diags {
 			line := max(d.Line, 1)
@@ -37,4 +38,19 @@ func appendDiagsToLog(logPath string, ped, spell []pedantic.Diagnostic) error {
 	defer f.Close()
 	_, err = f.WriteString(b.String())
 	return err
+}
+
+// emitLinelessBoxes re-emits `Underfull \vbox ... has occurred while \output is
+// active` log lines as `Package el Warning`, because VimTeX's errorformat only
+// matches Underfull \vbox with an `at line N` and silently drops these.
+func emitLinelessBoxes(b *strings.Builder, logPath string) {
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		return
+	}
+	for _, l := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(l, "Underfull \\vbox") && strings.Contains(l, "while \\output is active") {
+			fmt.Fprintf(b, "Package el Warning: [vbox] %s on input line 1.\n\n", strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(l), "[]")))
+		}
+	}
 }

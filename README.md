@@ -77,7 +77,7 @@ $ el compile -o
 
 #### Editor integration (VimTeX)
 
-Pedantic and spelling findings are also appended to `.el/<name>.log` as `Package el Warning: file: [el] message on input line N.` entries, so VimTeX's error list (`:VimtexErrors`) shows them as warnings next to the usual LaTeX ones without marking the compilation as failed. VimTeX cannot attach a file to warnings, so the file name is in the message text.
+Pedantic and spelling findings are also appended to `.el/<name>.log` as `Package el Warning: file: [el] message on input line N.` entries, so VimTeX's error list (`:VimtexErrors`) shows them as warnings next to the usual LaTeX ones without marking the compilation as failed. VimTeX cannot attach a file to warnings, so the file name is in the message text. Underfull `\vbox` warnings without a line number (which VimTeX would otherwise drop) are re-emitted the same way.
 
 #### Bib processing
 
