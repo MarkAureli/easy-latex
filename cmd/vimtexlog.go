@@ -40,17 +40,24 @@ func appendDiagsToLog(logPath string, ped, spell []pedantic.Diagnostic) error {
 	return err
 }
 
-// emitLinelessBoxes re-emits `Underfull \vbox ... has occurred while \output is
-// active` log lines as `Package el Warning`, because VimTeX's errorformat only
-// matches Underfull \vbox with an `at line N` and silently drops these.
+// emitLinelessBoxes re-emits `Underfull|Overfull \vbox|\hbox ... has occurred
+// while \output is active` log lines as `Package el Warning`, because VimTeX's
+// errorformat only matches boxes with an `at line N` and silently drops these.
 func emitLinelessBoxes(b *strings.Builder, logPath string) {
 	data, err := os.ReadFile(logPath)
 	if err != nil {
 		return
 	}
 	for _, l := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(l, "Underfull \\vbox") && strings.Contains(l, "while \\output is active") {
-			fmt.Fprintf(b, "Package el Warning: [vbox] %s on input line 1.\n\n", strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(l), "[]")))
+		if !strings.Contains(l, "while \\output is active") {
+			continue
+		}
+		for _, kind := range []string{"Underfull \\vbox", "Overfull \\vbox", "Underfull \\hbox", "Overfull \\hbox"} {
+			if !strings.HasPrefix(l, kind) {
+				continue
+			}
+			fmt.Fprintf(b, "Package el Warning: [%s] %s on input line 1.\n\n", kind[len(kind)-4:], strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(l), "[]")))
+			break
 		}
 	}
 }
