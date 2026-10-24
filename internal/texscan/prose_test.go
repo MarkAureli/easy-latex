@@ -282,3 +282,15 @@ func TestProseRuns_LineLengthPreserved(t *testing.T) {
 		t.Errorf("line length not preserved: src=%d run=%d", len(src), len(runs[0].Text))
 	}
 }
+
+func TestProseRunsMultilineOptArgs(t *testing.T) {
+	src := "\\begin{tcolorbox}[\n    colback=white,\n    title={Box [1]}]\nHello world\n\\end{tcolorbox}\n"
+	runs := ProseRuns("a.tex", src, DefaultTextMacros)
+	var got []string
+	for _, r := range runs {
+		got = append(got, strings.TrimSpace(r.Text))
+	}
+	if len(got) != 1 || got[0] != "Hello world" {
+		t.Fatalf("got %q, want only \"Hello world\"", got)
+	}
+}

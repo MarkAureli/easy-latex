@@ -190,6 +190,7 @@ func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 		stMathEnv   // \begin{<envMath>} ... \end{...}
 		stVerbEnv   // verbatim env
 		stIgnoreArg // skipping first {...} of an ignored macro
+		stOptArg    // inside a `[...]` option list that spans lines
 	)
 
 	st := stText
@@ -201,6 +202,9 @@ func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 	skipAllArgs := false     // non-text macro: keep skipping groups until a non-group token
 	defName := false         // definition macro consumed; unbraced `\name` may follow
 	defParams := false       // ...and `#1#2` parameter tokens after that name
+	optDepth := 0            // open `[` depth while in stOptArg
+	optNext := stText        // state to enter once the option list closes
+	optEnv := ""             // envName to set with optNext
 
 	out := make([]ProseRun, 0, len(lines))
 
@@ -210,6 +214,9 @@ func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 		if strings.TrimSpace(line) == "" {
 			// Paragraph break: pending argument skips cannot span it.
 			awaitingArg, skipAllArgs, defName = false, false, false
+			if st == stOptArg {
+				st = stText
+			}
 		}
 
 		i := 0
@@ -217,6 +224,32 @@ func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 			c := line[i]
 
 			switch st {
+			case stOptArg:
+				blank(i)
+				switch c {
+				case '\\':
+					if i+1 < len(line) {
+						blank(i + 1)
+						i++
+					}
+				case '[':
+					optDepth++
+				case ']':
+					optDepth--
+					if optDepth == 0 {
+						i++
+						var d int
+						i, d = blankOptArgs(line, buf, i)
+						if d > 0 {
+							optDepth = d
+						} else {
+							st, envName = optNext, optEnv
+						}
+						continue
+					}
+				}
+				i++
+				continue
 			case stText:
 				if awaitingArg {
 					// Skip whitespace, optional `[...]` groups, then expect `{`.
@@ -323,14 +356,19 @@ func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 						}
 						i += n
 						// Blank any immediately-following `[...]` env options.
-						i = blankOptArgs(line, buf, i)
+						var d int
+						i, d = blankOptArgs(line, buf, i)
+						next := stText
 						switch {
 						case proseVerbatimEnvs[name]:
-							st = stVerbEnv
-							envName = name
+							next = stVerbEnv
 						case proseMathEnvs[name]:
-							st = stMathEnv
-							envName = name
+							next = stMathEnv
+						}
+						if d > 0 {
+							st, optDepth, optNext, optEnv = stOptArg, d, next, name
+						} else if next != stText {
+							st, envName = next, name
 						}
 						// non-math non-verbatim env: stay in text, but the
 						// `\begin{name}` letters were already blanked.
@@ -353,7 +391,11 @@ func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 						}
 						i += n
 						// Blank any immediately-following `[...]` option args.
-						i = blankOptArgs(line, buf, i)
+						var d int
+						i, d = blankOptArgs(line, buf, i)
+						if d > 0 {
+							st, optDepth, optNext, optEnv = stOptArg, d, stText, ""
+						}
 						skip, isText := textMacros[name]
 						switch {
 						case !isText:
@@ -527,8 +569,9 @@ func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 // `[]` inside an option list). Stops on the first non-`[` byte. Returns the
 // new index after the consumed sequence. Backslash-escaped brackets inside
 // the option body are honored (the byte after `\` is skipped without
-// triggering depth changes).
-func blankOptArgs(line string, buf []byte, i int) int {
+// triggering depth changes). When a `[` stays unclosed at end of line, the
+// open bracket depth is returned so the caller can carry it to the next line.
+func blankOptArgs(line string, buf []byte, i int) (int, int) {
 	for i < len(line) && line[i] == '[' {
 		depth := 1
 		buf[i] = ' '
@@ -557,11 +600,10 @@ func blankOptArgs(line string, buf []byte, i int) int {
 			}
 		}
 		if depth > 0 {
-			// Unclosed bracket — abandon and let outer state machine handle.
-			return i
+			return i, depth
 		}
 	}
-	return i
+	return i, 0
 }
 
 // readMacroName reads `\<macroChars>(*?)` starting at i (where line[i]=='\\').
