@@ -52,6 +52,7 @@ func init() {
 		c.Flags().BoolVar(&spellGlobal, "global", false, "Operate on the global file (instead of project-local)")
 		c.Flags().BoolVar(&spellIgnore, "ignore", false, "Operate on the macro ignore file (macros whose arguments are not spell-checked)")
 		c.Flags().BoolVar(&spellCommon, "common", false, "Operate on the language-agnostic common dict")
+		c.MarkFlagsMutuallyExclusive("ignore", "common")
 	}
 	spellCmd.AddCommand(spellAddCmd)
 	spellCmd.AddCommand(spellRemoveCmd)

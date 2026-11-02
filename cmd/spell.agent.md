@@ -12,7 +12,7 @@ el spell remove <token>... [--global] [--ignore | --common]
 el spell list             [--global] [--ignore | --common]
 ```
 
-`--ignore` and `--common` are mutually exclusive (validated up front).
+`--ignore` and `--common` are mutually exclusive (cobra `MarkFlagsMutuallyExclusive` — so flag TAB-completion hides the conflicting one — plus an up-front check).
 
 ## Target resolution
 
