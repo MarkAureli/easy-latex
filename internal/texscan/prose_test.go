@@ -294,3 +294,24 @@ func TestProseRunsMultilineOptArgs(t *testing.T) {
 		t.Fatalf("got %q, want only \"Hello world\"", got)
 	}
 }
+
+func TestProseRunsSkipsEnvMandatoryArgs(t *testing.T) {
+	src := "\\begin{tabular}{XXXXX}\nHello & world\\\\\n\\end{tabular}\n" +
+		"\\begin{tabularx}{\\textwidth}{XXXXX}\nfoo\n\\end{tabularx}\n" +
+		"\\begin{tabular}[t]{YYYYY}\nbar\n\\end{tabular}\n" +
+		"\\begin{center}\n{\\Large Zork}\n\\end{center}\n"
+	var all string
+	for _, r := range ProseRuns("a.tex", src, DefaultTextMacros) {
+		all += r.Text + "\n"
+	}
+	for _, bad := range []string{"XXXXX", "YYYYY", "textwidth"} {
+		if strings.Contains(all, bad) {
+			t.Errorf("%q leaked into prose: %q", bad, all)
+		}
+	}
+	for _, good := range []string{"Hello", "foo", "bar", "Zork"} {
+		if !strings.Contains(all, good) {
+			t.Errorf("%q missing from prose: %q", good, all)
+		}
+	}
+}

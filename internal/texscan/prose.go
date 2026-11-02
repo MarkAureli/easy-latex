@@ -244,6 +244,13 @@ func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 							optDepth = d
 						} else {
 							st, envName = optNext, optEnv
+							if optNext == stText && optEnv != "" {
+								var bd int
+								i, bd = blankEnvBraceArgs(line, buf, i)
+								if bd > 0 {
+									st, braceDepth = stIgnoreArg, bd
+								}
+							}
 						}
 						continue
 					}
@@ -369,6 +376,14 @@ func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 							st, optDepth, optNext, optEnv = stOptArg, d, next, name
 						} else if next != stText {
 							st, envName = next, name
+						} else {
+							// Mandatory args of text envs (`{XXXXX}` column specs,
+							// widths, …) are never prose.
+							var bd int
+							i, bd = blankEnvBraceArgs(line, buf, i)
+							if bd > 0 {
+								st, braceDepth = stIgnoreArg, bd
+							}
 						}
 						// non-math non-verbatim env: stay in text, but the
 						// `\begin{name}` letters were already blanked.
@@ -562,6 +577,37 @@ func ProseRuns(file, content string, textMacros map[string]int) []ProseRun {
 		}
 	}
 	return out
+}
+
+// blankEnvBraceArgs blanks any run of immediately-following `{...}` groups
+// (no whitespace between) after `\begin{env}[...]`. Returns the new index and,
+// if the last group is unclosed on this line, its remaining brace depth.
+func blankEnvBraceArgs(line string, buf []byte, i int) (int, int) {
+	for i < len(line) && line[i] == '{' {
+		depth := 0
+		for i < len(line) {
+			c := line[i]
+			buf[i] = ' '
+			i++
+			if c == '\\' && i < len(line) {
+				buf[i] = ' '
+				i++
+				continue
+			}
+			if c == '{' {
+				depth++
+			} else if c == '}' {
+				depth--
+				if depth == 0 {
+					break
+				}
+			}
+		}
+		if depth > 0 {
+			return i, depth
+		}
+	}
+	return i, 0
 }
 
 // blankOptArgs blanks any sequence of immediately-following `[...]` optional

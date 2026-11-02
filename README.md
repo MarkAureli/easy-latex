@@ -306,7 +306,7 @@ Files are sorted and deduplicated on every write; user comments are not preserve
 
 ##### Macro ignore list
 
-Spell-checking is **whitelist-based**: only the arguments of known text commands (`\emph`, `\textbf`, `\section`, `\caption`, `\footnote`, `\item`, `\title`, `\author`, `\textcolor` (text arg only), `\href` (text arg only), …) are checked. The arguments of every other command — `\cite`, `\ref`, `\label`, `\input`, `\usepackage`, `\includegraphics`, `\newcommand`, `\rowcolor`, … — are skipped at any position, so new or unknown commands never cause false positives.
+Spell-checking is **whitelist-based**: only the arguments of known text commands (`\emph`, `\textbf`, `\section`, `\caption`, `\footnote`, `\item`, `\title`, `\author`, `\textcolor` (text arg only), `\href` (text arg only), …) are checked. The arguments of every other command — `\cite`, `\ref`, `\label`, `\input`, `\usepackage`, `\includegraphics`, `\newcommand`, `\rowcolor`, … — are skipped at any position, so new or unknown commands never cause false positives. Likewise, the mandatory `{…}` arguments written directly after `\begin{env}` (e.g. the column spec in `\begin{tabular}{XXXXX}` or `\begin{tabularx}{\textwidth}{XXXXX}`) are never spell-checked.
 
 Commands you define yourself (`\newcommand`, `\renewcommand`, `\providecommand`, `\DeclareRobustCommand`, `\NewDocumentCommand`, `\def`, …) are added to the whitelist automatically, so their arguments are checked. To exclude one (or a built-in text command), list it in:
 
