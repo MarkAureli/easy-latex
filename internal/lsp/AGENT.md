@@ -70,3 +70,5 @@ Reads all keys from the global bib cache via `bib.LoadCacheKeys()`. No bib file 
 - Code action returns whole-document edit. Editors handle this but cursor position may shift on non-trivial diffs.
 - No incremental sync — every change re-lints the whole document. Cheap for typical project sizes.
 - Spell column offsets drift slightly on lines containing TeX accent macros (`NormalizeAccents` is not length-preserving).
+
+**Responses**: `response.MarshalJSON` always emits `result` (null if nil) unless `error` is set. `omitempty` used to drop `result` for `shutdown`, yielding `{id,jsonrpc}` which Neovim rejects (`INVALID_SERVER_MESSAGE`).

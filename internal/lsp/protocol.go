@@ -18,6 +18,24 @@ type response struct {
 	Error   *responseError  `json:"error,omitempty"`
 }
 
+// MarshalJSON emits `"result": null` for successful responses with a nil
+// result (e.g. shutdown). JSON-RPC requires exactly one of result/error, and
+// clients such as Neovim reject a response with neither (INVALID_SERVER_MESSAGE).
+func (r response) MarshalJSON() ([]byte, error) {
+	if r.Error != nil {
+		return json.Marshal(struct {
+			JSONRPC string          `json:"jsonrpc"`
+			ID      json.RawMessage `json:"id"`
+			Error   *responseError  `json:"error"`
+		}{r.JSONRPC, r.ID, r.Error})
+	}
+	return json.Marshal(struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Result  any             `json:"result"`
+	}{r.JSONRPC, r.ID, r.Result})
+}
+
 type responseError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`

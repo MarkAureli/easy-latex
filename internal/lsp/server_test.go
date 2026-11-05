@@ -600,3 +600,18 @@ func formatInt(n int) string {
 	}
 	return string(b)
 }
+
+func TestResponseNilResultIsExplicitNull(t *testing.T) {
+	id := json.RawMessage("2")
+	var buf bytes.Buffer
+	s := &server{w: &buf}
+	s.reply(&id, nil)
+	if !strings.Contains(buf.String(), `"result":null`) {
+		t.Errorf("shutdown reply lacks result: %q", buf.String())
+	}
+	buf.Reset()
+	s.replyError(&id, codeMethodNotFound, "x")
+	if strings.Contains(buf.String(), `"result"`) || !strings.Contains(buf.String(), `"error"`) {
+		t.Errorf("error reply malformed: %q", buf.String())
+	}
+}
