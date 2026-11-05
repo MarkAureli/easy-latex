@@ -8,36 +8,76 @@ import (
 	"github.com/MarkAureli/easy-latex/internal/pedantic"
 )
 
-// appendDiagsToLog appends pedantic and spelling diagnostics to the engine log
-// as `Package el Warning: ... on input line N.` so VimTeX's latexlog parser
-// lists them in :VimtexErrors as warnings. (`file:line:` form would parse as an
-// error and make VimTeX report the compilation as failed.) The parser cannot
-// attach a file to warnings, so the file name is part of the message and the
-// entry's location falls back to the main file.
-func appendDiagsToLog(logPath string, ped, spell []pedantic.Diagnostic) error {
-	var b strings.Builder
-	b.WriteString("\n")
-	emitLinelessBoxes(&b, logPath)
-	if len(ped)+len(spell) == 0 && b.Len() == 1 {
-		return nil
+// appendDiagsToLog prepares the engine log for VimTeX's latexlog parser:
+//
+//   - every warning in the log is preceded by a `**"file"` line naming the
+//     source file it came from. VimTeX's errorformat treats `**file` as a
+//     file-stack push (`%-P**\"%f\"`), so the following warning entry gets that
+//     file instead of the main-file fallback. Without this, only
+//     Over/Underfull boxes in space-free file names get a correct file.
+//   - pedantic and spelling diagnostics are appended as
+//     `Package el Warning: ... on input line N.` (a `file:line:` form would
+//     parse as an error and make VimTeX report the compilation as failed),
+//     each preceded by its own `**"file"` push.
+//   - lineless Over/Underfull boxes are re-emitted (see emitLinelessBoxes),
+//     attributed to mainFile since the source location is unknown.
+func appendDiagsToLog(logPath, mainFile string, ped, spell []pedantic.Diagnostic) error {
+	orig, err := os.ReadFile(logPath)
+	if err != nil {
+		return err
 	}
+	var b strings.Builder
+	b.WriteString(annotateLogFiles(string(orig), mainFile))
+	b.WriteString("\n")
+	b.WriteString(logFilePush(mainFile))
+	emitLinelessBoxes(&b, logPath)
 	emit := func(tag string, diags []pedantic.Diagnostic) {
 		for _, d := range diags {
 			line := max(d.Line, 1)
 			msg := strings.ReplaceAll(d.Message, "\n", " ")
+			b.WriteString(logFilePush(d.File))
 			fmt.Fprintf(&b, "Package el Warning: %s: [%s] %s on input line %d.\n\n", d.File, tag, msg, line)
 		}
 	}
 	emit("el", ped)
 	emit("el:spell", spell)
+	return os.WriteFile(logPath, []byte(b.String()), 0644)
+}
 
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
+const boxDecoyLine = "(el-unknown-file)\n"
+
+// logFilePush returns the `**"file"` file-stack push line VimTeX understands.
+func logFilePush(file string) string {
+	return "**\"" + strings.TrimPrefix(file, "./") + "\"\n"
+}
+
+// annotateLogFiles inserts a file-stack push line before every diagnostic in
+// the engine log, naming the project file TeX was reading at that point
+// (mainFile when unknown).
+func annotateLogFiles(log, mainFile string) string {
+	var tr logFileTracker
+	var b strings.Builder
+	for _, l := range strings.SplitAfter(log, "\n") {
+		text := strings.TrimSuffix(l, "\n")
+		isDiag := !contextLinePattern.MatchString(text) && isDiagnosticLine(text)
+		if isDiag && !tr.inBlock && !strings.HasPrefix(text, "Package el Warning") {
+			f := tr.current()
+			if f == "" {
+				f = mainFile
+			}
+			b.WriteString(logFilePush(f))
+			if strings.HasPrefix(text, "Overfull") || strings.HasPrefix(text, "Underfull") {
+				// VimTeX re-resolves the file of box warnings by scanning upwards
+				// for a line ending in "(file", which mis-attributes names with
+				// spaces. A decoy unreadable file on the line directly above makes
+				// that lookup give up and keep the pushed file.
+				b.WriteString(boxDecoyLine)
+			}
+		}
+		tr.feed(text, isDiag)
+		b.WriteString(l)
 	}
-	defer f.Close()
-	_, err = f.WriteString(b.String())
-	return err
+	return b.String()
 }
 
 // emitLinelessBoxes re-emits `Underfull|Overfull \vbox|\hbox ... has occurred
