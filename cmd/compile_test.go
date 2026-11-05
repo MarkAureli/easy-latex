@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -455,5 +456,31 @@ func TestRewriteCiteKeys_EscapedPercentBeforeCite(t *testing.T) {
 	want := "about $92\\,\\%$ see \\textcite[22]{New1} % \\cite{old1}\n"
 	if string(got) != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestFilterLines_WarningsNameSourceFile(t *testing.T) {
+	out := "(./main.tex [1] (./Kapitel 5/5.2 Wert.tex\n" +
+		"LaTeX Warning: Reference `a' on page 2 undefined on input line 23.\n\n" +
+		"Overfull \\hbox (6pt too wide) in paragraph at lines 1--2\n" +
+		"\\T1/x/m/n/12 foo (bar) )\n\n" +
+		"[3]) (./other.tex\n" +
+		"LaTeX Warning: Reference `b' on page 3 undefined on input line 5.\n\n) )\n"
+	got := filterLines([]byte(out))
+	want := []string{
+		"Kapitel 5/5.2 Wert.tex: LaTeX Warning: Reference `a' on page 2 undefined on input line 23.",
+		"Kapitel 5/5.2 Wert.tex: Overfull \\hbox (6pt too wide) in paragraph at lines 1--2",
+		"other.tex: LaTeX Warning: Reference `b' on page 3 undefined on input line 5.",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestFilterLines_FileClosedAfterContextLine(t *testing.T) {
+	out := "(./a.tex\npdfTeX warning (ext4): dup\n<to be read again>\n   \\relax\nl.22\n      [1]) (./b.tex\n\nLaTeX Warning: x undefined on input line 3.\n\n)\n"
+	got := filterLines([]byte(out))
+	if len(got) < 1 || !strings.HasPrefix(got[len(got)-1], "b.tex: LaTeX Warning") {
+		t.Errorf("got %q", got)
 	}
 }

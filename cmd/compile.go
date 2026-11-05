@@ -423,7 +423,11 @@ func needsRerun(lines []string) bool {
 func filterLines(output []byte) []string {
 	var errors, warnings []string
 	lastKind := "" // "error" or "warning"
+	var files logFileTracker
 	for line := range strings.SplitSeq(string(output), "\n") {
+		isDiag := !contextLinePattern.MatchString(line) && isDiagnosticLine(line)
+		curFile := files.current()
+		files.feed(line, isDiag)
 		// Context lines (l.123 ...) inherit the category of the preceding diagnostic.
 		if contextLinePattern.MatchString(line) {
 			switch lastKind {
@@ -446,6 +450,11 @@ func filterLines(output []byte) []string {
 		if !matched {
 			for _, pat := range warningPatterns {
 				if pat.MatchString(line) {
+					if curFile != "" {
+						// -file-line-error already prefixes errors; warnings
+						// only carry "input line N", so name the file.
+						line = curFile + ": " + line
+					}
 					warnings = append(warnings, line)
 					lastKind = "warning"
 					break
@@ -457,6 +466,21 @@ func filterLines(output []byte) []string {
 		return errors
 	}
 	return warnings
+}
+
+// isDiagnosticLine reports whether line matches any error or warning pattern.
+func isDiagnosticLine(line string) bool {
+	for _, pat := range errorPatterns {
+		if pat.MatchString(line) {
+			return true
+		}
+	}
+	for _, pat := range warningPatterns {
+		if pat.MatchString(line) {
+			return true
+		}
+	}
+	return false
 }
 
 func printLines(lines []string) {

@@ -34,3 +34,5 @@ Flags:
 Output filtering (`filterLines`): keeps lines matching `^!`, `^l.\d+`, warning, error, undefined, multiply defined, Over/Underfull. Error patterns are anchored (`^!`, `Error:`, `error (`, `(There were N errors)`, `fatal error`); a bare "error" word in echoed hbox context must not count (it used to demote all warnings: errors win in `filterLines`).
 
 `entriesBibFile(bibFiles)` — returns path of `bibliography.bib` from config bib list, or `""` if absent.
+
+**Warning file attribution** — `filterLines` runs a `logFileTracker` (`cmd/logfiles.go`) over engine output, following `(./file.tex … )` nesting (spaces allowed in names; absolute/texmf paths ignored; diagnostic blocks not scanned, except the line after an `l.N` context line when it starts with `[`/`]`/`)`). Warning lines are prefixed `<project-relative file>: `. Errors unchanged (`-file-line-error`).
