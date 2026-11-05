@@ -803,11 +803,10 @@ func rewriteCiteKeys(texFiles []string, renames map[string]string) error {
 		changed := false
 		for i, line := range lines {
 			// Only rewrite the non-comment portion of each line.
-			commentIdx := strings.Index(line, "%")
-			pre, suf := line, ""
-			if commentIdx >= 0 {
-				pre, suf = line[:commentIdx], line[commentIdx:]
-			}
+			// StripComment honours escaped \% so prose like "92\,\%" is not
+			// mistaken for a comment start.
+			pre := texscan.StripComment(line)
+			suf := line[len(pre):]
 			newPre := pre
 			for _, r := range rules {
 				newPre = r.re.ReplaceAllString(newPre, "${1}"+r.new+"${2}")

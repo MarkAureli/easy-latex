@@ -440,3 +440,20 @@ func TestResolveEngine(t *testing.T) {
 		t.Error("expected error for invalid magic engine")
 	}
 }
+
+func TestRewriteCiteKeys_EscapedPercentBeforeCite(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "a.tex")
+	in := "about $92\\,\\%$ see \\textcite[22]{old1} % \\cite{old1}\n"
+	if err := os.WriteFile(f, []byte(in), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := rewriteCiteKeys([]string{f}, map[string]string{"old1": "New1"}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(f)
+	want := "about $92\\,\\%$ see \\textcite[22]{New1} % \\cite{old1}\n"
+	if string(got) != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
