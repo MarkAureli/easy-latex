@@ -36,3 +36,5 @@ Output filtering (`filterLines`): keeps lines matching `^!`, `^l.\d+`, warning, 
 `entriesBibFile(bibFiles)` — returns path of `bibliography.bib` from config bib list, or `""` if absent.
 
 **Warning file attribution** — `filterLines` runs a `logFileTracker` (`cmd/logfiles.go`) over engine output, following `(./file.tex … )` nesting (spaces allowed in names; absolute/texmf paths ignored; diagnostic blocks not scanned, except the line after an `l.N` context line when it starts with `[`/`]`/`)`). Warning lines are prefixed `<project-relative file>: `. Errors unchanged (`-file-line-error`).
+
+**Biber output**: `filterLines` drops `INFO - ` lines (incl. the `INFO - WARNINGS: n` summary); `WARN - ` counts as warning, `ERROR - `/`FATAL - ` as error.

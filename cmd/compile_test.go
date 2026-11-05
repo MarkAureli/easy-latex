@@ -484,3 +484,15 @@ func TestFilterLines_FileClosedAfterContextLine(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestFilterLines_BiberInfoDroppedWarnKept(t *testing.T) {
+	in := "INFO - Reading '.el/main.bcf'\nWARN - Data source 'p.bib' contains no BibTeX entries/macros, ignoring\nINFO - WARNINGS: 1\n"
+	got := filterLines([]byte(in))
+	if len(got) != 1 || !strings.HasPrefix(got[0], "WARN - ") || lineType(got[0]) != "warning" {
+		t.Errorf("got %q", got)
+	}
+	got = filterLines([]byte("INFO - x\nERROR - Cannot find 'x.bib'!\nINFO - ERRORS: 1\n"))
+	if len(got) != 1 || lineType(got[0]) != "error" {
+		t.Errorf("got %q", got)
+	}
+}

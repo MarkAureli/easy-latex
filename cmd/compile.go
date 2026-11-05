@@ -104,11 +104,13 @@ var errorPatterns = []*regexp.Regexp{
 	// Over/Underfull hbox context and must not turn warnings into errors.
 	regexp.MustCompile(`\b(?:Error:|error \()`),
 	regexp.MustCompile(`^\(There were \d+ errors?\)`),
+	regexp.MustCompile(`^(?:ERROR|FATAL) - `), // biber
 	regexp.MustCompile(`(?i)\bfatal error\b`),
 }
 
 var warningPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)warning`),
+	regexp.MustCompile(`^WARN - `), // biber
 	regexp.MustCompile(`(?i)undefined`),
 	regexp.MustCompile(`(?i)multiply defined`),
 	regexp.MustCompile(`^(?:Over|Under)full`),
@@ -425,6 +427,10 @@ func filterLines(output []byte) []string {
 	lastKind := "" // "error" or "warning"
 	var files logFileTracker
 	for line := range strings.SplitSeq(string(output), "\n") {
+		// Biber's progress lines, incl. the "INFO - WARNINGS: n" summary, are noise.
+		if strings.HasPrefix(line, "INFO - ") {
+			continue
+		}
 		isDiag := !contextLinePattern.MatchString(line) && isDiagnosticLine(line)
 		curFile := files.current()
 		files.feed(line, isDiag)
