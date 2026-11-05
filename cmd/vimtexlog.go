@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/pedantic"
@@ -46,9 +47,14 @@ func appendDiagsToLog(logPath, mainFile string, ped, spell []pedantic.Diagnostic
 
 const boxDecoyLine = "(el-unknown-file)\n"
 
-// logFilePush returns the `**"file"` file-stack push line VimTeX understands.
+// logFilePush returns the `**"/abs/file"` file-stack push line VimTeX understands.
 func logFilePush(file string) string {
-	return "**\"" + strings.TrimPrefix(file, "./") + "\"\n"
+	// Absolute: nvim resolves quickfix paths against its own cwd, which need not
+	// be the project root (el runs with the main file's directory as cwd).
+	if abs, err := filepath.Abs(file); err == nil {
+		file = abs
+	}
+	return "**\"" + file + "\"\n"
 }
 
 // annotateLogFiles inserts a file-stack push line before every diagnostic in

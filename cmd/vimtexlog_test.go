@@ -71,8 +71,8 @@ func TestAppendDiagsToLogPushesSourceFile(t *testing.T) {
 	}
 	got, _ := os.ReadFile(p)
 	for _, want := range []string{
-		"**\"Kapitel 5/a b.tex\"\nLaTeX Warning: Reference",
-		"**\"Kapitel 5/a b.tex\"\nPackage el Warning: Kapitel 5/a b.tex: [el] bad",
+		logFilePush("Kapitel 5/a b.tex") + "LaTeX Warning: Reference",
+		logFilePush("Kapitel 5/a b.tex") + "Package el Warning: Kapitel 5/a b.tex: [el] bad",
 	} {
 		if !strings.Contains(string(got), want) {
 			t.Errorf("missing %q in %q", want, got)
@@ -83,8 +83,15 @@ func TestAppendDiagsToLogPushesSourceFile(t *testing.T) {
 func TestAnnotateLogFilesBoxDecoy(t *testing.T) {
 	in := "(./a b.tex\nOverfull \\hbox (1pt too wide) in paragraph at lines 3--4\n []\n\n)\n"
 	got := annotateLogFiles(in, "main.tex")
-	want := "**\"a b.tex\"\n" + boxDecoyLine + "Overfull \\hbox"
+	want := logFilePush("a b.tex") + boxDecoyLine + "Overfull \\hbox"
 	if !strings.Contains(got, want) {
 		t.Errorf("missing %q in %q", want, got)
+	}
+}
+
+func TestLogFilePushIsAbsolute(t *testing.T) {
+	got := logFilePush("Kapitel 5/a b.tex")
+	if !strings.HasPrefix(got, "**\"/") || !strings.HasSuffix(got, "/Kapitel 5/a b.tex\"\n") {
+		t.Errorf("not absolute: %q", got)
 	}
 }
