@@ -248,3 +248,32 @@ func TestTruncateAuthor(t *testing.T) {
 		t.Errorf("multiple authors: got %q", got)
 	}
 }
+
+func TestBibListPreRun_ResolvesProjectRootFromSubdir(t *testing.T) {
+	dir := t.TempDir()
+	dir, _ = filepath.EvalSymlinks(dir)
+	os.MkdirAll(filepath.Join(dir, ".el"), 0755)
+	sub := filepath.Join(dir, "Kapitel 3")
+	os.MkdirAll(sub, 0755)
+	chdir(t, sub)
+
+	if err := rootCmd.PersistentPreRunE(bibListCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	if wd, _ := os.Getwd(); wd != dir {
+		t.Errorf("cwd = %q, want project root %q", wd, dir)
+	}
+}
+
+func TestBibListPreRun_OutsideProjectStaysPut(t *testing.T) {
+	dir := t.TempDir()
+	dir, _ = filepath.EvalSymlinks(dir)
+	chdir(t, dir)
+
+	if err := rootCmd.PersistentPreRunE(bibListCmd, nil); err != nil {
+		t.Fatalf("bib list must work outside a project: %v", err)
+	}
+	if wd, _ := os.Getwd(); wd != dir {
+		t.Errorf("cwd changed to %q", wd)
+	}
+}

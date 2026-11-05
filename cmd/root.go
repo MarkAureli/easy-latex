@@ -313,8 +313,13 @@ var rootCmd = &cobra.Command{
 			return nil
 		}
 		// bib subcommands target the global cache; only `bib parse` needs a
-		// project (it consumes the project's registered .bib files).
+		// project (it consumes the project's registered .bib files). The others
+		// still use the project when there is one (e.g. `bib list` marks cited
+		// keys), so resolve the root like git does but tolerate its absence.
 		if isBibCommand(cmd) && cmd.Name() != "parse" {
+			if root, err := findProjectRoot(); err == nil {
+				return os.Chdir(root)
+			}
 			return nil
 		}
 		root, err := findProjectRoot()

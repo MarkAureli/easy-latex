@@ -53,3 +53,5 @@ Remove one or more entries from the global bib cache by key (`cobra.MinimumNArgs
 ## Related
 
 - `cmd/biblog.go` — `bibLogger` implements `bib.Logger` with colored output via `internal/term`
+
+**Project root**: all `el bib` subcommands chdir to the nearest ancestor containing `.el` (like git). `bib parse` requires one; `list`/`add` tolerate its absence (global cache only, no cited-key info).
