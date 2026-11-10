@@ -325,3 +325,20 @@ func TestAssignCanonicalKeys_RawItemsSkipped(t *testing.T) {
 		t.Errorf("items[1].Key = %q, want %q", got, "Smith2023APaper")
 	}
 }
+
+func TestLatexToASCII_ExtendedUnicodeLetters(t *testing.T) {
+	cases := map[string]string{
+		"Jamiołkowski":   "Jamiolkowski",
+		"Kamiński":       "Kaminski",
+		"Subaşı":         "Subasi",
+		"Erdoğan":        "Erdogan",
+		"Đorđević":       "Dordevic",
+		"Þórður":         "Thordur",
+		"Ștefan Țurcanu": "Stefan Turcanu",
+	}
+	for in, want := range cases {
+		if got := latexToASCII(in); got != want {
+			t.Errorf("latexToASCII(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

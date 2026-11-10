@@ -120,7 +120,7 @@ Produced by `AllocateCacheEntries` when canonical key differs from bib file key.
 
 ## Key generation (`key.go`)
 
-Canonical key: `{LastName}{Year}{Title}` — CamelCase, LaTeX accents→ASCII, math stripped.
+Canonical key: `{LastName}{Year}{Title}` — CamelCase, LaTeX accents→ASCII, Unicode letters→ASCII via `unicodeMap` (incl. Polish/Turkish/Romanian/Nordic: `ł ń ğ ı ş ș ţ ț đ ð þ ŋ œ`; unmapped non-ASCII letters act as word separators, e.g. `ł` once gave `JamioKowski`), math stripped.
 `@unpublished` with no year: `{LastName}{Title}`.
 Fallback to existing key if component missing.
 Disambiguate collisions with `a`, `b`, `c`, … suffix.
