@@ -120,7 +120,7 @@ func runBibList(cmd *cobra.Command, args []string) error {
 
 	colorSource := func(source string) string {
 		switch source {
-		case "crossref", "arxiv", "zenodo":
+		case "crossref", "arxiv", "zenodo", "datacite":
 			return c.Green + source + c.Reset
 		case "invalid-id":
 			return c.Red + source + c.Reset

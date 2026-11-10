@@ -280,7 +280,7 @@ func buildCacheEntry(e Entry, raw cacheEntry, source, rawURL string) cacheEntry 
 			fields[f.Name] = v
 		}
 	}
-	if source == "crossref" || source == "arxiv" || source == "zenodo" {
+	if source == "crossref" || source == "arxiv" || source == "zenodo" || source == "datacite" {
 		for k, v := range raw.Fields {
 			if v != "" {
 				fields[k] = v
@@ -616,6 +616,17 @@ func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Ent
 			return result, raw, "zenodo", ""
 		}
 		result, raw, crType, err := queryCrossref(e, doi, log)
+		if errors.Is(err, errNotFound) {
+			// Not a Crossref DOI — try DataCite (always @misc).
+			dcResult, dcRaw, dcErr := queryDataCite(e, doi, log)
+			if dcErr == nil {
+				return dcResult, dcRaw, "datacite", ""
+			}
+			if errors.Is(dcErr, errNotFound) {
+				return nil, cacheEntry{}, "invalid-id", "DOI not found in Crossref or DataCite"
+			}
+			return nil, cacheEntry{}, "timeout", fmt.Sprintf("DataCite query failed: %v", dcErr)
+		}
 		if err != nil {
 			source := "timeout"
 			if errors.Is(err, errNotFound) {
@@ -640,6 +651,22 @@ func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Ent
 	}
 
 	if id := findArxivID(e); id != "" {
+		// Entries identified only by an arXiv DOI (10.48550/arXiv.<id>)
+		// become arXiv @misc entries when arXiv-only metadata is used.
+		viaDOI := arxivIDFromDOI(entryRawDOI(e)) != ""
+		asArxivMisc := func(r *Entry) *Entry {
+			if !viaDOI {
+				return r
+			}
+			if r == nil {
+				cp := e
+				r = &cp
+			}
+			r.Type = "misc"
+			SetField(r, "eprint", "{"+id+"}")
+			SetField(r, "archiveprefix", "{arXiv}")
+			return r
+		}
 		result, raw, doi, err := queryArxiv(e, id, log)
 		if err != nil {
 			source := "timeout"
@@ -655,7 +682,7 @@ func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Ent
 			if crErr != nil {
 				// Crossref failed — fall back to arXiv result.
 				log.Warn(e.Key, fmt.Sprintf("Crossref query failed (%v), falling back to arXiv", crErr))
-				return result, raw, "arxiv", ""
+				return asArxivMisc(result), raw, "arxiv", ""
 			}
 			entryType := crType
 			if entryType == "" {
@@ -673,7 +700,7 @@ func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Ent
 			}
 			return crResult, crRaw, "crossref", ""
 		}
-		return result, raw, "arxiv", ""
+		return asArxivMisc(result), raw, "arxiv", ""
 	}
 
 	if spec, ok := entrySpecs[e.Type]; ok && slices.Contains(spec.mandatory, "doi") {
@@ -683,13 +710,26 @@ func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Ent
 }
 
 // findDOI returns the entry's DOI from the doi field or a doi.org url.
-// Placeholder DOIs (see isPlaceholderDOI) are ignored.
+// Placeholder DOIs (see isPlaceholderDOI) and arXiv DOIs (handled by
+// findArxivID) are ignored.
 func findDOI(e Entry) string {
-	if doi := FieldValue(e, "doi"); doi != "" && !isPlaceholderDOI(doi) {
+	if doi := FieldValue(e, "doi"); doi != "" && !isPlaceholderDOI(doi) && arxivIDFromDOI(doi) == "" {
 		return doi
 	}
 	u := FieldValue(e, "url")
-	if _, after, ok := strings.Cut(u, "doi.org/"); ok && !isPlaceholderDOI(after) {
+	if _, after, ok := strings.Cut(u, "doi.org/"); ok && !isPlaceholderDOI(after) && arxivIDFromDOI(after) == "" {
+		return after
+	}
+	return ""
+}
+
+// entryRawDOI returns the doi field, else the DOI of a doi.org url, without
+// any filtering.
+func entryRawDOI(e Entry) string {
+	if doi := FieldValue(e, "doi"); doi != "" {
+		return doi
+	}
+	if _, after, ok := strings.Cut(FieldValue(e, "url"), "doi.org/"); ok {
 		return after
 	}
 	return ""
@@ -722,6 +762,12 @@ func findArxivID(e Entry) string {
 	}
 	if m := reArxivURL.FindStringSubmatch(strings.ToLower(FieldValue(e, "url"))); m != nil {
 		return m[1]
+	}
+	if id := arxivIDFromDOI(FieldValue(e, "doi")); id != "" {
+		return id
+	}
+	if _, after, ok := strings.Cut(FieldValue(e, "url"), "doi.org/"); ok {
+		return arxivIDFromDOI(after)
 	}
 	return ""
 }
@@ -797,6 +843,11 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 		return "", false, err
 	}
 
+	// arXiv DOIs (10.48550/arXiv.<id>) take the arXiv path.
+	if axID := arxivIDFromDOI(normalizeDOI(id)); axID != "" {
+		id = axID
+	}
+
 	if doi := normalizeDOI(id); doi != "" {
 		if isPlaceholderDOI(doi) {
 			return "", false, fmt.Errorf("%s is a placeholder DOI (Crossref test prefix 10.5555, used by the ACM Digital Library for items without a registered DOI)", doi)
@@ -827,6 +878,30 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 		}
 		base := Entry{Type: "article", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
 		corrected, raw, crType, err := queryCrossref(base, doi, log)
+		if errors.Is(err, errNotFound) {
+			// Not a Crossref DOI — try DataCite (always @misc).
+			dcCorrected, dcRaw, dcErr := queryDataCite(base, doi, log)
+			if dcErr != nil {
+				if errors.Is(dcErr, errNotFound) {
+					return "", false, fmt.Errorf("DOI not found in Crossref or DataCite: %w", errNotFound)
+				}
+				return "", false, dcErr
+			}
+			if key := cachedKeyByDOI(c, dcRaw.Fields["doi"]); key != "" {
+				return key, false, nil
+			}
+			e := base
+			if dcCorrected != nil {
+				e = *dcCorrected
+			}
+			if err := checkAPIMandatoryFields(e, "DataCite"); err != nil {
+				return "", false, err
+			}
+			key := disambiguateKey(GenerateKey(e), c)
+			c[key] = buildCacheEntry(e, dcRaw, "datacite", "")
+			saveCache(c, log)
+			return key, true, nil
+		}
 		if err != nil {
 			return "", false, err
 		}

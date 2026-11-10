@@ -6,7 +6,7 @@ Command group for bibliography management. All subcommands read/write the **glob
 
 ### `el bib list`
 
-Lists entries from the global bib cache. Source colouring: `crossref`/`arxiv`/`zenodo` green, `invalid-id` red, `timeout` yellow, others dim. Uses `bib.LoadCacheEntries()` returning `[]CacheEntryInfo`. Displays truncated table: key, type, source. Helper funcs `truncate`, `truncateAuthor` for column width.
+Lists entries from the global bib cache. Source colouring: `crossref`/`arxiv`/`zenodo`/`datacite` green, `invalid-id` red, `timeout` yellow, others dim. Uses `bib.LoadCacheEntries()` returning `[]CacheEntryInfo`. Displays truncated table: key, type, source. Helper funcs `truncate`, `truncateAuthor` for column width.
 
 When config exists with `main` tex file, scans for `\cite{}` keys via `texscan.FindCiteKeys` and groups output into "Referenced" and "Unreferenced" sections. Falls back to flat list when config unavailable.
 
@@ -20,7 +20,7 @@ Flags:
 Manually allocate/update bib cache entries from registered `.bib` files. Calls `bib.AllocateCacheEntries(bibFiles, retryTimeout, log)`:
 - Parses all `.bib` files in config
 - Batch-prefetches all uncached arXiv ids in one API call (`bib.PrefetchArxivIDs`) before per-entry validation
-- Deduplicates by DOI (Crossref or Zenodo validated; Zenodo version DOIs merge into their concept DOI's entry), arXiv ID (arXiv validated), or canonical key (no-ID)
+- Deduplicates by DOI (Crossref, DataCite or Zenodo validated; Zenodo version DOIs merge into their concept DOI's entry), arXiv ID (arXiv validated), or canonical key (no-ID)
 - Skips entries already in cache
 - Does NOT rewrite bib files
 - Prints count of newly cached entries
@@ -39,7 +39,7 @@ Per-arg outcomes:
 - `isNew=false` — announces entry already cached with existing key
 - Placeholder DOI (`10.5555/…`) — error "… is a placeholder DOI …", cache untouched
 - `bib.ErrUnrecognizedID` — warns unrecognized format, continues to next arg
-- Other errors — prints to stderr, continues; first error returned at end. Includes "metadata missing mandatory fields for @<type>: …" when the Crossref/arXiv/Zenodo response lacks any field in `entrySpecs[type].mandatory` (e.g. authorless Crossref book records like `10.1007/b97696`); cache is not modified in that case.
+- Other errors — prints to stderr, continues; first error returned at end. Includes "metadata missing mandatory fields for @<type>: …" when the Crossref/arXiv/Zenodo/DataCite response lacks any field in `entrySpecs[type].mandatory` (e.g. authorless Crossref book records like `10.1007/b97696`); cache is not modified in that case.
 
 Uses `bibLogger` (`cmd/biblog.go`) for colored output. No config load required.
 
