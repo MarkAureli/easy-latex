@@ -143,6 +143,13 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 		switch {
 		case doi != "":
 			if cachedDOIs[strings.ToLower(doi)] {
+				// Already cached, possibly under another key (el bib add,
+				// another project): map this entry onto the cached key.
+				if key := cachedKeyByDOI(c, doi); key != "" {
+					aliasKey[i] = key
+				} else if owner, ok := pendingByDOI[strings.ToLower(doi)]; ok {
+					aliasOwner[i] = owner
+				}
 				continue
 			}
 			corrected, raw, source, warn := validateEntry(e, false, log)
@@ -167,6 +174,7 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 				items[i].Entry = *corrected
 			}
 			pending = append(pending, pendingEntry{i, buildCacheEntry(items[i].Entry, raw, source, rawURL)})
+			pendingByDOI[strings.ToLower(doi)] = i
 			if resolved != "" {
 				cachedDOIs[resolved] = true
 				pendingByDOI[resolved] = i
@@ -174,6 +182,9 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 			added++
 		case arxivID != "":
 			if cachedArxivIDs[strings.ToLower(arxivID)] {
+				if key := cachedKeyByEprint(c, arxivID); key != "" {
+					aliasKey[i] = key
+				}
 				continue
 			}
 			corrected, raw, source, warn := validateEntry(e, false, log)
@@ -262,6 +273,20 @@ func cachedKeyByDOI(c cache, doi string) string {
 	}
 	for key, entry := range c {
 		if strings.EqualFold(entry.Fields["doi"], doi) {
+			return key
+		}
+	}
+	return ""
+}
+
+// cachedKeyByEprint returns the cache key of the entry whose eprint equals
+// id (case-insensitive), or "" if none.
+func cachedKeyByEprint(c cache, id string) string {
+	if id == "" {
+		return ""
+	}
+	for key, entry := range c {
+		if strings.EqualFold(entry.Fields["eprint"], id) {
 			return key
 		}
 	}

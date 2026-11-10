@@ -2352,3 +2352,36 @@ func TestAddEntryFromID_PlaceholderDOIRejected(t *testing.T) {
 		t.Errorf("err = %v, want placeholder error", err)
 	}
 }
+
+// A bib entry whose DOI / eprint is already cached under a different key
+// (e.g. via el bib add) must be renamed to the cached key.
+func TestAllocateCacheEntries_DedupHit_RenamesToCachedKey(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	saveCache(cache{
+		"Combes2019Forest": cacheEntry{Source: "zenodo", Type: "misc",
+			Fields: map[string]string{"doi": "10.5281/zenodo.3455847", "author": "Combes, J.", "title": "Forest", "year": "2019"}},
+		"Doe2023Preprint": cacheEntry{Source: "arxiv", Type: "misc",
+			Fields: map[string]string{"eprint": "2301.07041", "archiveprefix": "arXiv", "author": "Doe, J.", "title": "Preprint", "year": "2023"}},
+	}, nil)
+	bibContent := "@misc{Gulshen2019Forest,\n  author = {Gulshen, K.},\n  title = {Forest},\n  year = {2019},\n  url = {https://doi.org/10.5281/zenodo.3455847},\n}\n\n" +
+		"@misc{Same,\n  author = {Combes, J.},\n  title = {Forest},\n  year = {2019},\n  doi = {10.5281/ZENODO.3455847},\n}\n\n" +
+		"@misc{Old,\n  author = {Roe, R.},\n  title = {Other},\n  year = {2023},\n  eprint = {2301.07041},\n  archiveprefix = {arXiv},\n}\n"
+	path := filepath.Join(dir, "test.bib")
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	added, renames, err := AllocateCacheEntries([]string{path}, true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added != 0 {
+		t.Errorf("added = %d, want 0", added)
+	}
+	want := map[string]string{"Gulshen2019Forest": "Combes2019Forest", "Same": "Combes2019Forest", "Old": "Doe2023Preprint"}
+	for k, v := range want {
+		if renames[k] != v {
+			t.Errorf("renames[%s] = %q, want %q (all: %v)", k, renames[k], v, renames)
+		}
+	}
+}
