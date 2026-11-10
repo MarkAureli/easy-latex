@@ -25,7 +25,7 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 
 Two-phase design: **cache allocation** and **bib generation from cache**. All validated entries live in the **global bib cache** (path from `bib.GlobalBibPath()`); there is no per-project cache file. Read-modify-write paths wrap their work in `withGlobalLock` for cross-process safety.
 
-- `AllocateCacheEntries(bibFiles, retryTimeout, log Logger)` — parses bib files, assigns canonical keys (`{LastName}{Year}{Title}`), validates unseen entries via Crossref (DOI) or arXiv (eprint), seeds the global cache. Used by `el init`, `el bib parse`, and auto-triggered by `el compile` when `bibliography.bib` changes.
+- `AllocateCacheEntries(bibFiles, retryTimeout, log Logger)` — parses bib files, assigns canonical keys (`{LastName}{Year}{Title}`), validates unseen entries via Zenodo (`10.5281/zenodo.*` DOI), Crossref (other DOI) or arXiv (eprint), seeds the global cache. Used by `el init`, `el bib parse`, and auto-triggered by `el compile` when `bibliography.bib` changes.
 - `WriteBibFromCache(path, citeKeys, opts)` — reconstructs entries from the global cache for cited keys only, applies config transforms (journal abbreviation, author formatting, brace titles, etc.), writes `bibliography.bib`. Called by `el compile` after pass 1. Any cited key present in the global cache but not yet in the project bib file is materialised here (auto-import on compile).
 - `AddEntryFromID(id, log Logger) (key, isNew, err)` — single-entry insertion from bare DOI/arXiv ID. Used by `el bib add`.
 

@@ -32,7 +32,7 @@ var canonicalOrder = map[string][]string{
 		"author", "year", "title", "institution", "doi", "url",
 	},
 	"misc": {
-		"author", "year", "title", "eprint", "archiveprefix", "primaryclass", "doi", "url",
+		"author", "year", "title", "publisher", "eprint", "archiveprefix", "primaryclass", "doi", "url",
 	},
 	"unpublished": {
 		"author", "year", "title", "doi", "url", "note",

@@ -121,6 +121,12 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 	}
 	var pending []pendingEntry
 	added := 0
+	// Zenodo version DOIs resolve to a concept DOI that may already be cached
+	// (aliasKey) or pending from an earlier item in this file (aliasOwner).
+	// Such items are merged into the existing entry instead of being added.
+	pendingByDOI := map[string]int{}
+	aliasOwner := map[int]int{}
+	aliasKey := map[int]string{}
 
 	for i, item := range items {
 		if !item.IsEntry {
@@ -143,11 +149,28 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 			if warn != "" {
 				log.Warn(e.Key, warn)
 			}
+			cachedDOIs[strings.ToLower(doi)] = true
+			resolved := strings.ToLower(raw.Fields["doi"])
+			if source == "zenodo" && resolved != "" && resolved != strings.ToLower(doi) {
+				if owner, ok := pendingByDOI[resolved]; ok {
+					aliasOwner[i] = owner
+					continue
+				}
+				if cachedDOIs[resolved] {
+					if key := cachedKeyByDOI(c, resolved); key != "" {
+						aliasKey[i] = key
+						continue
+					}
+				}
+			}
 			if corrected != nil {
 				items[i].Entry = *corrected
 			}
 			pending = append(pending, pendingEntry{i, buildCacheEntry(items[i].Entry, raw, source, rawURL)})
-			cachedDOIs[strings.ToLower(doi)] = true
+			if resolved != "" {
+				cachedDOIs[resolved] = true
+				pendingByDOI[resolved] = i
+			}
 			added++
 		case arxivID != "":
 			if cachedArxivIDs[strings.ToLower(arxivID)] {
@@ -192,8 +215,28 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 		}
 	}
 
-	// Re-assign canonical keys: Crossref/arXiv may have corrected author/title/year.
-	assignCanonicalKeys(items)
+	// Re-assign canonical keys: Crossref/arXiv/Zenodo may have corrected
+	// author/title/year. Merged aliases are excluded so they cannot force a
+	// collision suffix onto their owner, then take the owner's key.
+	view := slices.Clone(items)
+	for idx := range aliasOwner {
+		view[idx].IsEntry = false
+	}
+	for idx := range aliasKey {
+		view[idx].IsEntry = false
+	}
+	assignCanonicalKeys(view)
+	for i := range items {
+		if view[i].IsEntry {
+			items[i].Entry.Key = view[i].Entry.Key
+		}
+	}
+	for idx, owner := range aliasOwner {
+		items[idx].Entry.Key = items[owner].Entry.Key
+	}
+	for idx, key := range aliasKey {
+		items[idx].Entry.Key = key
+	}
 	for _, p := range pending {
 		c[items[p.itemIdx].Entry.Key] = p.entry
 	}
@@ -211,6 +254,20 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 	return added, renames, nil
 }
 
+// cachedKeyByDOI returns the cache key of the entry whose doi equals doi
+// (case-insensitive), or "" if none.
+func cachedKeyByDOI(c cache, doi string) string {
+	if doi == "" {
+		return ""
+	}
+	for key, entry := range c {
+		if strings.EqualFold(entry.Fields["doi"], doi) {
+			return key
+		}
+	}
+	return ""
+}
+
 // buildCacheEntry constructs a cacheEntry from a validated entry and its raw API
 // response, mirroring the snapshot logic in processBibFile.
 func buildCacheEntry(e Entry, raw cacheEntry, source, rawURL string) cacheEntry {
@@ -223,7 +280,7 @@ func buildCacheEntry(e Entry, raw cacheEntry, source, rawURL string) cacheEntry 
 			fields[f.Name] = v
 		}
 	}
-	if source == "crossref" || source == "arxiv" {
+	if source == "crossref" || source == "arxiv" || source == "zenodo" {
 		for k, v := range raw.Fields {
 			if v != "" {
 				fields[k] = v
@@ -378,7 +435,7 @@ var entrySpecs = map[string]typeSpec{
 	"misc": {
 		mandatory: []string{"author", "year", "title", "url"},
 		allowed: map[string]bool{
-			"author": true, "year": true, "title": true, "doi": true, "url": true,
+			"author": true, "year": true, "title": true, "publisher": true, "doi": true, "url": true,
 		},
 		arxivMandatory: []string{"author", "year", "title", "eprint", "archiveprefix"},
 		arxivAllowed: map[string]bool{
@@ -537,6 +594,20 @@ func ensureArticleOptionalFields(e *Entry) {
 func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Entry, raw cacheEntry, source, warning string) {
 	log = logOrNop(log)
 	if doi := findDOI(e); doi != "" {
+		if recid := zenodoRecordID(doi); recid != "" {
+			result, raw, _, err := queryZenodo(e, recid, log)
+			if err != nil {
+				source := "timeout"
+				if errors.Is(err, errNotFound) {
+					source = "invalid-id"
+				}
+				return nil, cacheEntry{}, source, fmt.Sprintf("Zenodo query failed: %v", err)
+			}
+			if result != nil && raw.Fields["journal"] != "" && abbreviateJournals {
+				SetField(result, "journal", "{"+AbbreviateISO4(raw.Fields["journal"])+"}")
+			}
+			return result, raw, "zenodo", ""
+		}
 		result, raw, crType, err := queryCrossref(e, doi, log)
 		if err != nil {
 			source := "timeout"
@@ -705,10 +776,29 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 	}
 
 	if doi := normalizeDOI(id); doi != "" {
-		for key, entry := range c {
-			if strings.EqualFold(entry.Fields["doi"], doi) {
+		if key := cachedKeyByDOI(c, doi); key != "" {
+			return key, false, nil
+		}
+		if recid := zenodoRecordID(doi); recid != "" {
+			base := Entry{Type: "misc", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
+			corrected, raw, _, err := queryZenodo(base, recid, log)
+			if err != nil {
+				return "", false, err
+			}
+			if key := cachedKeyByDOI(c, raw.Fields["doi"]); key != "" {
 				return key, false, nil
 			}
+			e := base
+			if corrected != nil {
+				e = *corrected
+			}
+			if err := checkAPIMandatoryFields(e, "Zenodo"); err != nil {
+				return "", false, err
+			}
+			key := disambiguateKey(GenerateKey(e), c)
+			c[key] = buildCacheEntry(e, raw, "zenodo", "")
+			saveCache(c, log)
+			return key, true, nil
 		}
 		base := Entry{Type: "article", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
 		corrected, raw, crType, err := queryCrossref(base, doi, log)

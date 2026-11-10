@@ -114,7 +114,7 @@ Example: an entry for "A Great Paper" by Smith in 2023 becomes `Smith2023AGreatP
 | `@inproceedings` / `@conference` | `author, year, title, booktitle, pages, doi, url` |
 | `@phdthesis` / `@mastersthesis` | `author, year, title, school, doi, url` |
 | `@techreport` | `author, year, title, institution, doi, url` |
-| `@misc` | `author, year, title, doi, url` — or for arXiv entries: `author, year, title, eprint, archiveprefix, primaryclass` |
+| `@misc` | `author, year, title, publisher, doi, url` — or for arXiv entries: `author, year, title, eprint, archiveprefix, primaryclass` |
 | `@unpublished` | `author, year, title, doi, url, note` |
 
 **Author formatting** — the `author` field is normalised uniformly across all entry types. Individual authors are written as `Last, F. M.` (last name followed by space-separated abbreviated initials); multiple authors are separated by ` and `:
@@ -140,6 +140,7 @@ The file is only rewritten if the content actually changes.
 **Metadata validation** — each entry is checked against an external source the first time it is seen (results are cached in the global bib cache; see above for the path). Entries that fail due to a transient error (timeout, rate limit, server error) are marked `source: "timeout"` and automatically retried on the next parse (disable with `el config set retry-timeout false`). Entries whose identifier is not found are marked `source: "invalid-id"` and not retried.
 
 - Entry has a `doi` field (or a `url` containing `doi.org`) → queried against the [Crossref API](https://api.crossref.org); mismatched fields are auto-corrected in place and the entry type is set from Crossref's `type` field (e.g. `journal-article` → `@article`, `proceedings-article` → `@inproceedings`). For `@article` entries, the journal name is mechanically abbreviated to its ISO 4 form using the [LTWA](https://www.issn.org/services/online-services/access-to-the-ltwa/) (e.g. `Nature Communications` → `Nat. Commun.`). For proceedings and collection types, Crossref's `container-title` maps to `booktitle` instead of `journal`.
+- Entry has a Zenodo DOI (`10.5281/zenodo.<id>`) → queried against the [Zenodo API](https://developers.zenodo.org) instead of Crossref (Zenodo DOIs are registered with DataCite, not Crossref). A version DOI is replaced by the record's concept DOI (which covers all versions), so several versions of the same software collapse into one entry. Creator names are kept as Zenodo provides them (organisations are braced). Most records (software, datasets, posters, …) become `@misc` with `publisher = {Zenodo}`; journal articles, conference papers, book chapters, books and theses become `@article`, `@inproceedings`, `@incollection`, `@book` and `@phdthesis`/`@mastersthesis` — but only if Zenodo supplies every mandatory field of that type (e.g. a journal title for `@article`, a university for a thesis); otherwise they fall back to `@misc`.
 - Entry has an `eprint` field with `archiveprefix`/`eprinttype = {arXiv}`, or a `url` pointing to `arxiv.org` → queried against the arXiv API. If the arXiv response contains a DOI (i.e. the paper has been published), the entry is automatically redirected to Crossref validation with the correct entry type and full metadata. If Crossref is unavailable, it falls back to arXiv-only correction of title, author, and year.
 - Entry has neither → a one-time warning is printed for types where `doi` is mandatory (`@article`, `@inproceedings`, `@conference`); silently skipped for all other types.
 
@@ -362,9 +363,17 @@ Added "Doe2023SomePreprint" to bib cache.
   Title:  Some Preprint
   Author: Doe, Jane
   Source: arxiv
+
+$ el bib add 10.5281/zenodo.7347926
+[bib] tmp: fetching metadata from Zenodo...
+[bib] tmp: 10.5281/zenodo.7347926 is a Zenodo version DOI; using concept DOI 10.5281/zenodo.3908559
+Added "Jocher2022UltralyticsYolov5V70Yolov5SotaRealtimeInstanceSegmentation" to bib cache.
+  Title:  ultralytics/yolov5: v7.0 - YOLOv5 SOTA Realtime Instance Segmentation
+  Author: Glenn Jocher et al.
+  Source: zenodo
 ```
 
-Accepts bare DOIs (`10.…`), `doi.org/` URLs, bare arXiv IDs (`2301.07041`, `2301.07041v2`), old-format arXiv IDs (`hep-th/0401234`), and `arxiv.org/abs/…` URLs. Duplicate entries (by DOI or arXiv ID) are detected and the existing key is returned. For arXiv IDs, if the paper has a published DOI, the entry is automatically upgraded to a full Crossref-validated `@article`.
+Accepts bare DOIs (`10.…`), `doi.org/` URLs, bare arXiv IDs (`2301.07041`, `2301.07041v2`), old-format arXiv IDs (`hep-th/0401234`), and `arxiv.org/abs/…` URLs. Duplicate entries (by DOI or arXiv ID; for Zenodo also by concept DOI) are detected and the existing key is returned. For arXiv IDs, if the paper has a published DOI, the entry is automatically upgraded to a full Crossref-validated `@article`.
 
 If the metadata returned by Crossref or arXiv is incomplete (for example Springer's older book DOIs that ship without authors), `el bib add` refuses the entry rather than caching it with a malformed cite key:
 
