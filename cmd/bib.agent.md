@@ -37,6 +37,7 @@ Add one or more entries to the global bib cache from bare DOIs or arXiv IDs (`co
 Per-arg outcomes:
 - `isNew=true` — announces newly added entry with key
 - `isNew=false` — announces entry already cached with existing key
+- Placeholder DOI (`10.5555/…`) — error "… is a placeholder DOI …", cache untouched
 - `bib.ErrUnrecognizedID` — warns unrecognized format, continues to next arg
 - Other errors — prints to stderr, continues; first error returned at end. Includes "metadata missing mandatory fields for @<type>: …" when the Crossref/arXiv/Zenodo response lacks any field in `entrySpecs[type].mandatory` (e.g. authorless Crossref book records like `10.1007/b97696`); cache is not modified in that case.
 

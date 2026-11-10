@@ -2318,3 +2318,37 @@ func TestQueryCrossref_ArticleNumberAsPages(t *testing.T) {
 		t.Errorf("pages = %q, want 042612", got)
 	}
 }
+
+func TestPlaceholderDOI_IgnoredAndDropped(t *testing.T) {
+	e := Entry{Type: "book", Key: "k", Fields: []Field{
+		{Name: "author", Value: "{Russell, S.}"},
+		{Name: "doi", Value: "{10.5555/1671238}"},
+		{Name: "url", Value: "{https://doi.org/10.5555/1671238}"},
+	}}
+	if got := findDOI(e); got != "" {
+		t.Errorf("findDOI = %q, want empty", got)
+	}
+	normalizeEntryFields(&e, true)
+	if FieldValue(e, "doi") != "" || FieldValue(e, "url") != "" {
+		t.Errorf("placeholder doi/url not dropped: %+v", e.Fields)
+	}
+	if FieldValue(e, "author") == "" {
+		t.Error("author dropped")
+	}
+	_, _, source, warn := validateEntry(e, false, nil)
+	if source != "no-id" || warn != "" {
+		t.Errorf("source = %q, warn = %q; want no-id without warning for @book", source, warn)
+	}
+	real := Entry{Type: "article", Key: "k", Fields: []Field{{Name: "url", Value: "{https://doi.org/10.1103/x}"}}}
+	if findDOI(real) != "10.1103/x" {
+		t.Error("non-placeholder doi.org url not detected")
+	}
+}
+
+func TestAddEntryFromID_PlaceholderDOIRejected(t *testing.T) {
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(t.TempDir(), "bib.json"))
+	_, _, err := AddEntryFromID("https://doi.org/10.5555/1671238", nil)
+	if err == nil || !strings.Contains(err.Error(), "placeholder") {
+		t.Errorf("err = %v, want placeholder error", err)
+	}
+}

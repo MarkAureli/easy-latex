@@ -547,9 +547,16 @@ func normalizeEntryFields(e *Entry, urlFromDOI bool) {
 			}
 		}
 	}
-	// Drop fields not in the allowed set (including consumed alias fields).
+	// Drop fields not in the allowed set (including consumed alias fields),
+	// and placeholder DOIs (10.5555/…) together with their doi.org url.
 	filtered := make([]Field, 0, len(e.Fields))
 	for _, f := range e.Fields {
+		if f.Name == "doi" && isPlaceholderDOI(FieldValue(*e, "doi")) {
+			continue
+		}
+		if f.Name == "url" && isPlaceholderDOIURL(FieldValue(*e, "url")) {
+			continue
+		}
 		if allowed[f.Name] {
 			filtered = append(filtered, f)
 		}
@@ -675,15 +682,30 @@ func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Ent
 	return nil, cacheEntry{}, "no-id", ""
 }
 
+// findDOI returns the entry's DOI from the doi field or a doi.org url.
+// Placeholder DOIs (see isPlaceholderDOI) are ignored.
 func findDOI(e Entry) string {
-	if doi := FieldValue(e, "doi"); doi != "" {
+	if doi := FieldValue(e, "doi"); doi != "" && !isPlaceholderDOI(doi) {
 		return doi
 	}
 	u := FieldValue(e, "url")
-	if _, after, ok := strings.Cut(u, "doi.org/"); ok {
+	if _, after, ok := strings.Cut(u, "doi.org/"); ok && !isPlaceholderDOI(after) {
 		return after
 	}
 	return ""
+}
+
+// isPlaceholderDOI reports whether doi uses Crossref's test prefix 10.5555.
+// No real publication has such a DOI; the ACM Digital Library uses it for
+// pseudo-DOIs on items without a registered DOI (e.g. 10.5555/1671238).
+func isPlaceholderDOI(doi string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(doi)), "10.5555/")
+}
+
+// isPlaceholderDOIURL reports whether u is a doi.org URL of a placeholder DOI.
+func isPlaceholderDOIURL(u string) bool {
+	_, after, ok := strings.Cut(u, "doi.org/")
+	return ok && isPlaceholderDOI(after)
 }
 
 var reArxivURL = regexp.MustCompile(`arxiv\.org/abs/([0-9]{4}\.[0-9]{4,5}(?:v\d+)?|[a-z-]+/[0-9]{7})`)
@@ -776,6 +798,9 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 	}
 
 	if doi := normalizeDOI(id); doi != "" {
+		if isPlaceholderDOI(doi) {
+			return "", false, fmt.Errorf("%s is a placeholder DOI (Crossref test prefix 10.5555, used by the ACM Digital Library for items without a registered DOI)", doi)
+		}
 		if key := cachedKeyByDOI(c, doi); key != "" {
 			return key, false, nil
 		}
