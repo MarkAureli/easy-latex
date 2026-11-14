@@ -98,40 +98,7 @@ func resolveEngine(cfg *Config, flagVal string) (string, error) {
 	return engine, nil
 }
 
-var errorPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`^!`),
-	// Anchored: a bare "error" word also appears in paragraph text echoed as
-	// Over/Underfull hbox context and must not turn warnings into errors.
-	regexp.MustCompile(`\b(?:Error:|error \()`),
-	regexp.MustCompile(`^\(There were \d+ errors?\)`),
-	regexp.MustCompile(`^(?:ERROR|FATAL) - `), // biber
-	regexp.MustCompile(`(?i)\bfatal error\b`),
-}
-
-var warningPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)warning`),
-	regexp.MustCompile(`^WARN - `), // biber
-	regexp.MustCompile(`(?i)undefined`),
-	regexp.MustCompile(`(?i)multiply defined`),
-	regexp.MustCompile(`^(?:Over|Under)full`),
-}
-
-var contextLinePattern = regexp.MustCompile(`^l\.\d+`)
-
 var compileColors = term.Detect()
-
-func lineType(line string) string {
-	for _, pat := range errorPatterns {
-		if pat.MatchString(line) {
-			return "error"
-		}
-	}
-	return "warning"
-}
-
-func isContextLine(line string) bool {
-	return contextLinePattern.MatchString(line)
-}
 
 func runCompile(cmd *cobra.Command, args []string) error {
 	if compileFix && compileNoCheck {
@@ -190,7 +157,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	stem := filepath.Base(strings.TrimSuffix(cfg.Main, ".tex"))
 
-	var compileWarnLines []string
+	var compileDiags []logDiag
 
 	log := newBibLogger()
 
@@ -219,15 +186,15 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	// If the pass fails and a stale .bbl exists (e.g. from a previous failed
 	// compile with malformed bib content), delete it and retry once: the .bbl
 	// will be regenerated correctly by the bib tool on this run.
-	firstLines, err := runEngine(enginePath, cfg, injectStys, true)
+	firstDiags, err := runEngine(enginePath, cfg, injectStys, true)
 	if err != nil {
 		bblPath := filepath.Join(auxDir, stem+".bbl")
 		if _, statErr := os.Stat(bblPath); statErr == nil {
 			os.Remove(bblPath) //nolint:errcheck
-			firstLines, err = runEngine(enginePath, cfg, injectStys, true)
+			firstDiags, err = runEngine(enginePath, cfg, injectStys, true)
 		}
 		if err != nil {
-			printLines(firstLines)
+			printLogDiags(os.Stdout, firstDiags)
 			return err
 		}
 	}
@@ -301,37 +268,34 @@ func runCompile(cmd *cobra.Command, args []string) error {
 		}
 		fixBblBurl(filepath.Join(auxDir, stem+".bbl"))
 		// Second pdflatex pass to incorporate bibliography
-		secondLines, err := runEngine(enginePath, cfg, injectStys, true)
+		secondDiags, err := runEngine(enginePath, cfg, injectStys, true)
 		if err != nil {
-			printLines(secondLines)
+			printLogDiags(os.Stdout, secondDiags)
 			return err
 		}
 		// Additional passes to stabilize cross-references and citations
-		prev := secondLines
+		prev := secondDiags
 		for range 2 {
 			if !needsRerun(prev) {
 				break
 			}
 			prev, err = runEngine(enginePath, cfg, injectStys, true)
 			if err != nil {
-				printLines(prev)
+				printLogDiags(os.Stdout, prev)
 				return err
 			}
 		}
-		compileWarnLines = prev
-	} else {
-		compileWarnLines = firstLines
 	}
 
 	// Final non-draft pass writes the PDF. All prior passes run with -draftmode
 	// to avoid intermediate PDF writes (which trigger PDF viewer reloads when
 	// bib/rerun stabilization is in progress).
-	finalLines, err := runEngine(enginePath, cfg, injectStys, false)
+	compileDiags, err = runEngine(enginePath, cfg, injectStys, false)
 	if err != nil {
-		printLines(finalLines)
+		printLogDiags(os.Stdout, compileDiags)
 		return err
 	}
-	compileWarnLines = finalLines
+	compileWarns := ofKind(compileDiags, logWarning)
 
 	// Best effort: learn environment and command signatures for editor completion.
 	_ = updateEnvTable(stem, scannedEnvs)
@@ -379,17 +343,12 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	// Best effort: expose diagnostics to editors (VimTeX) via the engine log.
 	_ = appendDiagsToLog(filepath.Join(auxDir, stem+".log"), cfg.Main, pedDiags, spellDiags)
 
-	hasWarnLines := len(compileWarnLines) > 0 && lineType(compileWarnLines[0]) == "warning"
-	printCompileSections(fixedPedDiags, pedDiags, spellDiags, compileWarnLines, hasWarnLines, compileFix)
+	printCompileSections(fixedPedDiags, pedDiags, spellDiags, compileWarns, compileFix)
 
 	fmt.Printf("Compiled successfully -> %s\n", pdfName)
 
 	if resolveStrict(cfg, compileStrict, compileNoStrict) {
-		warnCount := 0
-		if hasWarnLines {
-			warnCount = countWarnings(compileWarnLines)
-		}
-		if len(pedDiags)+len(spellDiags)+warnCount > 0 {
+		if len(pedDiags)+len(spellDiags)+len(compileWarns) > 0 {
 			return errStrict
 		}
 	}
@@ -412,115 +371,12 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// "may have changed" catches natbib's two-line rerun signal where the
-// continuation "(natbib) Rerun to get them right." is filtered from output.
-var rerunPattern = regexp.MustCompile(`(?i)rerun|may have changed`)
-
-func needsRerun(lines []string) bool {
-	return slices.ContainsFunc(lines, func(line string) bool {
-		return rerunPattern.MatchString(line)
-	})
-}
-
-func filterLines(output []byte) []string {
-	var errors, warnings []string
-	lastKind := "" // "error" or "warning"
-	var files logFileTracker
-	for line := range strings.SplitSeq(string(output), "\n") {
-		// Biber's progress lines, incl. the "INFO - WARNINGS: n" summary, are noise.
-		if strings.HasPrefix(line, "INFO - ") {
-			continue
-		}
-		isDiag := !contextLinePattern.MatchString(line) && isDiagnosticLine(line)
-		curFile := files.current()
-		files.feed(line, isDiag)
-		// Context lines (l.123 ...) inherit the category of the preceding diagnostic.
-		if contextLinePattern.MatchString(line) {
-			switch lastKind {
-			case "error":
-				errors = append(errors, line)
-			case "warning":
-				warnings = append(warnings, line)
-			}
-			continue
-		}
-		matched := false
-		for _, pat := range errorPatterns {
-			if pat.MatchString(line) {
-				errors = append(errors, line)
-				lastKind = "error"
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			for _, pat := range warningPatterns {
-				if pat.MatchString(line) {
-					if curFile != "" {
-						// -file-line-error already prefixes errors; warnings
-						// only carry "input line N", so name the file.
-						line = curFile + ": " + line
-					}
-					warnings = append(warnings, line)
-					lastKind = "warning"
-					break
-				}
-			}
-		}
-	}
-	if len(errors) > 0 {
-		return errors
-	}
-	return warnings
-}
-
-// isDiagnosticLine reports whether line matches any error or warning pattern.
-func isDiagnosticLine(line string) bool {
-	for _, pat := range errorPatterns {
-		if pat.MatchString(line) {
-			return true
-		}
-	}
-	for _, pat := range warningPatterns {
-		if pat.MatchString(line) {
-			return true
-		}
-	}
-	return false
-}
-
-func printLines(lines []string) {
-	if len(lines) == 0 {
-		return
-	}
-
-	typ := lineType(lines[0])
-
-	if typ == "error" {
-		fmt.Printf("%s%sError:%s\n", compileColors.Bold, compileColors.Red, compileColors.Reset)
-	} else {
-		fmt.Printf("%s%sWarnings:%s\n", compileColors.Bold, compileColors.Yellow, compileColors.Reset)
-	}
-
-	color := compileColors.Red
-	if typ == "warning" {
-		color = compileColors.Yellow
-	}
-
-	for i, line := range lines {
-		if i > 0 && !isContextLine(line) {
-			fmt.Println()
-		}
-		fmt.Printf("  %s%s%s\n", color, line, compileColors.Reset)
-	}
-}
-
 // printCompileSections prints Pedantics (fixed), Pedantics (remaining)/Pedantics,
 // Misspellings, Warnings sections in order (blank line between each pair of
 // non-empty sections), followed by the summary. The "fixed" section is shown in
 // the default colour; remaining/misspelling/warnings sections are yellow.
 // `withFix` toggles the "(remaining)" suffix on the pedantics header label.
-func printCompileSections(fixedPed, ped, spell []pedantic.Diagnostic, warnLines []string, hasWarnLines, withFix bool) {
+func printCompileSections(fixedPed, ped, spell []pedantic.Diagnostic, warns []logDiag, withFix bool) {
 	first := true
 	emit := func(fn func()) {
 		if !first {
@@ -546,41 +402,13 @@ func printCompileSections(fixedPed, ped, spell []pedantic.Diagnostic, warnLines 
 			printDiagSection(os.Stderr, "Misspellings", spell, compileColors.Yellow, compileColors.Yellow, compileColors)
 		})
 	}
-	if hasWarnLines {
-		emit(func() { printWarningLines(warnLines) })
+	if len(warns) > 0 {
+		emit(func() { printLogSection(os.Stderr, "Warnings:", compileColors.Yellow, warns) })
 	}
-	printSummary(os.Stderr, len(ped), len(spell), countWarnings(warnLines), true, compileColors)
+	printSummary(os.Stderr, len(ped), len(spell), len(warns), true, compileColors)
 }
 
-// printWarningLines prints compile-time warnings under the "Warnings:" header.
-func printWarningLines(lines []string) {
-	if len(lines) == 0 {
-		return
-	}
-	fmt.Fprintf(os.Stderr, "%s%sWarnings:%s\n", compileColors.Bold, compileColors.Yellow, compileColors.Reset)
-	for i, line := range lines {
-		if i > 0 && !isContextLine(line) {
-			fmt.Fprintln(os.Stderr)
-		}
-		fmt.Fprintf(os.Stderr, "  %s%s%s\n", compileColors.Yellow, line, compileColors.Reset)
-	}
-}
-
-// countWarnings returns the count of distinct compile warnings (excludes context lines).
-func countWarnings(lines []string) int {
-	if len(lines) == 0 || lineType(lines[0]) != "warning" {
-		return 0
-	}
-	n := 0
-	for _, l := range lines {
-		if !isContextLine(l) {
-			n++
-		}
-	}
-	return n
-}
-
-func runEngine(enginePath string, cfg *Config, injectStys []string, draft bool) ([]string, error) {
+func runEngine(enginePath string, cfg *Config, injectStys []string, draft bool) ([]logDiag, error) {
 	args := []string{
 		"-synctex=1",
 		"-interaction=nonstopmode",
@@ -613,11 +441,11 @@ func runEngine(enginePath string, cfg *Config, injectStys []string, draft bool) 
 		c.Env = append(c.Env, "TEXINPUTS="+absAux+string(os.PathListSeparator))
 	}
 	output, runErr := c.CombinedOutput()
-	lines := filterLines(output)
+	diags := parseLog(output)
 	if runErr != nil {
-		return lines, fmt.Errorf("compilation failed")
+		return diags, fmt.Errorf("compilation failed")
 	}
-	return lines, nil
+	return diags, nil
 }
 
 // detectBibTool inspects the aux directory after a pdflatex pass to determine
@@ -663,7 +491,7 @@ func runBibTool(tool, stem, auxDir string) error {
 	}
 
 	output, runErr := c.CombinedOutput()
-	printLines(filterLines(output))
+	printLogDiags(os.Stdout, parseLog(output))
 	if runErr != nil {
 		return fmt.Errorf("%s failed", tool)
 	}

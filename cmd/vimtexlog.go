@@ -65,7 +65,7 @@ func annotateLogFiles(log, mainFile string) string {
 	var b strings.Builder
 	for _, l := range strings.SplitAfter(log, "\n") {
 		text := strings.TrimSuffix(l, "\n")
-		isDiag := !contextLinePattern.MatchString(text) && isDiagnosticLine(text)
+		isDiag := classifyLine(text) != logNone
 		if isDiag && !tr.inBlock && !strings.HasPrefix(text, "Package el Warning") {
 			f := tr.current()
 			if f == "" {

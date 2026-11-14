@@ -272,49 +272,45 @@ func TestRunEngine_ErrorSuppressesWarnings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lines, err := runEngine(pdflatex, &Config{Main: "main.tex"}, nil, false)
+	diags, err := runEngine(pdflatex, &Config{Main: "main.tex"}, nil, false)
 	if err == nil {
 		t.Fatal("expected compilation error")
 	}
-
-	if len(lines) == 0 {
-		t.Fatal("expected error lines in output, got none")
+	if len(ofKind(diags, logError)) == 0 {
+		t.Fatalf("expected errors in output, got %+v", diags)
 	}
+}
 
-	for _, line := range lines {
-		isError := false
-		for _, pat := range errorPatterns {
-			if pat.MatchString(line) {
-				isError = true
-				break
-			}
-		}
-		if !isError && !isContextLine(line) {
-			t.Errorf("non-error line in output when errors present: %q", line)
-		}
+// shownLines returns the lines printLogDiags would show for output: the
+// errors if any, else the warnings, each followed by its context lines.
+func shownLines(output []byte) []string {
+	diags := parseLog(output)
+	if errs := ofKind(diags, logError); len(errs) > 0 {
+		diags = errs
 	}
+	var lines []string
+	for _, d := range diags {
+		lines = append(lines, d.String())
+		lines = append(lines, d.Context...)
+	}
+	return lines
 }
 
 func TestFilterLines_ErrorsOnly(t *testing.T) {
 	input := []byte("! Undefined control sequence.\nl.4 \\badcommand\nLaTeX Warning: Citation undefined\n")
-	lines := filterLines(input)
-	for _, line := range lines {
-		isErr := false
-		for _, pat := range errorPatterns {
-			if pat.MatchString(line) {
-				isErr = true
-				break
-			}
-		}
-		if !isErr && !isContextLine(line) {
-			t.Errorf("non-error line when errors present: %q", line)
-		}
+	want := []string{"! Undefined control sequence.", "l.4 \\badcommand"}
+	if got := shownLines(input); !slices.Equal(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	diags := parseLog(input)
+	if len(diags) != 2 || len(diags[0].Context) != 1 || diags[1].Kind != logWarning {
+		t.Errorf("parseLog = %+v, want error with context + warning", diags)
 	}
 }
 
 func TestFilterLines_IgnoresErrorInFilePath(t *testing.T) {
 	input := []byte("(/usr/local/texlive/2026/texmf-dist/tex/generic/pgfplots/pgfplots.errorbars.code\nLaTeX Warning: Citation 'foo' undefined.\n")
-	lines := filterLines(input)
+	lines := shownLines(input)
 	if len(lines) != 1 {
 		t.Fatalf("expected 1 warning line, got %d: %v", len(lines), lines)
 	}
@@ -325,15 +321,15 @@ func TestFilterLines_IgnoresErrorInFilePath(t *testing.T) {
 
 func TestFilterLines_IgnoresErrorInHboxContext(t *testing.T) {
 	input := []byte("Underfull \\hbox (badness 2111) in paragraph at lines 1--2\n\\TU/georgia.ttf(7)/m/n/9 not have symmetries to exploit for error mitigation purposes, the\n []\n")
-	lines := filterLines(input)
-	if len(lines) != 1 || lineType(lines[0]) != "warning" {
-		t.Fatalf("expected 1 warning line, got %v", lines)
+	diags := parseLog(input)
+	if len(diags) != 1 || diags[0].Kind != logWarning {
+		t.Fatalf("expected 1 warning, got %+v", diags)
 	}
 }
 
 func TestFilterLines_WarningsWhenNoErrors(t *testing.T) {
 	input := []byte("LaTeX Warning: Citation 'foo' undefined.\nOverfull \\hbox in paragraph\n")
-	lines := filterLines(input)
+	lines := shownLines(input)
 	if len(lines) != 2 {
 		t.Fatalf("expected 2 warning lines, got %d: %v", len(lines), lines)
 	}
@@ -356,18 +352,23 @@ func TestLineType(t *testing.T) {
 		{"(/usr/local/texlive/2026/texmf-dist/tex/generic/pgfplots/pgfplots.errorbars.code", "warning"},
 	}
 	for _, tc := range tests {
-		if got := lineType(tc.line); got != tc.want {
-			t.Errorf("lineType(%q) = %q, want %q", tc.line, got, tc.want)
+		if got := classifyLine(tc.line) == logError; got != (tc.want == "error") {
+			t.Errorf("classifyLine(%q) error = %v, want %s", tc.line, got, tc.want)
 		}
+	}
+	if classifyLine("l.4 \\badcommand") != logNone {
+		t.Error("context line must not be a diagnostic")
 	}
 }
 
-func TestIsContextLine(t *testing.T) {
-	if !isContextLine("l.4 \\badcommand") {
-		t.Error("expected l.4 line to be context")
+func TestNeedsRerun_IgnoresFileName(t *testing.T) {
+	diags := []logDiag{{Kind: logWarning, File: "rerun.tex", Text: "LaTeX Warning: x undefined."}}
+	if needsRerun(diags) {
+		t.Error("file name must not trigger a rerun")
 	}
-	if isContextLine("! Undefined control sequence.") {
-		t.Error("! line should not be context")
+	diags[0].Text = "LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right."
+	if !needsRerun(diags) {
+		t.Error("rerun warning not detected")
 	}
 }
 
@@ -466,7 +467,7 @@ func TestFilterLines_WarningsNameSourceFile(t *testing.T) {
 		"\\T1/x/m/n/12 foo (bar) )\n\n" +
 		"[3]) (./other.tex\n" +
 		"LaTeX Warning: Reference `b' on page 3 undefined on input line 5.\n\n) )\n"
-	got := filterLines([]byte(out))
+	got := shownLines([]byte(out))
 	want := []string{
 		"Kapitel 5/5.2 Wert.tex: LaTeX Warning: Reference `a' on page 2 undefined on input line 23.",
 		"Kapitel 5/5.2 Wert.tex: Overfull \\hbox (6pt too wide) in paragraph at lines 1--2",
@@ -479,7 +480,7 @@ func TestFilterLines_WarningsNameSourceFile(t *testing.T) {
 
 func TestFilterLines_FileClosedAfterContextLine(t *testing.T) {
 	out := "(./a.tex\npdfTeX warning (ext4): dup\n<to be read again>\n   \\relax\nl.22\n      [1]) (./b.tex\n\nLaTeX Warning: x undefined on input line 3.\n\n)\n"
-	got := filterLines([]byte(out))
+	got := shownLines([]byte(out))
 	if len(got) < 1 || !strings.HasPrefix(got[len(got)-1], "b.tex: LaTeX Warning") {
 		t.Errorf("got %q", got)
 	}
@@ -491,7 +492,7 @@ func TestFilterLines_OutputAfterTruncatedContext(t *testing.T) {
 	out := "(./Kapitel 1/Einleitung.tex\npdfTeX warning (ext4): dup\n<to be read again>\n   \\relax\nl.29 D\n" +
 		ctx + " [1]) (./Kapitel 3/3.3 After-Tax Leistungsmaß.tex [28]\n" +
 		"Overfull \\hbox (6pt too wide) in paragraph at lines 180--183\n\n)\n"
-	got := filterLines([]byte(out))
+	got := shownLines([]byte(out))
 	want := "Kapitel 3/3.3 After-Tax Leistungsmaß.tex: Overfull \\hbox (6pt too wide) in paragraph at lines 180--183"
 	if len(got) < 1 || got[len(got)-1] != want {
 		t.Errorf("got %q", got)
@@ -502,7 +503,7 @@ func TestFilterLines_OutputAfterBoxContent(t *testing.T) {
 	// Terminal output: no blank line after the box content line.
 	out := "(./a.tex\nOverfull \\hbox (6pt too wide) in paragraph at lines 1--2\n" +
 		"\\T1/x (foo\n[3]) (./b tex.tex\nUnderfull \\hbox (badness 10000) in paragraph at lines 38--38\n[]|x\n) )\n"
-	got := filterLines([]byte(out))
+	got := shownLines([]byte(out))
 	want := []string{
 		"a.tex: Overfull \\hbox (6pt too wide) in paragraph at lines 1--2",
 		"b tex.tex: Underfull \\hbox (badness 10000) in paragraph at lines 38--38",
@@ -525,12 +526,12 @@ func TestCutTruncatedContext(t *testing.T) {
 
 func TestFilterLines_BiberInfoDroppedWarnKept(t *testing.T) {
 	in := "INFO - Reading '.el/main.bcf'\nWARN - Data source 'p.bib' contains no BibTeX entries/macros, ignoring\nINFO - WARNINGS: 1\n"
-	got := filterLines([]byte(in))
-	if len(got) != 1 || !strings.HasPrefix(got[0], "WARN - ") || lineType(got[0]) != "warning" {
-		t.Errorf("got %q", got)
+	got := parseLog([]byte(in))
+	if len(got) != 1 || got[0].Kind != logWarning || !strings.HasPrefix(got[0].Text, "WARN - ") {
+		t.Errorf("got %+v", got)
 	}
-	got = filterLines([]byte("INFO - x\nERROR - Cannot find 'x.bib'!\nINFO - ERRORS: 1\n"))
-	if len(got) != 1 || lineType(got[0]) != "error" {
-		t.Errorf("got %q", got)
+	got = parseLog([]byte("INFO - x\nERROR - Cannot find 'x.bib'!\nINFO - ERRORS: 1\n"))
+	if len(got) != 1 || got[0].Kind != logError {
+		t.Errorf("got %+v", got)
 	}
 }
