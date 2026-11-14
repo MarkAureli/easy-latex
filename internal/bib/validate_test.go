@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -985,6 +986,21 @@ func containsField(warn, field string) bool {
 
 // ── validateEntry ─────────────────────────────────────────────────────────────
 
+// noNetwork makes any HTTP request fail the test, to assert cache hits.
+func noNetwork(t *testing.T) {
+	t.Helper()
+	orig := httpClient
+	httpClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("unexpected request to %s", r.URL)
+		return nil, errors.New("network disabled")
+	})}
+	t.Cleanup(func() { httpClient = orig })
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 // resolveForTest runs resolveEntry and reports the outcome in the shape the
 // allocation path records: corrected entry, raw fields, source, warning.
 func resolveForTest(e Entry) (*Entry, cacheEntry, string, string) {
@@ -1676,6 +1692,20 @@ func TestAllocateCacheEntries_ArxivDedup_ByPublishedDOI(t *testing.T) {
 	if got := renames["Pre"]; got != "Smith2023Crossref" {
 		t.Errorf("renames[Pre] = %q, want Smith2023Crossref", got)
 	}
+	if got := loadCache()["Smith2023Crossref"].Aliases; !slices.Equal(got, []string{"eprint:2301.00002"}) {
+		t.Errorf("aliases = %v, want [eprint:2301.00002]", got)
+	}
+
+	// Another project citing the preprint is merged without any lookup.
+	noNetwork(t)
+	path2 := filepath.Join(dir, "other.bib")
+	if err := os.WriteFile(path2, []byte("@misc{Other,\n  title = {A Title},\n  eprint = {2301.00002v3},\n  archiveprefix = {arXiv},\n}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	added, renames, err = AllocateCacheEntries([]string{path2}, false, nil)
+	if err != nil || added != 0 || renames["Other"] != "Smith2023Crossref" {
+		t.Errorf("second run: added=%d renames=%v err=%v", added, renames, err)
+	}
 }
 
 func TestAllocateCacheEntries_DOIDedup_CaseInsensitive(t *testing.T) {
@@ -2196,6 +2226,16 @@ func TestAddEntryFromID_ArxivWithDOI_UsesCrossref(t *testing.T) {
 	}
 	if got := entry.Fields["journal"]; got != "J. Testing" {
 		t.Errorf("journal = %q, want %q", got, "J. Testing")
+	}
+	if !slices.Equal(entry.Aliases, []string{"eprint:2301.00001"}) {
+		t.Errorf("aliases = %v, want [eprint:2301.00001]", entry.Aliases)
+	}
+
+	// The arXiv ID (any version) now resolves from the cache.
+	noNetwork(t)
+	k2, isNew, err := AddEntryFromID("2301.00001v2", nil)
+	if err != nil || isNew || k2 != key {
+		t.Errorf("re-add: key=%q isNew=%v err=%v, want %q existing", k2, isNew, err, key)
 	}
 }
 

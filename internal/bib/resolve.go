@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -147,7 +148,7 @@ func newIDIndex(c cache, skipTimeouts bool) idIndex {
 		if skipTimeouts && entry.Source == "timeout" {
 			continue
 		}
-		for _, id := range fieldIDs(entry.Fields) {
+		for _, id := range append(fieldIDs(entry.Fields), entry.Aliases...) {
 			idx[id] = key
 		}
 	}
@@ -161,11 +162,12 @@ func doiID(doi string) string {
 	return "doi:" + strings.ToLower(doi)
 }
 
+// eprintID is version-less, so 2301.00001v2 and 2301.00001 share a key.
 func eprintID(id string) string {
 	if id == "" {
 		return ""
 	}
-	return "eprint:" + strings.ToLower(id)
+	return "eprint:" + arxivCanonical(id)
 }
 
 // fieldIDs returns the identifier keys of a cache entry's fields.
@@ -177,6 +179,27 @@ func fieldIDs(fields map[string]string) []string {
 		}
 	}
 	return ids
+}
+
+// addAliases records those of ids that e's fields and aliases do not carry
+// yet, and reports whether e changed.
+func (e *cacheEntry) addAliases(ids ...string) bool {
+	have := map[string]bool{}
+	for _, id := range append(fieldIDs(e.Fields), e.Aliases...) {
+		have[id] = true
+	}
+	changed := false
+	for _, id := range ids {
+		if id != "" && !have[id] {
+			e.Aliases = append(e.Aliases, id)
+			have[id] = true
+			changed = true
+		}
+	}
+	if changed {
+		slices.Sort(e.Aliases)
+	}
+	return changed
 }
 
 // entryID returns the identifier key resolveEntry looks e up by, or "" if e

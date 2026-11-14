@@ -376,7 +376,7 @@ Added "Jocher2022UltralyticsYolov5V70Yolov5SotaRealtimeInstanceSegmentation" to 
   Source: zenodo
 ```
 
-Accepts bare DOIs (`10.…`, including Zenodo, DataCite and arXiv DOIs), `doi.org/` URLs, bare arXiv IDs (`2301.07041`, `2301.07041v2`), old-format arXiv IDs (`hep-th/0401234`), and `arxiv.org/abs/…` URLs. Duplicate entries (by DOI or arXiv ID; for Zenodo also by concept DOI) are detected and the existing key is returned. For arXiv IDs, if the paper has a published DOI, the entry is automatically upgraded to a full Crossref-validated `@article`.
+Accepts bare DOIs (`10.…`, including Zenodo, DataCite and arXiv DOIs), `doi.org/` URLs, bare arXiv IDs (`2301.07041`, `2301.07041v2`), old-format arXiv IDs (`hep-th/0401234`), and `arxiv.org/abs/…` URLs. Duplicate entries (by DOI or arXiv ID, ignoring arXiv version suffixes; for Zenodo also by concept DOI) are detected and the existing key is returned. The cache remembers every identifier it has seen for an entry — e.g. the arXiv ID of a preprint upgraded to its journal version, or Zenodo version DOIs — so adding or citing the work again by any of them needs no online lookup. For arXiv IDs, if the paper has a published DOI, the entry is automatically upgraded to a full Crossref-validated `@article`.
 
 If the metadata returned by Crossref or arXiv is incomplete (for example Springer's older book DOIs that ship without authors), `el bib add` refuses the entry rather than caching it with a malformed cite key:
 

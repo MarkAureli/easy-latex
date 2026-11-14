@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -217,6 +218,9 @@ func TestAddEntryFromID_ZenodoVersionDOI_StoresConceptAndDedups(t *testing.T) {
 	if entry.Fields["url"] != "" {
 		t.Errorf("url stored raw = %q, want derived at write time", entry.Fields["url"])
 	}
+	if !slices.Equal(entry.Aliases, []string{"doi:10.5281/zenodo.200"}) {
+		t.Errorf("aliases = %v, want version DOI", entry.Aliases)
+	}
 	for _, id := range []string{"10.5281/zenodo.300", "10.5281/zenodo.100"} {
 		k2, isNew2, err := AddEntryFromID(id, nil)
 		if err != nil || isNew2 || k2 != key {
@@ -225,6 +229,14 @@ func TestAddEntryFromID_ZenodoVersionDOI_StoresConceptAndDedups(t *testing.T) {
 	}
 	if n := len(loadCache()); n != 1 {
 		t.Errorf("cache size = %d, want 1", n)
+	}
+	want := []string{"doi:10.5281/zenodo.200", "doi:10.5281/zenodo.300"}
+	if got := loadCache()[key].Aliases; !slices.Equal(got, want) {
+		t.Errorf("aliases = %v, want %v", got, want)
+	}
+	noNetwork(t)
+	if k, _, err := AddEntryFromID("10.5281/zenodo.300", nil); err != nil || k != key {
+		t.Errorf("cached version DOI: key=%q err=%v", k, err)
 	}
 }
 
@@ -262,7 +274,9 @@ func TestAllocateCacheEntries_ZenodoVersionsMergeIntoConcept(t *testing.T) {
 		t.Errorf("renames = %v, want A,B → %q", renames, key)
 	}
 
-	// A second file citing another version merges into the cached entry.
+	// A second file citing another version merges into the cached entry
+	// without a Zenodo lookup (version DOIs are aliases).
+	noNetwork(t)
 	path2 := filepath.Join(dir, "b.bib")
 	if err := os.WriteFile(path2, []byte("@misc{C,\n  title = {Other},\n  doi = {10.5281/zenodo.300},\n}\n"), 0644); err != nil {
 		t.Fatal(err)

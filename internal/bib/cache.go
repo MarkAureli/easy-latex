@@ -30,6 +30,11 @@ type cacheEntry struct {
 	Source string            `json:"source"`
 	Type   string            `json:"type"`
 	Fields map[string]string `json:"fields,omitempty"`
+	// Aliases are further identifier keys (see doiID, eprintID) of the same
+	// work that its fields do not carry, e.g. the arXiv ID of a preprint
+	// upgraded to its Crossref record, or a Zenodo version DOI of a concept
+	// record. They only serve dedup and are never written to .bib files.
+	Aliases []string `json:"aliases,omitempty"`
 }
 
 // cache maps canonical citation keys to their cacheEntry.

@@ -70,25 +70,29 @@ func allocateCacheEntriesLocked(bibFiles []string, retryTimeout bool, log Logger
 	PrefetchArxivIDs(pendingArxiv, log)
 
 	added := 0
+	dirty := false
 	allRenames := map[string]string{}
 	for _, path := range bibFiles {
-		n, renames, err := allocateBibFile(path, c, idx, log)
+		n, aliased, renames, err := allocateBibFile(path, c, idx, log)
 		if err != nil {
 			return added, allRenames, err
 		}
 		added += n
+		dirty = dirty || aliased
 		maps.Copy(allRenames, renames)
 	}
-	if added > 0 {
+	if added > 0 || dirty {
 		saveCache(c, log)
 	}
 	return added, allRenames, nil
 }
 
-func allocateBibFile(path string, c cache, idx idIndex, log Logger) (int, map[string]string, error) {
+// allocateBibFile seeds c from one bib file. It returns the number of added
+// entries, whether aliases were added to already-cached entries, and renames.
+func allocateBibFile(path string, c cache, idx idIndex, log Logger) (int, bool, map[string]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return 0, nil, fmt.Errorf("cannot read %s: %w", path, err)
+		return 0, false, nil, fmt.Errorf("cannot read %s: %w", path, err)
 	}
 	items := ParseFile(string(data))
 
@@ -111,7 +115,9 @@ func allocateBibFile(path string, c cache, idx idIndex, log Logger) (int, map[st
 	// An item whose identifier is already cached (possibly under another key,
 	// e.g. from el bib add or another project) or claimed by an earlier item of
 	// this file is merged into that entry instead of being added: aliasKey
-	// maps it to a cache key, aliasOwner to the owning item.
+	// maps it to a cache key, aliasOwner to the owning item. Identifiers the
+	// target's fields lack are recorded as its aliases.
+	aliased := false
 	pendingIDs := map[string]int{}
 	aliasKey := map[int]string{}
 	aliasOwner := map[int]int{}
@@ -121,6 +127,10 @@ func allocateBibFile(path string, c cache, idx idIndex, log Logger) (int, map[st
 				aliasKey[i] = key
 				for _, id := range ids {
 					idx[id] = key
+				}
+				if entry, ok := c[key]; ok && entry.addAliases(ids...) {
+					c[key] = entry
+					aliased = true
 				}
 				return true
 			}
@@ -219,7 +229,11 @@ func allocateBibFile(path string, c cache, idx idIndex, log Logger) (int, map[st
 	}
 	// Later bib files see this file's identifiers under their final keys.
 	for id, owner := range pendingIDs {
-		idx[id] = items[owner].Entry.Key
+		key := items[owner].Entry.Key
+		idx[id] = key
+		if entry, ok := c[key]; ok && entry.addAliases(id) {
+			c[key] = entry
+		}
 	}
 
 	// Collect renames: entries whose canonical key differs from the original key.
@@ -232,7 +246,7 @@ func allocateBibFile(path string, c cache, idx idIndex, log Logger) (int, map[st
 			renames[orig] = item.Entry.Key
 		}
 	}
-	return added, renames, nil
+	return added, aliased, renames, nil
 }
 
 // buildCacheEntry snapshots a validated entry for the cache: its normalized
@@ -698,7 +712,8 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 		return "", false, err
 	}
 	idx := newIDIndex(c, false)
-	if key, ok := idx[entryID(e)]; ok {
+	inputID := entryID(e)
+	if key, ok := idx[inputID]; ok {
 		return key, false, nil
 	}
 	res, err := resolveEntry(e, func(id string) bool { _, ok := idx[id]; return ok }, log)
@@ -707,6 +722,10 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 	}
 	for _, id := range res.ids() {
 		if key, ok := idx[id]; ok {
+			if entry := c[key]; entry.addAliases(inputID) {
+				c[key] = entry
+				saveCache(c, log)
+			}
 			return key, false, nil
 		}
 	}
@@ -714,7 +733,9 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 		return "", false, err
 	}
 	key = disambiguateKey(GenerateKey(res.entry), c)
-	c[key] = buildCacheEntry(res.entry, res.raw, res.source, "")
+	entry := buildCacheEntry(res.entry, res.raw, res.source, "")
+	entry.addAliases(append(res.ids(), inputID)...)
+	c[key] = entry
 	saveCache(c, log)
 	return key, true, nil
 }
