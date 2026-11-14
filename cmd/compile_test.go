@@ -296,6 +296,18 @@ func shownLines(output []byte) []string {
 	return lines
 }
 
+func TestParseLog_FileLineErrorShown(t *testing.T) {
+	input := []byte("./main.tex:3: Undefined control sequence.\nl.3 \\badcommand\n                Hello\n\n./main.tex:3:  ==> Fatal error occurred, no output PDF file produced!\n")
+	want := []string{
+		"./main.tex:3: Undefined control sequence.",
+		"l.3 \\badcommand",
+		"./main.tex:3:  ==> Fatal error occurred, no output PDF file produced!",
+	}
+	if got := shownLines(input); !slices.Equal(got, want) {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
 func TestFilterLines_ErrorsOnly(t *testing.T) {
 	input := []byte("! Undefined control sequence.\nl.4 \\badcommand\nLaTeX Warning: Citation undefined\n")
 	want := []string{"! Undefined control sequence.", "l.4 \\badcommand"}
@@ -346,7 +358,10 @@ func TestLineType(t *testing.T) {
 		{"Package foo Error: broken", "error"},
 		{"\\TU/georgia.ttf(7)/m/n/9 exploit for error mitigation purposes, the", "warning"},
 		{"l.4 \\badcommand", "warning"},
-		{"./main.tex:12: Undefined control sequence", "warning"},
+		{"./main.tex:12: Undefined control sequence", "error"},
+		{"./Kapitel 5/5.2 Wert.tex:3: Missing $ inserted.", "error"},
+		{"/usr/local/texlive/2026/texmf-dist/tex/latex/foo/foo.sty:10: Undefined control sequence.", "error"},
+		{"\\T1/cmr/m/n/10 a ratio of 3:12: the", "warning"},
 		{"LaTeX Warning: Citation undefined", "warning"},
 		{"Overfull \\hbox (12.3pt too wide)", "warning"},
 		{"(/usr/local/texlive/2026/texmf-dist/tex/generic/pgfplots/pgfplots.errorbars.code", "warning"},

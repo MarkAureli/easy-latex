@@ -10,6 +10,9 @@ import (
 
 var errorPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^!`),
+	// -file-line-error replaces "! " with "<file>:<line>: ". The file must end
+	// in an extension so echoed paragraph text ("ratio 3:12: ...") cannot match.
+	regexp.MustCompile(`^(?:[A-Za-z]:)?[^:]*\.[A-Za-z]+:\d+: `),
 	// Anchored: a bare "error" word also appears in paragraph text echoed as
 	// Over/Underfull hbox context and must not turn warnings into errors.
 	regexp.MustCompile(`\b(?:Error:|error \()`),
