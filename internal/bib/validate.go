@@ -1,7 +1,6 @@
 package bib
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -41,21 +40,9 @@ func allocateCacheEntriesLocked(bibFiles []string, retryTimeout bool, log Logger
 		return 0, nil, err
 	}
 
-	// Build reverse-index of IDs already in cache for fast dedup.
-	// When retryTimeout is true, exclude "timeout" entries so they get re-validated.
-	cachedDOIs := make(map[string]bool)
-	cachedArxivIDs := make(map[string]bool)
-	for _, entry := range c {
-		if retryTimeout && entry.Source == "timeout" {
-			continue
-		}
-		if doi := entry.Fields["doi"]; doi != "" {
-			cachedDOIs[strings.ToLower(doi)] = true
-		}
-		if id := entry.Fields["eprint"]; id != "" {
-			cachedArxivIDs[strings.ToLower(id)] = true
-		}
-	}
+	// When retryTimeout is true, "timeout" entries stay out of the index so
+	// they get re-validated.
+	idx := newIDIndex(c, retryTimeout)
 
 	// Pre-pass: collect all uncached arXiv ids across all bib files and
 	// fetch them in batched API calls. Per-entry validation below then
@@ -74,7 +61,7 @@ func allocateCacheEntriesLocked(bibFiles []string, retryTimeout bool, log Logger
 				continue
 			}
 			id := findArxivID(item.Entry)
-			if id == "" || cachedArxivIDs[strings.ToLower(id)] {
+			if _, cached := idx[eprintID(id)]; id == "" || cached {
 				continue
 			}
 			pendingArxiv = append(pendingArxiv, id)
@@ -85,7 +72,7 @@ func allocateCacheEntriesLocked(bibFiles []string, retryTimeout bool, log Logger
 	added := 0
 	allRenames := map[string]string{}
 	for _, path := range bibFiles {
-		n, renames, err := allocateBibFile(path, c, cachedDOIs, cachedArxivIDs, log)
+		n, renames, err := allocateBibFile(path, c, idx, log)
 		if err != nil {
 			return added, allRenames, err
 		}
@@ -98,7 +85,7 @@ func allocateCacheEntriesLocked(bibFiles []string, retryTimeout bool, log Logger
 	return added, allRenames, nil
 }
 
-func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string]bool, log Logger) (int, map[string]string, error) {
+func allocateBibFile(path string, c cache, idx idIndex, log Logger) (int, map[string]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0, nil, fmt.Errorf("cannot read %s: %w", path, err)
@@ -121,12 +108,37 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 	}
 	var pending []pendingEntry
 	added := 0
-	// Zenodo version DOIs resolve to a concept DOI that may already be cached
-	// (aliasKey) or pending from an earlier item in this file (aliasOwner).
-	// Such items are merged into the existing entry instead of being added.
-	pendingByDOI := map[string]int{}
-	aliasOwner := map[int]int{}
+	// An item whose identifier is already cached (possibly under another key,
+	// e.g. from el bib add or another project) or claimed by an earlier item of
+	// this file is merged into that entry instead of being added: aliasKey
+	// maps it to a cache key, aliasOwner to the owning item.
+	pendingIDs := map[string]int{}
 	aliasKey := map[int]string{}
+	aliasOwner := map[int]int{}
+	alias := func(i int, ids []string) bool {
+		for _, id := range ids {
+			if key, ok := idx[id]; ok {
+				aliasKey[i] = key
+				for _, id := range ids {
+					idx[id] = key
+				}
+				return true
+			}
+			if owner, ok := pendingIDs[id]; ok {
+				aliasOwner[i] = owner
+				for _, id := range ids {
+					pendingIDs[id] = owner
+				}
+				return true
+			}
+		}
+		return false
+	}
+	known := func(id string) bool {
+		_, cached := idx[id]
+		_, claimed := pendingIDs[id]
+		return cached || claimed
+	}
 
 	for i, item := range items {
 		if !item.IsEntry {
@@ -137,67 +149,9 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 			e.Fields[j].Value = unescapeFieldValue(f.Value)
 		}
 		rawURL := FieldValue(e, "url")
-		doi := findDOI(e)
-		arxivID := findArxivID(e)
+		id := entryID(e)
 
-		switch {
-		case doi != "":
-			if cachedDOIs[strings.ToLower(doi)] {
-				// Already cached, possibly under another key (el bib add,
-				// another project): map this entry onto the cached key.
-				if key := cachedKeyByDOI(c, doi); key != "" {
-					aliasKey[i] = key
-				} else if owner, ok := pendingByDOI[strings.ToLower(doi)]; ok {
-					aliasOwner[i] = owner
-				}
-				continue
-			}
-			corrected, raw, source, warn := validateEntry(e, false, log)
-			if warn != "" {
-				log.Warn(e.Key, warn)
-			}
-			cachedDOIs[strings.ToLower(doi)] = true
-			resolved := strings.ToLower(raw.Fields["doi"])
-			if source == "zenodo" && resolved != "" && resolved != strings.ToLower(doi) {
-				if owner, ok := pendingByDOI[resolved]; ok {
-					aliasOwner[i] = owner
-					continue
-				}
-				if cachedDOIs[resolved] {
-					if key := cachedKeyByDOI(c, resolved); key != "" {
-						aliasKey[i] = key
-						continue
-					}
-				}
-			}
-			if corrected != nil {
-				items[i].Entry = *corrected
-			}
-			pending = append(pending, pendingEntry{i, buildCacheEntry(items[i].Entry, raw, source, rawURL)})
-			pendingByDOI[strings.ToLower(doi)] = i
-			if resolved != "" {
-				cachedDOIs[resolved] = true
-				pendingByDOI[resolved] = i
-			}
-			added++
-		case arxivID != "":
-			if cachedArxivIDs[strings.ToLower(arxivID)] {
-				if key := cachedKeyByEprint(c, arxivID); key != "" {
-					aliasKey[i] = key
-				}
-				continue
-			}
-			corrected, raw, source, warn := validateEntry(e, false, log)
-			if warn != "" {
-				log.Warn(e.Key, warn)
-			}
-			if corrected != nil {
-				items[i].Entry = *corrected
-			}
-			pending = append(pending, pendingEntry{i, buildCacheEntry(items[i].Entry, raw, source, rawURL)})
-			cachedArxivIDs[strings.ToLower(arxivID)] = true
-			added++
-		default:
+		if id == "" {
 			if _, seen := c[e.Key]; seen {
 				continue
 			}
@@ -210,20 +164,32 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 			if warn := warnMissingFields(e); warn != "" {
 				log.Warn(e.Key, warn)
 			}
-			fields := make(map[string]string, len(e.Fields))
-			for _, f := range e.Fields {
-				if v := FieldValue(e, f.Name); v != "" {
-					fields[f.Name] = v
-				}
-			}
-			delete(fields, "url")
-			if rawURL != "" {
-				fields["url"] = rawURL
-			}
 			items[i].Entry = e
-			pending = append(pending, pendingEntry{i, cacheEntry{Source: "no-id", Type: e.Type, Fields: fields}})
+			pending = append(pending, pendingEntry{i, buildCacheEntry(e, cacheEntry{}, "no-id", rawURL)})
 			added++
+			continue
 		}
+
+		if alias(i, []string{id}) {
+			continue
+		}
+		res, err := resolveEntry(e, known, log)
+		if err != nil {
+			log.Warn(e.Key, err.Error())
+			res = resolved{entry: e, source: failureSource(err)}
+		}
+		// The fetched metadata may carry another identifier (Zenodo concept
+		// DOI, journal DOI of a preprint) that is already known.
+		ids := append(res.ids(), id)
+		if alias(i, ids) {
+			continue
+		}
+		for _, id := range ids {
+			pendingIDs[id] = i
+		}
+		items[i].Entry = res.entry
+		pending = append(pending, pendingEntry{i, buildCacheEntry(res.entry, res.raw, res.source, rawURL)})
+		added++
 	}
 
 	// Re-assign canonical keys: Crossref/arXiv/Zenodo may have corrected
@@ -251,6 +217,10 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 	for _, p := range pending {
 		c[items[p.itemIdx].Entry.Key] = p.entry
 	}
+	// Later bib files see this file's identifiers under their final keys.
+	for id, owner := range pendingIDs {
+		idx[id] = items[owner].Entry.Key
+	}
 
 	// Collect renames: entries whose canonical key differs from the original key.
 	renames := map[string]string{}
@@ -265,36 +235,8 @@ func allocateBibFile(path string, c cache, cachedDOIs, cachedArxivIDs map[string
 	return added, renames, nil
 }
 
-// cachedKeyByDOI returns the cache key of the entry whose doi equals doi
-// (case-insensitive), or "" if none.
-func cachedKeyByDOI(c cache, doi string) string {
-	if doi == "" {
-		return ""
-	}
-	for key, entry := range c {
-		if strings.EqualFold(entry.Fields["doi"], doi) {
-			return key
-		}
-	}
-	return ""
-}
-
-// cachedKeyByEprint returns the cache key of the entry whose eprint equals
-// id (case-insensitive), or "" if none.
-func cachedKeyByEprint(c cache, id string) string {
-	if id == "" {
-		return ""
-	}
-	for key, entry := range c {
-		if strings.EqualFold(entry.Fields["eprint"], id) {
-			return key
-		}
-	}
-	return ""
-}
-
-// buildCacheEntry constructs a cacheEntry from a validated entry and its raw API
-// response, mirroring the snapshot logic in processBibFile.
+// buildCacheEntry snapshots a validated entry for the cache: its normalized
+// fields overlaid with the raw API fields (empty for unvalidated entries).
 func buildCacheEntry(e Entry, raw cacheEntry, source, rawURL string) cacheEntry {
 	entry := cacheEntry{Source: source, Type: e.Type}
 	eCopy := e
@@ -305,11 +247,9 @@ func buildCacheEntry(e Entry, raw cacheEntry, source, rawURL string) cacheEntry 
 			fields[f.Name] = v
 		}
 	}
-	if source == "crossref" || source == "arxiv" || source == "zenodo" || source == "datacite" {
-		for k, v := range raw.Fields {
-			if v != "" {
-				fields[k] = v
-			}
+	for k, v := range raw.Fields {
+		if v != "" {
+			fields[k] = v
 		}
 	}
 	delete(fields, "url")
@@ -620,120 +560,6 @@ func ensureArticleOptionalFields(e *Entry) {
 	}
 }
 
-// validateEntry looks up the entry via Crossref or arXiv and returns a
-// corrected entry (nil if nothing changed), the raw fields for caching, the
-// source used, and an optional warning.
-func validateEntry(e Entry, abbreviateJournals bool, log Logger) (corrected *Entry, raw cacheEntry, source, warning string) {
-	log = logOrNop(log)
-	if doi := findDOI(e); doi != "" {
-		if recid := zenodoRecordID(doi); recid != "" {
-			result, raw, _, err := queryZenodo(e, recid, log)
-			if err != nil {
-				source := "timeout"
-				if errors.Is(err, errNotFound) {
-					source = "invalid-id"
-				}
-				return nil, cacheEntry{}, source, fmt.Sprintf("Zenodo query failed: %v", err)
-			}
-			if result != nil && raw.Fields["journal"] != "" && abbreviateJournals {
-				SetField(result, "journal", "{"+AbbreviateISO4(raw.Fields["journal"])+"}")
-			}
-			return result, raw, "zenodo", ""
-		}
-		result, raw, crType, err := queryCrossref(e, doi, log)
-		if errors.Is(err, errNotFound) {
-			// Not a Crossref DOI — try DataCite (always @misc).
-			dcResult, dcRaw, dcErr := queryDataCite(e, doi, log)
-			if dcErr == nil {
-				return dcResult, dcRaw, "datacite", ""
-			}
-			if errors.Is(dcErr, errNotFound) {
-				return nil, cacheEntry{}, "invalid-id", "DOI not found in Crossref or DataCite"
-			}
-			return nil, cacheEntry{}, "timeout", fmt.Sprintf("DataCite query failed: %v", dcErr)
-		}
-		if err != nil {
-			source := "timeout"
-			if errors.Is(err, errNotFound) {
-				source = "invalid-id"
-			}
-			return nil, cacheEntry{}, source, fmt.Sprintf("Crossref query failed: %v", err)
-		}
-		if crType != "" {
-			if result != nil {
-				result.Type = crType
-			} else {
-				cp := e
-				result = &cp
-				result.Type = crType
-			}
-		}
-		// Apply journal abbreviation to the corrected entry (raw.Fields["journal"] is always full).
-		if result != nil && raw.Fields["journal"] != "" && abbreviateJournals {
-			SetField(result, "journal", "{"+AbbreviateISO4(raw.Fields["journal"])+"}")
-		}
-		return result, raw, "crossref", ""
-	}
-
-	if id := findArxivID(e); id != "" {
-		// Entries identified only by an arXiv DOI (10.48550/arXiv.<id>)
-		// become arXiv @misc entries when arXiv-only metadata is used.
-		viaDOI := arxivIDFromDOI(entryRawDOI(e)) != ""
-		asArxivMisc := func(r *Entry) *Entry {
-			if !viaDOI {
-				return r
-			}
-			if r == nil {
-				cp := e
-				r = &cp
-			}
-			r.Type = "misc"
-			SetField(r, "eprint", "{"+id+"}")
-			SetField(r, "archiveprefix", "{arXiv}")
-			return r
-		}
-		result, raw, doi, err := queryArxiv(e, id, log)
-		if err != nil {
-			source := "timeout"
-			if errors.Is(err, errNotFound) {
-				source = "invalid-id"
-			}
-			return nil, cacheEntry{}, source, fmt.Sprintf("arXiv query failed: %v", err)
-		}
-		if doi != "" {
-			// arXiv entry has a DOI — use Crossref validation instead.
-			log.Info(e.Key, fmt.Sprintf("arXiv entry has DOI %s, using Crossref", doi))
-			crResult, crRaw, crType, crErr := queryCrossref(e, doi, log)
-			if crErr != nil {
-				// Crossref failed — fall back to arXiv result.
-				log.Warn(e.Key, fmt.Sprintf("Crossref query failed (%v), falling back to arXiv", crErr))
-				return asArxivMisc(result), raw, "arxiv", ""
-			}
-			entryType := crType
-			if entryType == "" {
-				entryType = "article"
-			}
-			if crResult != nil {
-				crResult.Type = entryType
-			} else {
-				cp := e
-				crResult = &cp
-				crResult.Type = entryType
-			}
-			if crRaw.Fields["journal"] != "" && abbreviateJournals {
-				SetField(crResult, "journal", "{"+AbbreviateISO4(crRaw.Fields["journal"])+"}")
-			}
-			return crResult, crRaw, "crossref", ""
-		}
-		return asArxivMisc(result), raw, "arxiv", ""
-	}
-
-	if spec, ok := entrySpecs[e.Type]; ok && slices.Contains(spec.mandatory, "doi") {
-		return nil, cacheEntry{}, "no-id", "no DOI or arXiv ID — skipping validation"
-	}
-	return nil, cacheEntry{}, "no-id", ""
-}
-
 // findDOI returns the entry's DOI from the doi field or a doi.org url.
 // Placeholder DOIs (see isPlaceholderDOI) and arXiv DOIs (handled by
 // findArxivID) are ignored.
@@ -867,153 +693,30 @@ func addEntryFromIDLocked(id string, log Logger) (key string, isNew bool, err er
 	if err != nil {
 		return "", false, err
 	}
-
-	// arXiv DOIs (10.48550/arXiv.<id>) take the arXiv path.
-	if axID := arxivIDFromDOI(normalizeDOI(id)); axID != "" {
-		id = axID
+	e, err := entryFromID(id)
+	if err != nil {
+		return "", false, err
 	}
-
-	if doi := normalizeDOI(id); doi != "" {
-		if isPlaceholderDOI(doi) {
-			return "", false, fmt.Errorf("%s is a placeholder DOI (Crossref test prefix 10.5555, used by the ACM Digital Library for items without a registered DOI)", doi)
-		}
-		if key := cachedKeyByDOI(c, doi); key != "" {
+	idx := newIDIndex(c, false)
+	if key, ok := idx[entryID(e)]; ok {
+		return key, false, nil
+	}
+	res, err := resolveEntry(e, func(id string) bool { _, ok := idx[id]; return ok }, log)
+	if err != nil {
+		return "", false, err
+	}
+	for _, id := range res.ids() {
+		if key, ok := idx[id]; ok {
 			return key, false, nil
 		}
-		if recid := zenodoRecordID(doi); recid != "" {
-			base := Entry{Type: "misc", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
-			corrected, raw, _, err := queryZenodo(base, recid, log)
-			if err != nil {
-				return "", false, err
-			}
-			if key := cachedKeyByDOI(c, raw.Fields["doi"]); key != "" {
-				return key, false, nil
-			}
-			e := base
-			if corrected != nil {
-				e = *corrected
-			}
-			if err := checkAPIMandatoryFields(e, "Zenodo"); err != nil {
-				return "", false, err
-			}
-			key := disambiguateKey(GenerateKey(e), c)
-			c[key] = buildCacheEntry(e, raw, "zenodo", "")
-			saveCache(c, log)
-			return key, true, nil
-		}
-		base := Entry{Type: "article", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
-		corrected, raw, crType, err := queryCrossref(base, doi, log)
-		if errors.Is(err, errNotFound) {
-			// Not a Crossref DOI — try DataCite (always @misc).
-			dcCorrected, dcRaw, dcErr := queryDataCite(base, doi, log)
-			if dcErr != nil {
-				if errors.Is(dcErr, errNotFound) {
-					return "", false, fmt.Errorf("DOI not found in Crossref or DataCite: %w", errNotFound)
-				}
-				return "", false, dcErr
-			}
-			if key := cachedKeyByDOI(c, dcRaw.Fields["doi"]); key != "" {
-				return key, false, nil
-			}
-			e := base
-			if dcCorrected != nil {
-				e = *dcCorrected
-			}
-			if err := checkAPIMandatoryFields(e, "DataCite"); err != nil {
-				return "", false, err
-			}
-			key := disambiguateKey(GenerateKey(e), c)
-			c[key] = buildCacheEntry(e, dcRaw, "datacite", "")
-			saveCache(c, log)
-			return key, true, nil
-		}
-		if err != nil {
-			return "", false, err
-		}
-		e := base
-		if corrected != nil {
-			e = *corrected
-		}
-		if crType != "" {
-			e.Type = crType
-		}
-		raw.Fields["doi"] = strings.ToLower(doi)
-		if err := checkAPIMandatoryFields(e, "Crossref"); err != nil {
-			return "", false, err
-		}
-		cEntry := buildCacheEntry(e, raw, "crossref", "")
-		key := disambiguateKey(GenerateKey(e), c)
-		c[key] = cEntry
-		saveCache(c, log)
-		return key, true, nil
 	}
-
-	if arxivID := normalizeArxivID(id); arxivID != "" {
-		for key, entry := range c {
-			if strings.EqualFold(entry.Fields["eprint"], arxivID) {
-				return key, false, nil
-			}
-		}
-		base := Entry{
-			Type: "misc",
-			Key:  "tmp",
-			Fields: []Field{
-				{Name: "eprint", Value: arxivID},
-				{Name: "archiveprefix", Value: "{arXiv}"},
-			},
-		}
-		corrected, raw, doi, err := queryArxiv(base, arxivID, log)
-		if err != nil {
-			return "", false, err
-		}
-
-		if doi != "" {
-			// arXiv entry has a DOI — use Crossref instead.
-			for key, entry := range c {
-				if strings.EqualFold(entry.Fields["doi"], doi) {
-					return key, false, nil
-				}
-			}
-			crBase := Entry{Type: "article", Key: "tmp", Fields: []Field{{Name: "doi", Value: doi}}}
-			crCorrected, crRaw, crType, crErr := queryCrossref(crBase, doi, log)
-			if crErr == nil {
-				e := crBase
-				if crCorrected != nil {
-					e = *crCorrected
-				}
-				if crType != "" {
-					e.Type = crType
-				}
-				crRaw.Fields["doi"] = strings.ToLower(doi)
-				if err := checkAPIMandatoryFields(e, "Crossref"); err != nil {
-					return "", false, err
-				}
-				cEntry := buildCacheEntry(e, crRaw, "crossref", "")
-				key := disambiguateKey(GenerateKey(e), c)
-				c[key] = cEntry
-				saveCache(c, log)
-				return key, true, nil
-			}
-			// Crossref failed — fall back to arXiv result.
-			log.Warn("", fmt.Sprintf("Crossref failed for DOI %s (%v), falling back to arXiv", doi, crErr))
-		}
-
-		e := base
-		if corrected != nil {
-			e = *corrected
-		}
-		raw.Fields["eprint"] = arxivID
-		if err := checkAPIMandatoryFields(e, "arXiv"); err != nil {
-			return "", false, err
-		}
-		cEntry := buildCacheEntry(e, raw, "arxiv", "")
-		key := disambiguateKey(GenerateKey(e), c)
-		c[key] = cEntry
-		saveCache(c, log)
-		return key, true, nil
+	if err := checkAPIMandatoryFields(res.entry, sourceLabel[res.source]); err != nil {
+		return "", false, err
 	}
-
-	return "", false, ErrUnrecognizedID
+	key = disambiguateKey(GenerateKey(res.entry), c)
+	c[key] = buildCacheEntry(res.entry, res.raw, res.source, "")
+	saveCache(c, log)
+	return key, true, nil
 }
 
 // disambiguateKey returns key if it is not already in c, otherwise appends a

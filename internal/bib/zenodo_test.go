@@ -179,7 +179,7 @@ func TestQueryZenodo_BookWithoutPublisherFallsBack(t *testing.T) {
 func TestValidateEntry_Zenodo404_InvalidID(t *testing.T) {
 	zenodoServer(t, nil, nil)
 	e := Entry{Type: "misc", Key: "k", Fields: []Field{{Name: "doi", Value: "{10.5281/zenodo.9}"}}}
-	_, _, source, warn := validateEntry(e, false, nil)
+	_, _, source, warn := resolveForTest(e)
 	if source != "invalid-id" {
 		t.Errorf("source = %q, want invalid-id", source)
 	}
@@ -191,7 +191,7 @@ func TestValidateEntry_Zenodo404_InvalidID(t *testing.T) {
 func TestValidateEntry_ZenodoSource(t *testing.T) {
 	zenodoServer(t, map[string]zrec{"200": softwareRec}, nil)
 	e := Entry{Type: "misc", Key: "k", Fields: []Field{{Name: "doi", Value: "{10.5281/zenodo.200}"}}}
-	got, _, source, warn := validateEntry(e, false, nil)
+	got, _, source, warn := resolveForTest(e)
 	if warn != "" || source != "zenodo" {
 		t.Fatalf("source = %q, warn = %q", source, warn)
 	}

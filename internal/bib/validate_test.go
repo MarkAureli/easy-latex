@@ -3,6 +3,7 @@ package bib
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -467,7 +468,7 @@ func TestValidateEntry_DOI_SetsCrossrefType(t *testing.T) {
 			{Name: "doi", Value: "{10.1/conf}"},
 		},
 	}
-	result, _, source, warn := validateEntry(e, false, nil)
+	result, _, source, warn := resolveForTest(e)
 	if warn != "" {
 		t.Fatalf("unexpected warning: %s", warn)
 	}
@@ -984,28 +985,20 @@ func containsField(warn, field string) bool {
 
 // ── validateEntry ─────────────────────────────────────────────────────────────
 
-func TestValidateEntry_NoIDWarning_ArticleWarns(t *testing.T) {
-	e := Entry{Type: "article", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
-	corrected, _, source, warn := validateEntry(e, true, nil)
-	if corrected != nil {
-		t.Error("expected no correction")
+// resolveForTest runs resolveEntry and reports the outcome in the shape the
+// allocation path records: corrected entry, raw fields, source, warning.
+func resolveForTest(e Entry) (*Entry, cacheEntry, string, string) {
+	res, err := resolveEntry(e, nil, nil)
+	if err != nil {
+		return nil, cacheEntry{}, failureSource(err), err.Error()
 	}
-	if source != "no-id" {
-		t.Errorf("source = %q, want %q", source, "no-id")
-	}
-	if warn == "" {
-		t.Error("expected a warning for article with no DOI or arXiv ID")
-	}
+	return &res.entry, res.raw, res.source, ""
 }
 
-func TestValidateEntry_NoIDWarning_BookSuppressed(t *testing.T) {
-	e := Entry{Type: "book", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
-	_, _, source, warn := validateEntry(e, true, nil)
-	if source != "no-id" {
-		t.Errorf("source = %q, want %q", source, "no-id")
-	}
-	if warn != "" {
-		t.Errorf("expected no warning for book without doi, got %q", warn)
+func TestResolveEntry_NoID(t *testing.T) {
+	e := Entry{Type: "article", Key: "NoID", Fields: []Field{{Name: "title", Value: "{X}"}}}
+	if _, err := resolveEntry(e, nil, nil); !errors.Is(err, errNoID) {
+		t.Errorf("err = %v, want errNoID", err)
 	}
 }
 
@@ -1643,6 +1636,48 @@ func TestAllocateCacheEntries_ArxivDedup_ByEprint(t *testing.T) {
 	}
 }
 
+// A preprint whose arXiv record names a journal DOI that is already cached
+// is merged into the cached entry without querying Crossref.
+func TestAllocateCacheEntries_ArxivDedup_ByPublishedDOI(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
+	saveCache(cache{"Smith2023Crossref": cacheEntry{
+		Source: "crossref",
+		Type:   "article",
+		Fields: map[string]string{"doi": "10.1016/j.test.2023.1234"},
+	}}, nil)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/api/query") {
+			w.Header().Set("Content-Type", "application/xml")
+			w.Write(makeArxivXMLWithDOI("A Title", "Smith, John", "2023-01-15T00:00:00Z", "10.1016/j.test.2023.1234"))
+			return
+		}
+		t.Error("unexpected request to", r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	orig := httpClient
+	httpClient = &http.Client{Transport: rebaseTransport{base: srv.URL}}
+	defer func() { httpClient = orig }()
+
+	path := filepath.Join(dir, "test.bib")
+	bibContent := "@misc{Pre,\n  author = {Smith, John},\n  title = {A Title},\n  year = {2023},\n  eprint = {2301.00002},\n  archiveprefix = {arXiv},\n}\n"
+	if err := os.WriteFile(path, []byte(bibContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	added, renames, err := AllocateCacheEntries([]string{path}, false, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if added != 0 {
+		t.Errorf("added = %d, want 0", added)
+	}
+	if got := renames["Pre"]; got != "Smith2023Crossref" {
+		t.Errorf("renames[Pre] = %q, want Smith2023Crossref", got)
+	}
+}
+
 func TestAllocateCacheEntries_DOIDedup_CaseInsensitive(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("EL_GLOBAL_BIB", filepath.Join(dir, "_global_bib.json"))
@@ -1729,7 +1764,7 @@ func TestValidateEntry_CrossrefHTTP429_Warning(t *testing.T) {
 			{Name: "doi", Value: "{10.1000/test}"},
 		},
 	}
-	corrected, _, source, warn := validateEntry(e, false, nil)
+	corrected, _, source, warn := resolveForTest(e)
 	if corrected != nil {
 		t.Error("expected no correction on HTTP 429")
 	}
@@ -1761,7 +1796,7 @@ func TestValidateEntry_Crossref404_InvalidID(t *testing.T) {
 			{Name: "doi", Value: "{10.1000/nonexistent}"},
 		},
 	}
-	corrected, _, source, warn := validateEntry(e, false, nil)
+	corrected, _, source, warn := resolveForTest(e)
 	if corrected != nil {
 		t.Error("expected no correction on HTTP 404")
 	}
@@ -2054,7 +2089,7 @@ func TestValidateEntry_ArxivWithDOI_UsesCrossref(t *testing.T) {
 			{Name: "archiveprefix", Value: "{arXiv}"},
 		},
 	}
-	result, raw, source, warn := validateEntry(e, false, nil)
+	result, raw, source, warn := resolveForTest(e)
 	if warn != "" {
 		t.Fatalf("unexpected warning: %s", warn)
 	}
@@ -2105,7 +2140,7 @@ func TestValidateEntry_ArxivWithDOI_CrossrefFails_FallsBackToArxiv(t *testing.T)
 			{Name: "archiveprefix", Value: "{arXiv}"},
 		},
 	}
-	result, _, source, warn := validateEntry(e, false, nil)
+	result, _, source, warn := resolveForTest(e)
 	if warn != "" {
 		t.Fatalf("unexpected warning: %s", warn)
 	}
@@ -2335,9 +2370,8 @@ func TestPlaceholderDOI_IgnoredAndDropped(t *testing.T) {
 	if FieldValue(e, "author") == "" {
 		t.Error("author dropped")
 	}
-	_, _, source, warn := validateEntry(e, false, nil)
-	if source != "no-id" || warn != "" {
-		t.Errorf("source = %q, warn = %q; want no-id without warning for @book", source, warn)
+	if _, err := resolveEntry(e, nil, nil); !errors.Is(err, errNoID) {
+		t.Errorf("err = %v, want errNoID for placeholder-only entry", err)
 	}
 	real := Entry{Type: "article", Key: "k", Fields: []Field{{Name: "url", Value: "{https://doi.org/10.1103/x}"}}}
 	if findDOI(real) != "10.1103/x" {

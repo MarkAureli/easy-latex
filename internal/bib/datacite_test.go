@@ -80,7 +80,7 @@ func TestValidateEntry_CrossrefMiss_DataCiteMisc(t *testing.T) {
 		{Name: "doi", Value: "{10.13140/2.1.3578.9122}"},
 		{Name: "journal", Value: "{Bogus}"},
 	}}
-	got, raw, source, warn := validateEntry(e, false, nil)
+	got, raw, source, warn := resolveForTest(e)
 	if source != "datacite" || warn != "" {
 		t.Fatalf("source = %q, warn = %q", source, warn)
 	}
@@ -110,7 +110,7 @@ func TestValidateEntry_CrossrefMiss_DataCiteMisc(t *testing.T) {
 func TestValidateEntry_CrossrefAndDataCiteMiss_InvalidID(t *testing.T) {
 	doiServer(t, nil, nil)
 	e := Entry{Type: "misc", Key: "k", Fields: []Field{{Name: "doi", Value: "{10.1000/nope}"}}}
-	_, _, source, warn := validateEntry(e, false, nil)
+	_, _, source, warn := resolveForTest(e)
 	if source != "invalid-id" || !strings.Contains(warn, "DataCite") {
 		t.Errorf("source = %q, warn = %q", source, warn)
 	}
@@ -151,7 +151,7 @@ func TestArxivDOI_Detection(t *testing.T) {
 func TestValidateEntry_ArxivDOI_BecomesArxivMisc(t *testing.T) {
 	doiServer(t, nil, makeArxivXML("Some Preprint", "Jane Doe", "2023-01-17T00:00:00Z"))
 	e := Entry{Type: "article", Key: "k", Fields: []Field{{Name: "doi", Value: "{10.48550/arXiv.2301.07041}"}}}
-	got, raw, source, warn := validateEntry(e, false, nil)
+	got, raw, source, warn := resolveForTest(e)
 	if source != "arxiv" || warn != "" || got == nil {
 		t.Fatalf("source = %q, warn = %q, got = %+v", source, warn, got)
 	}
