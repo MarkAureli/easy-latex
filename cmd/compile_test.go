@@ -485,6 +485,44 @@ func TestFilterLines_FileClosedAfterContextLine(t *testing.T) {
 	}
 }
 
+func TestFilterLines_OutputAfterTruncatedContext(t *testing.T) {
+	// Terminal output: TeX continues on the line after the truncated context.
+	ctx := "      ie Frage, unter welchen Bedingungen es vorteilhaft ist, Steuerplanung ..."
+	out := "(./Kapitel 1/Einleitung.tex\npdfTeX warning (ext4): dup\n<to be read again>\n   \\relax\nl.29 D\n" +
+		ctx + " [1]) (./Kapitel 3/3.3 After-Tax Leistungsmaß.tex [28]\n" +
+		"Overfull \\hbox (6pt too wide) in paragraph at lines 180--183\n\n)\n"
+	got := filterLines([]byte(out))
+	want := "Kapitel 3/3.3 After-Tax Leistungsmaß.tex: Overfull \\hbox (6pt too wide) in paragraph at lines 180--183"
+	if len(got) < 1 || got[len(got)-1] != want {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestFilterLines_OutputAfterBoxContent(t *testing.T) {
+	// Terminal output: no blank line after the box content line.
+	out := "(./a.tex\nOverfull \\hbox (6pt too wide) in paragraph at lines 1--2\n" +
+		"\\T1/x (foo\n[3]) (./b tex.tex\nUnderfull \\hbox (badness 10000) in paragraph at lines 38--38\n[]|x\n) )\n"
+	got := filterLines([]byte(out))
+	want := []string{
+		"a.tex: Overfull \\hbox (6pt too wide) in paragraph at lines 1--2",
+		"b tex.tex: Underfull \\hbox (badness 10000) in paragraph at lines 38--38",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestCutTruncatedContext(t *testing.T) {
+	// XeTeX/LuaTeX count runes: "ä" is one column but two bytes.
+	ctx := "      ä" + strings.Repeat("x", 69) + "..."
+	if rest, ok := cutTruncatedContext(ctx + " [1])"); !ok || rest != " [1])" {
+		t.Errorf("rune width: got %q %v", rest, ok)
+	}
+	if _, ok := cutTruncatedContext("      short source line [1])"); ok {
+		t.Error("untruncated context must not be cut")
+	}
+}
+
 func TestFilterLines_BiberInfoDroppedWarnKept(t *testing.T) {
 	in := "INFO - Reading '.el/main.bcf'\nWARN - Data source 'p.bib' contains no BibTeX entries/macros, ignoring\nINFO - WARNINGS: 1\n"
 	got := filterLines([]byte(in))

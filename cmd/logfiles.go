@@ -10,12 +10,16 @@ import (
 // end at "[" (page marker), "(", ")" or end of line.
 var reLogFileOpen = regexp.MustCompile(`^\(((?:\.{0,2}/)[^()\[\]]*?|[^()\[\]]*?\.tex)(?:\s*(?:[\[()]|$))`)
 
+// reHboxWarning matches box warnings whose next line is the box content.
+var reHboxWarning = regexp.MustCompile(`^(?:Over|Under)full \\hbox .* (?:at lines? \d|in alignment at)`)
+
 // logFileTracker follows the "(file ... )" nesting of TeX output so warnings
 // can be attributed to the source file that was being read.
 type logFileTracker struct {
 	stack    []string // one entry per open "(" ; "" for non-file parens
 	inBlock  bool     // inside a diagnostic block (until blank line)
 	afterCtx bool     // previous line was an "l.N" context line
+	afterBox bool     // previous line was an Over/Underfull \hbox warning
 }
 
 // current returns the innermost open file, or "".
@@ -41,13 +45,29 @@ func (t *logFileTracker) feed(line string, isDiag bool) {
 		// file closers ("      [1]) (./next.tex"), so scan it unless it looks
 		// like plain source text.
 		t.afterCtx = false
-		if tr := strings.TrimSpace(line); tr != "" && strings.ContainsRune("[])", rune(tr[0])) {
+		if rest, ok := cutTruncatedContext(line); ok {
+			// Truncated context ("...") ends exactly at error_line; TeX's
+			// regular output continues on the same line after it.
+			t.inBlock = false
+			line = rest
+		} else if tr := strings.TrimSpace(line); tr != "" && strings.ContainsRune("[])", rune(tr[0])) {
 			t.inBlock = false
 		}
+	}
+	if t.afterBox {
+		// The line after an \hbox warning shows the box content (may contain
+		// parens). In terminal output no blank line follows it: normal output
+		// resumes on the next line, so the block ends after this one.
+		t.afterBox = false
+		t.inBlock = false
+		return
 	}
 	if contextLinePattern.MatchString(line) {
 		t.afterCtx = true
 		return
+	}
+	if isDiag && reHboxWarning.MatchString(line) {
+		t.afterBox = true
 	}
 	if isDiag {
 		t.inBlock = true
@@ -74,4 +94,31 @@ func (t *logFileTracker) feed(line string, isDiag bool) {
 			}
 		}
 	}
+}
+
+// texErrorLine is TeX's error_line: the width of the second line of an error
+// context display. runEngine pins it so the cut below is reliable.
+const texErrorLine = 79
+
+// cutTruncatedContext returns what follows the source text on the line after
+// an "l.N" context line, when TeX truncated that text with "..." at
+// error_line. Width is counted in bytes (pdfTeX) or runes (XeTeX/LuaTeX).
+func cutTruncatedContext(line string) (string, bool) {
+	if len(line) >= texErrorLine && line[texErrorLine-3:texErrorLine] == "..." {
+		return line[texErrorLine:], true
+	}
+	n := 0
+	for i := range line {
+		if n == texErrorLine {
+			if strings.HasSuffix(line[:i], "...") {
+				return line[i:], true
+			}
+			return "", false
+		}
+		n++
+	}
+	if n == texErrorLine && strings.HasSuffix(line, "...") {
+		return "", true
+	}
+	return "", false
 }

@@ -606,7 +606,7 @@ func runEngine(enginePath string, cfg *Config, injectStys []string, draft bool) 
 	c := exec.Command(enginePath, args...)
 	// Avoid hard-wrapping log lines at 79 columns so warnings (and their
 	// "on input line N") stay on one line for editors parsing the log (VimTeX).
-	c.Env = append(os.Environ(), "max_print_line=1000")
+	c.Env = append(os.Environ(), "max_print_line=1000", "error_line=79", "half_error_line=50")
 	if len(injectStys) > 0 {
 		// Add aux dir to TEXINPUTS so the engine finds the injected .sty files.
 		absAux, _ := filepath.Abs(auxDir)
