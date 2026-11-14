@@ -19,12 +19,10 @@ import (
 )
 
 var (
-	openAfter       bool
-	compileFix      bool
-	compileNoCheck  bool
-	compileStrict   bool
-	compileNoStrict bool
-	compileEngine   string
+	openAfter      bool
+	compileFix     bool
+	compileNoCheck bool
+	compileEngine  string
 )
 
 var compileCmd = &cobra.Command{
@@ -42,10 +40,7 @@ func init() {
 	compileCmd.Flags().BoolVarP(&openAfter, "open", "o", false, "Open PDF after successful compilation")
 	compileCmd.Flags().BoolVarP(&compileFix, "fix", "f", false, "Apply autofixes to source files where available")
 	compileCmd.Flags().BoolVarP(&compileNoCheck, "no-check", "n", false, "Skip all pedantic checks (static and dynamic)")
-	compileCmd.Flags().BoolVar(&compileStrict, "strict", false, "Treat warnings as errors (overrides config)")
-	compileCmd.Flags().BoolVar(&compileNoStrict, "no-strict", false, "Treat warnings as warnings (overrides config)")
 	compileCmd.Flags().StringVar(&compileEngine, "engine", "", "LaTeX engine: pdflatex, xelatex, or lualatex (overrides config and magic comment)")
-	compileCmd.MarkFlagsMutuallyExclusive("strict", "no-strict")
 }
 
 // magicEnginePattern matches the de-facto TeXShop/VSCode convention:
@@ -104,308 +99,289 @@ func runCompile(cmd *cobra.Command, args []string) error {
 	if compileFix && compileNoCheck {
 		return fmt.Errorf("--fix and --no-check are mutually exclusive")
 	}
-
-	cfg, err := loadConfig()
+	r, err := prepareCompile()
 	if err != nil {
 		return err
 	}
-	enabledChecks := cfg.Pedantic.EnabledNames()
-	runChecks := !compileNoCheck && (len(enabledChecks) > 0 || cfg.Spelling != nil)
-	if runChecks {
-		if err := pedantic.ValidateCheckNames(enabledChecks); err != nil {
-			return err
-		}
+	if err := r.syncBibCache(); err != nil {
+		return err
 	}
-
-	var injectStys []string
-	if !compileNoCheck {
-		stys := pedantic.PostCompileStys(enabledChecks)
-		for name, data := range stys {
-			styPath := filepath.Join(auxDir, name)
-			if err := os.WriteFile(styPath, data, 0644); err != nil {
-				return fmt.Errorf("cannot write %s: %w", styPath, err)
-			}
-			injectStys = append(injectStys, strings.TrimSuffix(name, ".sty"))
-		}
-		slices.Sort(injectStys)
-	}
-
-	if _, err := os.Stat(cfg.Main); err != nil {
-		return fmt.Errorf("main file %q not found. Re-run 'el init'", cfg.Main)
-	}
-
-	if err := os.MkdirAll(auxDir, 0755); err != nil {
-		return fmt.Errorf("cannot create %s: %w", auxDir, err)
-	}
-
-	// Instrument the compile to learn environment kinds (see envprobe).
-	scannedEnvs := scanProjectEnvs(cfg.Main)
-	if err := writeEnvProbe(scannedEnvs); err != nil {
-		return fmt.Errorf("cannot write env probe: %w", err)
-	}
-	injectStys = append(injectStys, envprobe.PkgName)
-	slices.Sort(injectStys)
-
-	engine, err := resolveEngine(cfg, compileEngine)
+	diags, err := r.runPasses()
 	if err != nil {
 		return err
 	}
-	enginePath, err := findTool(engine)
-	if err != nil {
-		return err
-	}
-
-	stem := filepath.Base(strings.TrimSuffix(cfg.Main, ".tex"))
-
-	var compileDiags []logDiag
-
-	log := newBibLogger()
-
-	// If bibliography.bib changed since the last compile or bib parse run,
-	// auto-allocate new cache entries and record any renames before compiling.
-	if ef := entriesBibFile(cfg.BibFiles); ef != "" && bib.BibFileChanged(ef, auxDir) {
-		log.Info("", "bibliography.bib changed, re-parsing...")
-		added, renames, err := bib.AllocateCacheEntries(cfg.BibFiles, cfg.retryTimeout(), log)
-		if err != nil {
-			return err
-		}
-		for old, new := range renames {
-			log.Info("", fmt.Sprintf("key renamed: %s -> %s", old, new))
-		}
-		if added > 0 {
-			log.Info("", fmt.Sprintf("allocated %d new cache entries", added))
-		}
-		bib.SaveRenames(auxDir, renames)
-		bib.UpdateBibHash(ef, auxDir)
-	}
-
-	// First pdflatex pass — buffer output; only print if no bib tool runs,
-	// since bib-related warnings (undefined citations, references) are expected
-	// at this stage and will be resolved by the subsequent bib tool pass.
-	//
-	// If the pass fails and a stale .bbl exists (e.g. from a previous failed
-	// compile with malformed bib content), delete it and retry once: the .bbl
-	// will be regenerated correctly by the bib tool on this run.
-	firstDiags, err := runEngine(enginePath, cfg, injectStys, true)
-	if err != nil {
-		bblPath := filepath.Join(auxDir, stem+".bbl")
-		if _, statErr := os.Stat(bblPath); statErr == nil {
-			os.Remove(bblPath) //nolint:errcheck
-			firstDiags, err = runEngine(enginePath, cfg, injectStys, true)
-		}
-		if err != nil {
-			printLogDiags(os.Stdout, firstDiags)
-			return err
-		}
-	}
-
-	// Update bib file list from artifacts if not already set by el init.
-	if len(cfg.BibFiles) == 0 {
-		if found := bibFilesFromArtifacts(stem, auxDir); len(found) > 0 {
-			cfg.BibFiles = found
-			localCfg, _ := loadLocalConfig()
-			localCfg.BibFiles = found
-			_ = saveLocalConfig(localCfg)
-		}
-	}
-
-	// Apply pending cite-key renames produced by el bib parse: update \cite{}
-	// references in all .tex files and re-run pdflatex so the .aux/.bcf reflects
-	// the new keys before the bib tool.
-	if renames := bib.LoadRenames(auxDir); len(renames) > 0 {
-		log.Info("", "rewriting cite keys in .tex files")
-		for old, new := range renames {
-			log.Info("", fmt.Sprintf("  %s -> %s", old, new))
-		}
-		texFiles := texscan.FindTexFiles(cfg.Main, ".")
-		if err := rewriteCiteKeys(texFiles, renames); err != nil {
-			return err
-		}
-		bib.ClearRenames(auxDir)
-		if _, err := runEngine(enginePath, cfg, injectStys, true); err != nil {
-			return err
-		}
-	}
-
-	// Generate bibliography.bib from cache for cited entries only.
-	if ef := entriesBibFile(cfg.BibFiles); ef != "" {
-		citeKeys := citedKeysFromArtifacts(stem, auxDir)
-		// Drop keys defined in generated .bib files (e.g. revtex's
-		// citeautoscript writes mainNotes.bib with @FOOTNOTE{Note1,...}).
-		// Those keys live outside our cache and bibtex resolves them on its own.
-		if excluded := generatedBibKeys(stem, auxDir, cfg.BibFiles); len(excluded) > 0 {
-			kept := citeKeys[:0]
-			for _, k := range citeKeys {
-				if !excluded[k] {
-					kept = append(kept, k)
-				}
-			}
-			citeKeys = kept
-		}
-		if len(citeKeys) > 0 {
-			if err := bib.WriteBibFromCache(ef, citeKeys, bib.WriteOptions{
-				AbbreviateJournals:  cfg.abbreviateJournals(),
-				BraceTitles:         cfg.braceTitles(),
-				ArxivAsUnpublished:  cfg.arxivAsUnpublished(),
-				MaxAuthors:          cfg.maxAuthors(),
-				AbbreviateFirstName: cfg.abbreviateFirstName(),
-				UrlFromDOI:          cfg.urlFromDOI(),
-			}); err != nil {
-				return err
-			}
-			bib.UpdateBibHash(ef, auxDir)
-		}
-	}
-
-	// Detect and run bibliography tool based on artifacts from first pass
-	bibTool, err := detectBibTool(stem, auxDir)
-	if err != nil {
-		return err
-	}
-	if bibTool != "" {
-		if err := runBibTool(bibTool, stem, auxDir); err != nil {
-			return err
-		}
-		fixBblBurl(filepath.Join(auxDir, stem+".bbl"))
-		// Second pdflatex pass to incorporate bibliography
-		secondDiags, err := runEngine(enginePath, cfg, injectStys, true)
-		if err != nil {
-			printLogDiags(os.Stdout, secondDiags)
-			return err
-		}
-		// Additional passes to stabilize cross-references and citations
-		prev := secondDiags
-		for range 2 {
-			if !needsRerun(prev) {
-				break
-			}
-			prev, err = runEngine(enginePath, cfg, injectStys, true)
-			if err != nil {
-				printLogDiags(os.Stdout, prev)
-				return err
-			}
-		}
-	}
-
-	// Final non-draft pass writes the PDF. All prior passes run with -draftmode
-	// to avoid intermediate PDF writes (which trigger PDF viewer reloads when
-	// bib/rerun stabilization is in progress).
-	compileDiags, err = runEngine(enginePath, cfg, injectStys, false)
-	if err != nil {
-		printLogDiags(os.Stdout, compileDiags)
-		return err
-	}
-	compileWarns := ofKind(compileDiags, logWarning)
 
 	// Best effort: learn environment and command signatures for editor completion.
-	_ = updateEnvTable(stem, scannedEnvs)
-	_ = updateCmdTable(cfg.Main)
+	_ = updateEnvTable(r.stem, r.scannedEnvs)
+	_ = updateCmdTable(r.cfg.Main)
 
-	pdfName := stem + ".pdf"
-	srcPDF := filepath.Join(auxDir, pdfName)
-
-	// Copy compiled PDF from aux dir to working dir
-	_ = os.Remove(pdfName)
-	srcData, err := os.ReadFile(srcPDF)
+	pdfName, err := r.copyPDF()
 	if err != nil {
-		return fmt.Errorf("cannot read %s: %w", srcPDF, err)
-	}
-	if err := os.WriteFile(pdfName, srcData, 0644); err != nil {
-		return fmt.Errorf("cannot write %s: %w", pdfName, err)
+		return err
 	}
 
-	var fixedPedDiags, pedDiags, spellDiags []pedantic.Diagnostic
-	if runChecks {
-		texFiles := texscan.FindTexFiles(cfg.Main, ".")
-
-		if compileFix {
-			beforeSrc := pedantic.RunSourceChecks(enabledChecks, texFiles)
-			if _, err := pedantic.RunSourceFixes(enabledChecks, texFiles); err != nil {
-				return err
-			}
-			afterSrc := pedantic.RunSourceChecks(enabledChecks, texFiles)
-			fixedPedDiags = diffDiagnostics(beforeSrc, afterSrc)
-			pedDiags = append(afterSrc, pedantic.RunPostCompileChecks(enabledChecks, auxDir)...)
-		} else {
-			pedDiags = pedantic.RunSourceChecks(enabledChecks, texFiles)
-			pedDiags = append(pedDiags, pedantic.RunPostCompileChecks(enabledChecks, auxDir)...)
-		}
-		var err error
-		spellDiags, err = runSpellCheck(cfg, texFiles)
-		if err != nil {
+	var rep checkReport
+	if r.runChecks {
+		texFiles := texscan.FindTexFiles(r.cfg.Main, ".")
+		if rep, err = runSourceChecks(r.cfg, r.checks, texFiles, compileFix); err != nil {
 			return err
 		}
-		sortDiagnostics(fixedPedDiags)
-		sortDiagnostics(pedDiags)
-		sortDiagnostics(spellDiags)
+		rep.ped = append(rep.ped, pedantic.RunPostCompileChecks(r.checks, auxDir)...)
+		sortDiagnostics(rep.ped)
 	}
 
 	// Best effort: expose diagnostics to editors (VimTeX) via the engine log.
-	_ = appendDiagsToLog(filepath.Join(auxDir, stem+".log"), cfg.Main, pedDiags, spellDiags)
+	_ = appendDiagsToLog(filepath.Join(auxDir, r.stem+".log"), r.cfg.Main, rep.ped, rep.spell)
 
-	printCompileSections(fixedPedDiags, pedDiags, spellDiags, compileWarns, compileFix)
-
+	printReport(rep, ofKind(diags, logWarning), compileFix, true)
 	fmt.Printf("Compiled successfully -> %s\n", pdfName)
-
-	if resolveStrict(cfg, compileStrict, compileNoStrict) {
-		if len(pedDiags)+len(spellDiags)+len(compileWarns) > 0 {
-			return errStrict
-		}
-	}
-
 	if openAfter {
-		var cmd *exec.Cmd
-		switch runtime.GOOS {
-		case "darwin":
-			cmd = exec.Command("open", pdfName)
-		case "linux":
-			cmd = exec.Command("xdg-open", pdfName)
-		case "windows":
-			cmd = exec.Command("cmd", "/c", "start", pdfName)
-		}
-		if cmd != nil {
-			cmd.Start() //nolint:errcheck
-		}
+		openFile(pdfName)
 	}
-
 	return nil
 }
 
-// printCompileSections prints Pedantics (fixed), Pedantics (remaining)/Pedantics,
-// Misspellings, Warnings sections in order (blank line between each pair of
-// non-empty sections), followed by the summary. The "fixed" section is shown in
-// the default colour; remaining/misspelling/warnings sections are yellow.
-// `withFix` toggles the "(remaining)" suffix on the pedantics header label.
-func printCompileSections(fixedPed, ped, spell []pedantic.Diagnostic, warns []logDiag, withFix bool) {
-	first := true
-	emit := func(fn func()) {
-		if !first {
-			fmt.Println()
+// compileRun carries the state shared by the stages of one el compile.
+type compileRun struct {
+	cfg         *Config
+	stem        string // main file name without .tex; the engine's jobname
+	enginePath  string
+	injectStys  []string // packages \RequirePackage'd before the document
+	scannedEnvs map[string]texscan.EnvInfo
+	checks      []string // enabled pedantic checks
+	runChecks   bool
+	log         bib.Logger
+}
+
+// prepareCompile loads the config, resolves the engine and writes the
+// instrumentation packages (pedantic post-compile checks, env probe).
+func prepareCompile() (*compileRun, error) {
+	cfg, err := loadConfig()
+	if err != nil {
+		return nil, err
+	}
+	r := &compileRun{
+		cfg:    cfg,
+		stem:   filepath.Base(strings.TrimSuffix(cfg.Main, ".tex")),
+		checks: cfg.Pedantic.EnabledNames(),
+		log:    newBibLogger(),
+	}
+	r.runChecks = !compileNoCheck && (len(r.checks) > 0 || cfg.Spelling != nil)
+	if r.runChecks {
+		if err := pedantic.ValidateCheckNames(r.checks); err != nil {
+			return nil, err
 		}
-		fn()
-		first = false
 	}
-	remainingLabel := "Pedantics"
-	if withFix {
-		remainingLabel = "Pedantics (remaining)"
+	if _, err := os.Stat(cfg.Main); err != nil {
+		return nil, fmt.Errorf("main file %q not found. Re-run 'el init'", cfg.Main)
 	}
-	if len(fixedPed) > 0 {
-		emit(func() { printDiagSection(os.Stderr, "Pedantics (fixed)", fixedPed, "", "", compileColors) })
+	if err := os.MkdirAll(auxDir, 0755); err != nil {
+		return nil, fmt.Errorf("cannot create %s: %w", auxDir, err)
 	}
-	if len(ped) > 0 {
-		emit(func() {
-			printDiagSection(os.Stderr, remainingLabel, ped, compileColors.Yellow, compileColors.Yellow, compileColors)
-		})
+
+	if !compileNoCheck {
+		for name, data := range pedantic.PostCompileStys(r.checks) {
+			styPath := filepath.Join(auxDir, name)
+			if err := os.WriteFile(styPath, data, 0644); err != nil {
+				return nil, fmt.Errorf("cannot write %s: %w", styPath, err)
+			}
+			r.injectStys = append(r.injectStys, strings.TrimSuffix(name, ".sty"))
+		}
 	}
-	if len(spell) > 0 {
-		emit(func() {
-			printDiagSection(os.Stderr, "Misspellings", spell, compileColors.Yellow, compileColors.Yellow, compileColors)
-		})
+	// Instrument the compile to learn environment kinds (see envprobe).
+	r.scannedEnvs = scanProjectEnvs(cfg.Main)
+	if err := writeEnvProbe(r.scannedEnvs); err != nil {
+		return nil, fmt.Errorf("cannot write env probe: %w", err)
 	}
-	if len(warns) > 0 {
-		emit(func() { printLogSection(os.Stderr, "Warnings:", compileColors.Yellow, warns) })
+	r.injectStys = append(r.injectStys, envprobe.PkgName)
+	slices.Sort(r.injectStys)
+
+	engine, err := resolveEngine(cfg, compileEngine)
+	if err != nil {
+		return nil, err
 	}
-	printSummary(os.Stderr, len(ped), len(spell), len(warns), true, compileColors)
+	if r.enginePath, err = findTool(engine); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// syncBibCache re-parses bibliography.bib into the global cache if it changed
+// since the last compile or bib parse, recording renames for applyRenames.
+func (r *compileRun) syncBibCache() error {
+	ef := entriesBibFile(r.cfg.BibFiles)
+	if ef == "" || !bib.BibFileChanged(ef, auxDir) {
+		return nil
+	}
+	r.log.Info("", "bibliography.bib changed, re-parsing...")
+	added, renames, err := bib.AllocateCacheEntries(r.cfg.BibFiles, r.cfg.retryTimeout(), r.log)
+	if err != nil {
+		return err
+	}
+	for old, new := range renames {
+		r.log.Info("", fmt.Sprintf("key renamed: %s -> %s", old, new))
+	}
+	if added > 0 {
+		r.log.Info("", fmt.Sprintf("allocated %d new cache entries", added))
+	}
+	bib.SaveRenames(auxDir, renames)
+	bib.UpdateBibHash(ef, auxDir)
+	return nil
+}
+
+// pass runs one engine pass and prints its errors if it fails.
+func (r *compileRun) pass(draft bool) ([]logDiag, error) {
+	diags, err := runEngine(r.enginePath, r.cfg, r.injectStys, draft)
+	if err != nil {
+		printLogDiags(os.Stdout, diags)
+	}
+	return diags, err
+}
+
+// runPasses runs the full pass sequence and returns the diagnostics of the
+// final, PDF-writing pass:
+//
+//	engine → [cite-key renames → engine] → bib from cache → [bib tool →
+//	engine (+ up to 2 reruns)] → final engine pass
+//
+// All passes but the last run with -draftmode, so PDF viewers only reload
+// once. Bib-related warnings of earlier passes are expected and not shown.
+func (r *compileRun) runPasses() ([]logDiag, error) {
+	// A stale .bbl (e.g. from a previous compile with malformed bib content)
+	// can break the first pass: delete it and retry once; the bib tool
+	// regenerates it below.
+	if diags, err := runEngine(r.enginePath, r.cfg, r.injectStys, true); err != nil {
+		bblPath := filepath.Join(auxDir, r.stem+".bbl")
+		if _, statErr := os.Stat(bblPath); statErr == nil {
+			os.Remove(bblPath) //nolint:errcheck
+			diags, err = runEngine(r.enginePath, r.cfg, r.injectStys, true)
+		}
+		if err != nil {
+			printLogDiags(os.Stdout, diags)
+			return nil, err
+		}
+	}
+	r.discoverBibFiles()
+	if err := r.applyRenames(); err != nil {
+		return nil, err
+	}
+	if err := r.writeBib(); err != nil {
+		return nil, err
+	}
+
+	bibTool, err := detectBibTool(r.stem, auxDir)
+	if err != nil {
+		return nil, err
+	}
+	if bibTool != "" {
+		if err := runBibTool(bibTool, r.stem, auxDir); err != nil {
+			return nil, err
+		}
+		fixBblBurl(filepath.Join(auxDir, r.stem+".bbl"))
+		diags, err := r.pass(true)
+		// Additional passes to stabilize cross-references and citations.
+		for i := 0; err == nil && i < 2 && needsRerun(diags); i++ {
+			diags, err = r.pass(true)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return r.pass(false)
+}
+
+// discoverBibFiles records the bib files the first pass used in the local
+// config, if el init did not set any.
+func (r *compileRun) discoverBibFiles() {
+	if len(r.cfg.BibFiles) > 0 {
+		return
+	}
+	if found := bibFilesFromArtifacts(r.stem, auxDir); len(found) > 0 {
+		r.cfg.BibFiles = found
+		localCfg, _ := loadLocalConfig()
+		localCfg.BibFiles = found
+		_ = saveLocalConfig(localCfg)
+	}
+}
+
+// applyRenames rewrites \cite{} keys renamed by a bib parse in all .tex files
+// and reruns the engine so the .aux/.bcf carry the new keys.
+func (r *compileRun) applyRenames() error {
+	renames := bib.LoadRenames(auxDir)
+	if len(renames) == 0 {
+		return nil
+	}
+	r.log.Info("", "rewriting cite keys in .tex files")
+	for old, new := range renames {
+		r.log.Info("", fmt.Sprintf("  %s -> %s", old, new))
+	}
+	if err := rewriteCiteKeys(texscan.FindTexFiles(r.cfg.Main, "."), renames); err != nil {
+		return err
+	}
+	bib.ClearRenames(auxDir)
+	_, err := r.pass(true)
+	return err
+}
+
+// writeBib generates bibliography.bib from the cache for the cited keys.
+func (r *compileRun) writeBib() error {
+	ef := entriesBibFile(r.cfg.BibFiles)
+	if ef == "" {
+		return nil
+	}
+	// Drop keys defined in generated .bib files (e.g. revtex's citeautoscript
+	// writes mainNotes.bib with @FOOTNOTE{Note1,...}): they live outside our
+	// cache and bibtex resolves them on its own.
+	excluded := generatedBibKeys(r.stem, auxDir, r.cfg.BibFiles)
+	citeKeys := slices.DeleteFunc(citedKeysFromArtifacts(r.stem, auxDir), func(k string) bool { return excluded[k] })
+	if len(citeKeys) == 0 {
+		return nil
+	}
+	cfg := r.cfg
+	if err := bib.WriteBibFromCache(ef, citeKeys, bib.WriteOptions{
+		AbbreviateJournals:  cfg.abbreviateJournals(),
+		BraceTitles:         cfg.braceTitles(),
+		ArxivAsUnpublished:  cfg.arxivAsUnpublished(),
+		MaxAuthors:          cfg.maxAuthors(),
+		AbbreviateFirstName: cfg.abbreviateFirstName(),
+		UrlFromDOI:          cfg.urlFromDOI(),
+	}); err != nil {
+		return err
+	}
+	bib.UpdateBibHash(ef, auxDir)
+	return nil
+}
+
+// copyPDF copies the compiled PDF from the aux dir to the working dir and
+// returns its name.
+func (r *compileRun) copyPDF() (string, error) {
+	pdfName := r.stem + ".pdf"
+	srcPDF := filepath.Join(auxDir, pdfName)
+	_ = os.Remove(pdfName)
+	data, err := os.ReadFile(srcPDF)
+	if err != nil {
+		return "", fmt.Errorf("cannot read %s: %w", srcPDF, err)
+	}
+	if err := os.WriteFile(pdfName, data, 0644); err != nil {
+		return "", fmt.Errorf("cannot write %s: %w", pdfName, err)
+	}
+	return pdfName, nil
+}
+
+// openFile opens path with the platform's default viewer, without waiting.
+func openFile(path string) {
+	var c *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		c = exec.Command("open", path)
+	case "linux":
+		c = exec.Command("xdg-open", path)
+	case "windows":
+		c = exec.Command("cmd", "/c", "start", path)
+	}
+	if c != nil {
+		c.Start() //nolint:errcheck
+	}
 }
 
 func runEngine(enginePath string, cfg *Config, injectStys []string, draft bool) ([]logDiag, error) {

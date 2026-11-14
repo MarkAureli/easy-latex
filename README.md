@@ -216,7 +216,7 @@ $ el config set --global arxiv-as-unpublished  # writes to ~/.config/easy-latex/
 
 #### Pedantic checks
 
-Each pedantic check is a top-level bool key. Enable to enforce style rules during compilation. Violations are reported as warnings (yellow). By default the command exits 0 and the PDF is produced; set `el config set strict` (or pass `--strict` to `el check` / `el compile`) to make any violation a non-zero exit.
+Each pedantic check is a top-level bool key. Enable to enforce style rules during compilation. Violations are reported as warnings (yellow); the command still exits 0 and the PDF is produced.
 
 ```
 $ el config set no-block-citations          # enable a check
@@ -230,8 +230,7 @@ $ el config unset pedantic                  # disable every check at once
 Static (source-phase) checks can also be run standalone, without compiling, via `el check`:
 
 ```
-$ el check          # report violations as warnings; exit 0 (lenient) by default
-$ el check --strict # exit non-zero on any violation
+$ el check          # report violations as warnings (exit 0)
 $ el check --fix    # apply autofixes for fixable checks (see table below)
 ```
 
@@ -330,19 +329,9 @@ $ el spell list --ignore                         # show local ignore.txt
 $ el spell list --global --ignore                # show global ignore.txt
 ```
 
-#### Strict mode
+#### Output
 
-`el check` and `el compile` print pedantic, spelling, and compile-time warnings as yellow sections (`Pedantics:`, `Misspellings:`, `Warnings:`, in that order, separated by a blank line) followed by a yellow summary line (`N pedantic(s), M misspelling(s), K warning(s)`, with each term singular when its count is 1). By default the commands exit 0 even when sections are non-empty (so the PDF is still considered a success). Enable strict mode to make any non-empty section a non-zero exit:
-
-```
-$ el config set strict                 # enable for this project
-$ el config set --global strict        # enable as the default for all projects
-$ el config unset strict               # back to lenient (default)
-$ el check --strict                    # one-off override
-$ el compile --no-strict               # force lenient even if config strict
-```
-
-`--strict` and `--no-strict` are mutually exclusive and override the config value.
+`el check` and `el compile` print pedantic, spelling, and compile-time warnings as yellow sections (`Pedantics:`, `Misspellings:`, `Warnings:`, in that order, separated by a blank line) followed by a yellow summary line (`N pedantic(s), M misspelling(s), K warning(s)`, with each term singular when its count is 1). Warnings never change the exit code: the commands exit 0 even when sections are non-empty.
 
 ### `el bib`
 

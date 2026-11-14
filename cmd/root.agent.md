@@ -13,7 +13,6 @@ Config struct + load/save/merge. Shared by all commands that load config.
   "bib": { ... },
   "pedantic": { "checks": { "no-block-citations": true } },
   "spelling": "en_US",
-  "strict": false,
   "engine": "xelatex"
 }
 ```
@@ -25,7 +24,6 @@ Config struct + load/save/merge. Shared by all commands that load config.
 | `bib` | `BibConfig` | Bibliography processing options (see below) |
 | `pedantic` | `PedanticConfig` | Per-check enable/disable map |
 | `spelling` | *string | Spell-check language: `en_GB`, `en_US`, or unset (off). Triggers `runSpellCheck` in `cmd/check.go` and `cmd/compile.go`; independent of the pedantic registry. |
-| `strict` | *bool | When true, `el check` and `el compile` exit non-zero on any pedantic / spelling / compile-time warning. Default false. CLI flags `--strict` / `--no-strict` override. Helper: `cfg.strict()`. |
 | `engine` | *string | LaTeX engine: `pdflatex` (default), `xelatex`, `lualatex`. Validated via `validateEngine`. Helper: `cfg.engine()`. Resolved by `resolveEngine` in `cmd/compile.go` with precedence `--engine` flag → magic comment (`% !TEX program = ...`) → config → default. |
 
 ### `BibConfig`
@@ -65,10 +63,11 @@ Accessor methods on `*Config` (e.g. `cfg.ieeeFormat()`, `cfg.maxAuthors()`) enco
 | `GlobalConfigDir()` | Returns the global dir (honours `globalConfigDir` test override, then `XDG_CONFIG_HOME`, then `~/.config`). Used by `internal/spell` to locate `spell/{lang,common,ignore}.txt`. |
 | `globalConfigPath()` | `GlobalConfigDir()/config.json` |
 | `runSpellCheck(cfg, texFiles)` | Runs `internal/spell.Run` if `cfg.Spelling != nil`, returning `[]pedantic.Diagnostic`. Reads tex files, strips comments via `texscan.StripComment`. Callers display spelling diagnostics in their own `Spelling:` section (do not merge into pedantics). |
-| `sortDiagnostics(d)` | In-place stable sort of `[]pedantic.Diagnostic` by File then Line. |
-| `resolveStrict(cfg, strictFlag, noStrictFlag)` | Strict-mode resolution: `--strict` wins, then `--no-strict`, then `cfg.strict()`. |
+| `sortDiagnostics(d)` (`report.go`) | In-place stable sort of `[]pedantic.Diagnostic` by File then Line. |
 | `printDiagSection(w, label, diags, headerColor, entryColor, colors)` | Prints a bold `<label>:` header in `headerColor` followed by indented diag lines in `entryColor`. Pass `""` for default-colour rendering (used by the `Pedantics (fixed)` section). Caller is responsible for blank-line separation between adjacent sections. |
 | `diffDiagnostics(before, after)` | Set difference: returns diagnostics present in `before` but not in `after` (matched by File+Line+Message). Used by `el check`/`el compile` with `--fix` to derive the "fixed" subset from pre/post detector runs. |
+| `checkReport{fixed, ped, spell}`, `runSourceChecks(cfg, checks, texFiles, fix)` (`report.go`) | Shared by `el check`/`el compile`: source checks (pre/post `RunSourceFixes` diff when `fix`) + spell-check, sorted. |
+| `printReport(rep, warns, withFix, includeWarnings)` (`report.go`) | Prints `Pedantics (fixed)`, `Pedantics`/`Pedantics (remaining)`, `Misspellings`, `Warnings` (compile only) to stderr with blank-line separators, then `printSummary`. |
 | `printSummary(w, ped, spell, warn, includeWarnings, colors)` | Yellow/bold one-line summary preceded by a blank line. No-op if all counts zero. `includeWarnings=false` for `el check` (omits compile-warning count). |
 
 JSON `omitzero` on `bib` and `pedantic` fields suppresses empty objects (Go 1.24+).

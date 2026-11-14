@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -14,16 +13,11 @@ import (
 	"github.com/MarkAureli/easy-latex/internal/bib"
 	"github.com/MarkAureli/easy-latex/internal/pedantic"
 	"github.com/MarkAureli/easy-latex/internal/spell"
-	"github.com/MarkAureli/easy-latex/internal/term"
 	"github.com/MarkAureli/easy-latex/internal/texscan"
 	"github.com/spf13/cobra"
 )
 
 const auxDir = ".el"
-
-// errStrict signals strict-mode failure. Execute() exits 1 without printing it
-// — the per-section yellow output already conveyed the cause.
-var errStrict = errors.New("strict mode: warnings present")
 
 // Config is the structure stored in .el/config.json
 type Config struct {
@@ -33,8 +27,6 @@ type Config struct {
 	Pedantic PedanticConfig `json:"pedantic,omitzero"`
 	// Spelling selects spell-check language. nil = off. Allowed: "en_GB", "en_US".
 	Spelling *string `json:"spelling,omitempty"`
-	// Strict treats pedantic, spelling, and compile warnings as errors when true.
-	Strict *bool `json:"strict,omitempty"`
 	// Engine selects LaTeX engine. nil = default (pdflatex). Allowed: "pdflatex", "xelatex", "lualatex".
 	Engine *string `json:"engine,omitempty"`
 }
@@ -54,10 +46,6 @@ func (cfg *Config) engine() string {
 		return "pdflatex"
 	}
 	return *cfg.Engine
-}
-
-func (cfg *Config) strict() bool {
-	return cfg.Strict != nil && *cfg.Strict
 }
 
 // spelling returns the active spell-check language ("en_GB", "en_US") or empty
@@ -265,7 +253,6 @@ func mergeConfig(local, global *Config) *Config {
 		return g
 	}
 	merged.Spelling = mergeStr(local.Spelling, global.Spelling)
-	merged.Strict = mergeBool(local.Strict, global.Strict)
 	merged.Engine = mergeStr(local.Engine, global.Engine)
 
 	// Pedantic: per-key pointer merge (local wins for keys it sets).
@@ -383,9 +370,7 @@ func isSpellCommand(cmd *cobra.Command) bool {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		if !errors.Is(err, errStrict) {
-			fmt.Fprintln(os.Stderr, err)
-		}
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -434,87 +419,6 @@ func runSpellCheck(cfg *Config, texFiles []string) ([]pedantic.Diagnostic, error
 	}
 	_ = spell.WriteMisspellings(spell.MisspellingsPath(auxDir), words)
 	return out, nil
-}
-
-// resolveStrict returns the effective strict flag. CLI overrides config.
-func resolveStrict(cfg *Config, strictFlag, noStrictFlag bool) bool {
-	if strictFlag {
-		return true
-	}
-	if noStrictFlag {
-		return false
-	}
-	return cfg.strict()
-}
-
-// printDiagSection prints a labelled section of diagnostics. headerColor and
-// entryColor are ANSI sequences (use "" for default colour). Caller is
-// responsible for blank-line separation between adjacent sections.
-func printDiagSection(w *os.File, label string, diags []pedantic.Diagnostic, headerColor, entryColor string, colors term.Colors) {
-	if len(diags) == 0 {
-		return
-	}
-	fmt.Fprintf(w, "%s%s%s:%s\n", colors.Bold, headerColor, label, colors.Reset)
-	for _, d := range diags {
-		fmt.Fprintf(w, "  %s%s%s\n", entryColor, d.String(), colors.Reset)
-	}
-}
-
-// diffDiagnostics returns the diagnostics in `before` that are not present in
-// `after` (matched by File+Line+Message). Used to derive the "fixed" subset
-// after running source autofixes.
-func diffDiagnostics(before, after []pedantic.Diagnostic) []pedantic.Diagnostic {
-	key := func(d pedantic.Diagnostic) string {
-		return fmt.Sprintf("%s\x00%d\x00%s", d.File, d.Line, d.Message)
-	}
-	seen := make(map[string]int, len(after))
-	for _, d := range after {
-		seen[key(d)]++
-	}
-	var fixed []pedantic.Diagnostic
-	for _, d := range before {
-		k := key(d)
-		if seen[k] > 0 {
-			seen[k]--
-			continue
-		}
-		fixed = append(fixed, d)
-	}
-	return fixed
-}
-
-// printSummary prints a one-line yellow summary if any count is non-zero.
-// includeWarnings controls whether the compile warnings count appears (compile only).
-func printSummary(w *os.File, ped, spell, warn int, includeWarnings bool, colors term.Colors) {
-	if ped == 0 && spell == 0 && warn == 0 {
-		return
-	}
-	plural := func(n int, sing, pl string) string {
-		if n == 1 {
-			return fmt.Sprintf("%d %s", n, sing)
-		}
-		return fmt.Sprintf("%d %s", n, pl)
-	}
-	fmt.Fprintln(w)
-	parts := []string{
-		plural(ped, "pedantic", "pedantics"),
-		plural(spell, "misspelling", "misspellings"),
-	}
-	if includeWarnings {
-		parts = append(parts, plural(warn, "warning", "warnings"))
-	}
-	summary := strings.Join(parts, ", ")
-	fmt.Fprintf(w, "%s%s%s%s\n", colors.Bold, colors.Yellow, summary, colors.Reset)
-}
-
-// sortDiagnostics orders diagnostics by File then Line for stable output.
-func sortDiagnostics(d []pedantic.Diagnostic) {
-	sort.SliceStable(d, func(i, j int) bool {
-		if d[i].File != d[j].File {
-			return d[i].File < d[j].File
-		}
-		return d[i].Line < d[j].Line
-	})
 }
 
 // entriesBibFile returns the path of the entries bib file (bibliography.bib)

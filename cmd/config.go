@@ -115,20 +115,6 @@ var bibConfigFields = []configField{
 // or pedantic checks.
 var generalConfigFields = []configField{
 	{
-		key: "strict", isBool: true,
-		setVal: func(c *Config, val string) error {
-			v, err := parseBool(val)
-			if err != nil {
-				return err
-			}
-			c.Strict = &v
-			return nil
-		},
-		unset:   func(c *Config) { c.Strict = nil },
-		isSet:   func(c *Config) bool { return c.Strict != nil },
-		display: func(c *Config) string { return strconv.FormatBool(c.strict()) },
-	},
-	{
 		key: "engine", isBool: false,
 		setVal: func(c *Config, val string) error {
 			if err := validateEngine(val); err != nil {
