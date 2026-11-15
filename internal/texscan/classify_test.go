@@ -71,7 +71,7 @@ func TestClassify_Prose(t *testing.T) {
 		// Plain groups inherit the context.
 		{`{\bfseries bold} x`, `__________ bold_ x`},
 		// Math and its prose islands.
-		{`$a \text{if} b$ x`, `_______________ x`},
+		{`$a \text{if} b$ x`, `_________if____ x`},
 		{`\begin{align}a \intertext{so} b\end{align}`, `__________________________so______________`},
 		{`$\mathrm{d}x \label{e}$`, `_______________________`},
 		// Definitions are opaque.
@@ -110,7 +110,7 @@ func TestClassify_Environments(t *testing.T) {
 		`CCkCCCkk`,
 		`kkkkkkkkkkkkk`,
 		`kkkkkkkkkkkkkkkk`,
-		`MMMMkkkkkkoook`, // \text inside math is opaque
+		`MMMMkkkkkkTTTk`, // \text inside math is prose
 		`kkkkkkkkkkkkkk`,
 		`kkkkkkkkkkkkkkkk`,
 		`vvvvvv`,

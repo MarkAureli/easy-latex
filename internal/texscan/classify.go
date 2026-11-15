@@ -22,7 +22,7 @@ func (c Class) IsProse() bool { return c <= ClassCell }
 
 // classInline marks a prose argument that continues the surrounding sentence
 // context (\emph inside a footnote stays standalone). Resolved on push; in
-// math it is opaque (\text{crit} subscripts are labels, not prose).
+// math it is running text (labels belong in \mathrm, which is opaque).
 const classInline Class = 255
 
 // arg describes one argument of a known command.
@@ -51,7 +51,7 @@ var commands = map[string][]arg{
 	"textup": {argInline}, "textmd": {argInline}, "textnormal": {argInline},
 	"textsuperscript": {argInline}, "textsubscript": {argInline}, "underline": {argInline},
 	"uline": {argInline}, "sout": {argInline}, "hl": {argInline}, "highlight": {argInline},
-	"enquote": {argInline}, "text": {argInline}, "intertext": {{class: ClassText}},
+	"enquote": {argInline}, "text": {argInline}, "intertext": {argInline},
 	// Boxes
 	"mbox": {argInline}, "hbox": {argInline}, "fbox": {argInline}, "makebox": {argInline},
 	"framebox": {argInline}, "parbox": {argOpaque, argInline}, "raisebox": {argOpaque, argInline},
@@ -311,14 +311,9 @@ func (lx *lexer) frameFor(a arg, close string) frame {
 		}
 		return frame{mode: mOpaque, class: ClassOpaque, close: close}
 	case c == classInline:
-		t := lx.top()
-		if t.mode == mMath {
-			// \text{crit}, \mathrm-like labels in math: not prose.
-			return frame{mode: mOpaque, class: ClassOpaque, close: close}
-		}
-		c = ClassText
-		if t.class.IsProse() {
-			c = t.class
+		c = ClassText // \text{…} inside math is running text
+		if t := lx.top().class; t.IsProse() {
+			c = t
 		}
 		return frame{mode: mText, class: c, close: close}
 	default:

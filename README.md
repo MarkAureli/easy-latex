@@ -312,7 +312,7 @@ Files are sorted and deduplicated on every write; user comments are not preserve
 Spell-checking only looks at prose. easy-latex classifies every part of the source once (shared with the pedantic checks):
 
 - **Prose**: running text, plus the text arguments of known commands — `\emph`, `\textbf`, `\section`, `\caption`, `\footnote`, `\item[…]`, `\title`, `\author`, `\textcolor` / `\href` (text argument only), `\multicolumn` (cell text), table cells, and in TikZ/PGF pictures the node text (`\node … {text}`, `node {text}`), the pgfplots `xlabel`, `ylabel`, `zlabel`, `title` and `legend entries` values, and `\addlegendentry` / `\legend`.
-- **Not prose**: math (including `\text{…}` labels inside math; `\intertext` stays prose), verbatim (`\verb`, `verbatim`, `lstlisting`, …), all `[…]` options except the short titles above, and the arguments of every other command — `\cite`, `\ref`, `\label`, `\input`, `\includegraphics`, `\newcommand`, … — **including commands defined in your own project**. Unknown commands therefore never cause false positives, but text passed to your own macros is not checked.
+- **Not prose**: math (but `\text{…}` and `\intertext{…}` inside math are prose — write labels such as `x_\mathrm{crit}` with `\mathrm`, which is not checked), verbatim (`\verb`, `verbatim`, `lstlisting`, …), all `[…]` options except the short titles above, and the arguments of every other command — `\cite`, `\ref`, `\label`, `\input`, `\includegraphics`, `\newcommand`, … — **including commands defined in your own project**. Unknown commands therefore never cause false positives, but text passed to your own macros is not checked.
 
 #### Output
 
