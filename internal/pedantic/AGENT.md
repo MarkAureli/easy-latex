@@ -1,6 +1,6 @@
 # internal/pedantic
 
-Configurable pedantic checks run during `el compile`. Violations are errors (non-zero exit). PDF still produced.
+Configurable pedantic checks run by `el check` and `el compile`. Violations are reported as warnings; the exit code is unaffected.
 
 ## Architecture
 
@@ -57,7 +57,7 @@ Exempt (no check performed on the line):
 - Command-only line (`isCommandOnly`): only control sequences + `*`/`[...]`/`{...}` args, first command not in `proseCmds` — e.g. `\hypersetup{..}`, `\def\x{..}`, `\includegraphics[..]{..}`, `\cite[..]{..}`, bare `[1em]`. Covers user macros without listing them.
 - `braceGroupLines`: line starts inside a multi-line group owned by a non-prose command (`\author{`, `\IEEEauthorblockA{`, `\tikzset{`, `\newcommand{\x}{`; owner = last control word before `{`, looking past `*`, `[..]`, earlier `{..}` args; anonymous `{` inherits parent; exemption inherits into nested groups), or inside a multi-line `[...]` option group (`\begin{tcolorbox}[`), or the line itself leaves a group open (`…\footnote{`, `\caption{\label{x}`). Groups owned by `proseCmds` (`\caption`, `\footnote`, `\thanks`, `\marginpar`, `\emph`, `\text*`, `\underline`) are checked line by line.
 - Ends with `\\` or `\newline` (`hasTrailingLineBreakToken`)
-- Next relevant line (`nextLineContinuesSentence`, ≤5 lines, skips blank + command-only lines such as `\vspace`/`\label`/`{\fontsize..}`, and `lookaheadTransparentEnvs` openers: `\begin{widetext}`) opens `\[`, `$$`, a list env, a `displayMathEnvs` env, `*subequations`, or a `theoremEnvNames` env (case-insensitive, star stripped) — the sentence continues through the block, whatever the line ends with.
+- Next relevant line (`nextLineContinuesSentence`, ≤5 lines, skips blank + command-only lines such as `\vspace`/`\label`/`{\fontsize..}`, and `lookaheadTransparentEnvs` openers: `\begin{widetext}`) opens `\[`, `$$`, a list env, a math env (`texscan.IsMathEnv`), `*subequations`, or a `theoremEnvNames` env (case-insensitive, star stripped) — the sentence continues through the block, whatever the line ends with.
 
 Terminal-punctuation search (`stripTrailingDecorations`): repeatedly strips trailing decoration commands (`\footnote{...}`, `\label{...}`, `\cite{...}` family, `\index{...}`, `\marginpar{...}`, `\qedhere`, star variants; `trailingDecoratorRe`) *only when non-empty content remains before them* (otherwise the decoration's argument is the line's content and stripping falls through to the generic-closer path, descending into it). Also strips a trailing run of closing brackets/quotes/braces (`)]"'}’”`). Allowed terminators: `.`, `?`, `!`, `:`, `…`, `\ldots`.
 
@@ -104,7 +104,7 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 |---|---|
 | `pedantic.go` | `Diagnostic`, `Check`, `SourceCheckFunc`, `SourceFixFunc`, `ProjectSourceCheckFunc`, `PostCompileCheckFunc`, registry (`Register`, `Get`, `Known`, `AllNames`, `ValidateCheckNames`) |
 | `run.go` | `RunSourceChecks` (per-file + project-source dispatch; passes raw or stripped lines per check's `WantRaw`), `RunPostCompileChecks`, `RunSourceFixes`, `HasPostCompileChecks`, `HasFixableChecks`, `readSource` (returns raw + stripped) |
-| `region.go` | `regionMask` — per-byte text/math/verbatim classification; tracks `$`, `\(\)`, `\[\]`, math envs, verbatim envs across lines |
+| `region.go` | `regionMask` — per-byte text/math/verbatim view of `texscan.ClassifyMath` (math = inside math incl. command names and `\text{…}`; delimiters `$`, `\[`, `\begin{equation}` are text; `\verb` and verbatim envs verbatim; command args in text are text). `matchBeginEnd`, `leadingWS`, `splitLineAt` helpers |
 | `block_citations.go` | `no-block-citations` check impl |
 | `single_spaces.go` | `single-spaces` check + fix impl |
 | `trailing_whitespace.go` | `no-trailing-whitespace` check + fix impl, `trimRightWS` |

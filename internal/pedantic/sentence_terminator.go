@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
 
 func init() {
@@ -423,7 +425,7 @@ func nextLineContinuesSentence(lines []string, from int) bool {
 			if lookaheadTransparentEnvs[name] {
 				continue
 			}
-			return listEnvNames[name] || displayMathEnvs[name] ||
+			return listEnvNames[name] || texscan.IsMathEnv(name) ||
 				strings.HasSuffix(name, "subequations") ||
 				theoremEnvNames[strings.ToLower(strings.TrimSuffix(name, "*"))]
 		}

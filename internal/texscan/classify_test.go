@@ -243,3 +243,20 @@ func TestClassify_UnbalancedRecovers(t *testing.T) {
 		t.Errorf("after unbalanced math: %q", got)
 	}
 }
+
+func TestClassifyMath_DelimitersOutside(t *testing.T) {
+	src := []string{`a $x \text{if}$ \begin{equation}y\end{equation} \(z\)`}
+	_, m := ClassifyMath(src)
+	var b strings.Builder
+	for _, in := range m[0] {
+		if in {
+			b.WriteByte('m')
+		} else {
+			b.WriteByte('.')
+		}
+	}
+	want := `...mmmmmmmmmmm..................m.................m..`
+	if b.String() != want {
+		t.Errorf("\n got  %s\n want %s\n      %s", b.String(), want, src[0])
+	}
+}

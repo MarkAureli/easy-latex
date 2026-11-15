@@ -165,6 +165,8 @@ type frame struct {
 	bdepth int    // nested […] inside a closeBrack frame
 	after  *await // argument parsing to resume once this frame closes
 
+	math bool // inside math (this frame or an ancestor is mMath)
+
 	keys bool   // mOptions: values of codeProseKeys are prose
 	key  []byte // mOptions: key read so far at the top level
 }
@@ -202,6 +204,7 @@ type lexer struct {
 	aw    *await
 	line  string
 	out   []Class
+	math  []bool // per byte: inside math (delimiters excluded)
 	i     int
 }
 
@@ -209,13 +212,22 @@ type lexer struct {
 // lines (see StripComment). State carries across lines; a blank line ends
 // pending argument parsing and open option lists.
 func Classify(lines []string) [][]Class {
+	classes, _ := ClassifyMath(lines)
+	return classes
+}
+
+// ClassifyMath is Classify that also reports, per byte, whether it lies
+// inside math — including markup and opaque arguments there (\alpha,
+// \text{…}) but not the math delimiters themselves ($, \[, \begin{equation}).
+func ClassifyMath(lines []string) ([][]Class, [][]bool) {
 	lx := &lexer{stack: []frame{{mode: mText, class: ClassText}}}
 	res := make([][]Class, len(lines))
+	maths := make([][]bool, len(lines))
 	for li, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			lx.paragraph()
 		}
-		lx.line, lx.out, lx.i = line, make([]Class, len(line)), 0
+		lx.line, lx.out, lx.math, lx.i = line, make([]Class, len(line)), make([]bool, len(line)), 0
 		for lx.i < len(line) {
 			lx.step()
 		}
@@ -225,21 +237,26 @@ func Classify(lines []string) [][]Class {
 		if lx.aw != nil && !lx.aw.crossesLines() {
 			lx.aw = nil
 		}
-		res[li] = lx.out
+		res[li], maths[li] = lx.out, lx.math
 	}
-	return res
+	return res, maths
 }
 
 func (lx *lexer) top() *frame { return &lx.stack[len(lx.stack)-1] }
 
 func (lx *lexer) mark(n int, c Class) {
+	m := lx.top().math
 	for j := 0; j < n && lx.i < len(lx.line); j++ {
 		lx.out[lx.i] = c
+		lx.math[lx.i] = m
 		lx.i++
 	}
 }
 
-func (lx *lexer) push(f frame) { lx.stack = append(lx.stack, f) }
+func (lx *lexer) push(f frame) {
+	f.math = f.mode == mMath || lx.top().math
+	lx.stack = append(lx.stack, f)
+}
 
 // pop closes the top frame and resumes its pending argument parsing.
 func (lx *lexer) pop() {
@@ -568,11 +585,12 @@ func (lx *lexer) stepParsed() {
 		if strings.HasPrefix(line[i:], "$$") {
 			closer = "$$"
 		}
-		lx.mark(len(closer), ClassMarkup)
 		if t.mode != mMath {
+			lx.mark(len(closer), ClassMarkup)
 			lx.push(frame{mode: mMath, class: ClassMath, close: closer})
 		} else {
 			lx.popTo(func(f *frame) bool { return f.close == closer })
+			lx.mark(len(closer), ClassMarkup)
 		}
 		return
 	case '{':
@@ -653,8 +671,8 @@ func (lx *lexer) command() {
 		return
 	case nx == ')' || nx == ']':
 		closer := `\` + string(nx)
-		lx.mark(2, ClassMarkup)
 		lx.popTo(func(f *frame) bool { return f.close == closer })
+		lx.mark(2, ClassMarkup)
 		return
 	case strings.IndexByte(accentCmds, nx) >= 0:
 		lx.mark(1, ClassMarkup)
@@ -670,8 +688,8 @@ func (lx *lexer) command() {
 		return
 	}
 	if name, n := matchEndEnvName(line, i); n > 0 {
-		lx.mark(n, ClassMarkup)
 		lx.popTo(func(f *frame) bool { return f.close == closeEnv && f.env == name })
+		lx.mark(n, ClassMarkup)
 		return
 	}
 	name, n := readMacroName(line, i)
