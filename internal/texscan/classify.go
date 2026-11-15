@@ -561,6 +561,9 @@ func (lx *lexer) stepParsed() {
 		lx.command()
 		return
 	case '$':
+		if t.mode == mCode {
+			break // TikZ calc syntax ($(a)!0.5!(b)$), not math
+		}
 		closer := "$"
 		if strings.HasPrefix(line[i:], "$$") {
 			closer = "$$"

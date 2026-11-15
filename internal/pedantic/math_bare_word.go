@@ -2,7 +2,8 @@ package pedantic
 
 import (
 	"fmt"
-	"strings"
+
+	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
 
 func init() {
@@ -13,134 +14,34 @@ func init() {
 	})
 }
 
-// isArgSkipCmd reports whether the braced argument of cmd should be skipped
-// entirely and not scanned for bare words:
-//   - \text family: \text, \textbf, \textrm, \textit, \textsf, \texttt, …
-//   - explicit text boxes: \mbox, \hbox, \intertext
-//   - upright / sans / typewriter math fonts: \mathrm, \mathsf, \mathtt, \mathit
-//   - identifier arguments: \label{…}, \begin{…}, \end{…}
-//   - spacing lengths: \hspace{…}, \hspace*{…}, \vspace{…}, \vspace*{…}
-func isArgSkipCmd(name string) bool {
-	switch name {
-	case "raisebox", "mbox", "hbox", "intertext",
-		"mathrm", "mathsf", "mathtt", "mathit", "operatorname",
-		"label", "begin", "end", "tag",
-		"hspace", "vspace":
-		return true
-	}
-	return strings.HasPrefix(name, "text")
-}
-
 func isASCIILetter(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
-// skipBalanced returns the index after a balanced group that starts at i with
-// the opening byte open (matching close). If line[i] != open, returns i.
-func skipBalanced(line string, i int, open, close byte) int {
-	if i >= len(line) || line[i] != open {
-		return i
-	}
-	depth := 1
-	i++
-	for i < len(line) && depth > 0 {
-		switch line[i] {
-		case open:
-			depth++
-		case close:
-			depth--
-		}
-		i++
-	}
-	return i
-}
-
-// checkMathBareWord flags sequences of 2+ consecutive ASCII letters in math
-// mode that are neither a LaTeX command (preceded by \) nor inside a text/font
-// wrapper or identifier argument (\text{…}, \mathrm{…}, \mbox{…}, \label{…},
-// \begin{…}, \end{…}, …).
+// checkMathBareWord flags runs of 2+ consecutive ASCII letters in math (see
+// texscan.Classify). Command names are markup, and the arguments of text and
+// font wrappers, labels and lengths (\text{…}, \mathrm{…}, \label{…}, …) are
+// not math, so they are never flagged.
 func checkMathBareWord(path string, lines []string) []Diagnostic {
-	mask := regionMask(lines)
 	var diags []Diagnostic
-
-	for li, line := range lines {
-		m := mask[li]
-		i := 0
-		for i < len(line) {
-			if i >= len(m) || m[i] != regMath {
+	for li, cs := range texscan.Classify(lines) {
+		line := lines[li]
+		for i := 0; i < len(line); {
+			if cs[i] != texscan.ClassMath || !isASCIILetter(line[i]) {
 				i++
 				continue
 			}
-
-			// Command: skip its name; if it is a text wrapper also skip {…}.
-			if line[i] == '\\' {
-				i++ // consume backslash
-				cmdStart := i
-				for i < len(line) && isASCIILetter(line[i]) {
-					i++
-				}
-				cmdName := line[cmdStart:i]
-				if i < len(line) && line[i] == '*' {
-					i++
-				}
-				if isArgSkipCmd(cmdName) && i < len(line) && line[i] == '{' {
-					i = skipBalanced(line, i, '{', '}')
-					// \begin{env} / \end{env} may carry extra optional
-					// [..] and required {..} arguments (e.g. column
-					// specs in \begin{array}{rrr}). Skip them too.
-					if cmdName == "begin" || cmdName == "end" {
-						for i < len(line) {
-							c := line[i]
-							if c == ' ' || c == '\t' {
-								i++
-								continue
-							}
-							if c == '[' {
-								i = skipBalanced(line, i, '[', ']')
-								continue
-							}
-							if c == '{' {
-								i = skipBalanced(line, i, '{', '}')
-								continue
-							}
-							break
-						}
-					}
-				}
-				continue
-			}
-
-			// TikZ node.anchor reference (e.g. "a1.south west" inside a
-			// calc-library coordinate expression such as
-			// "($(a1.south west)-(0.1,0.1)$)"): the anchor name is not a
-			// math bare word, so skip letters/spaces following a literal
-			// dot rather than flagging them.
-			if line[i] == '.' {
+			start := i
+			for i < len(line) && cs[i] == texscan.ClassMath && isASCIILetter(line[i]) {
 				i++
-				for i < len(line) && i < len(m) && m[i] == regMath &&
-					(isASCIILetter(line[i]) || line[i] == ' ') {
-					i++
-				}
-				continue
 			}
-
-			// Letter sequence: flag runs of 2+.
-			if isASCIILetter(line[i]) {
-				start := i
-				for i < len(line) && i < len(m) && m[i] == regMath && isASCIILetter(line[i]) {
-					i++
-				}
-				if i-start >= 2 {
-					diags = append(diags, Diagnostic{
-						File:    path,
-						Line:    li + 1,
-						Message: fmt.Sprintf("bare word %q in math mode", line[start:i]),
-					})
-				}
-				continue
+			if i-start >= 2 {
+				diags = append(diags, Diagnostic{
+					File:    path,
+					Line:    li + 1,
+					Message: fmt.Sprintf("bare word %q in math mode", line[start:i]),
+				})
 			}
-
-			i++
 		}
 	}
 	return diags
