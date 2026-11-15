@@ -11,19 +11,9 @@ import (
 // applied by no-tabs so both checks agree on column accounting.
 const envIndentWidth = 4
 
-// noIndentBodyEnvs are environments whose body is preserved verbatim: lines
-// inside them are never re-indented and never linted for indent. Depth of
-// these envs is also not counted (children would be skipped anyway).
-var noIndentBodyEnvs = map[string]bool{
-	"verbatim":   true,
-	"Verbatim":   true,
-	"BVerbatim":  true,
-	"LVerbatim":  true,
-	"lstlisting": true,
-	"minted":     true,
-	"comment":    true,
-	"alltt":      true,
-}
+// Verbatim environments (texscan.IsVerbatimEnv) keep their body as is: lines
+// inside them are never re-indented and never linted for indent, and their
+// depth is not counted.
 
 // transparentEnvs do not contribute to indent depth: their body indents at the
 // surrounding level. Used so the bulk of a document is not shifted right by 4.
@@ -115,7 +105,7 @@ func scanLineEvents(stripped string) []envEvent {
 // contributesDepth reports whether an env name pushes the indent counter.
 // Document and verbatim families are flat for indent purposes.
 func contributesDepth(name string) bool {
-	if transparentEnvs[name] || noIndentBodyEnvs[name] {
+	if transparentEnvs[name] || texscan.IsVerbatimEnv(name) {
 		return false
 	}
 	return true
@@ -123,7 +113,7 @@ func contributesDepth(name string) bool {
 
 func anyNoIndentAncestor(stack []string) bool {
 	for _, n := range stack {
-		if noIndentBodyEnvs[n] {
+		if texscan.IsVerbatimEnv(n) {
 			return true
 		}
 	}

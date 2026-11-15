@@ -114,7 +114,7 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 | `eqref_tie.go` | `eqref-tie` check + fix impl, `findEqrefTieEdits`, `eqrefTieOK` |
 | `cite_tie.go` | `cite-tie` check + fix impl, `findCiteTieEdits` (reuses `eqrefTieOK` from `eqref_tie.go`) |
 | `sentence_terminator.go` | `sentence-terminator` check impl, `sentenceExemptLeading`, `proseCmds`, `nonProseEnvs`, `nonProseLines`, `braceGroupLines`, `isCommandOnly`, `stripTrailingDecorations`, `nextLineContinuesSentence` |
-| `env_indent.go` | `env-indent` check + fix impl, `noIndentBodyEnvs`, `transparentEnvs`, `scanLineEvents` (per-line begin/end token list), `leadingContentPos`, `countBraces`, `nextDecision` state machine (env depth + brace depth) |
+| `env_indent.go` | `env-indent` check + fix impl, `transparentEnvs` (verbatim envs via `texscan.IsVerbatimEnv`), `scanLineEvents` (per-line begin/end token list), `leadingContentPos`, `countBraces`, `nextDecision` state machine (env depth + brace depth) |
 | `unused_labels.go` | `unused-labels` check impl, `reLabelCall`/`reRefCall`/`reHyperref`, `ignoredLabelPrefixes` set, project-source phase |
 | `math_bare_word.go` | `math-bare-word` check impl over `texscan.Classify`, `isASCIILetter` |
 | `dashes.go` | `dashes` check + fix impl, `applyDashRules` (spans by `texscan.Class`), `rewriteTextChunk`, `rewriteMathSpan`, fixpoint loop with regex pipeline |
