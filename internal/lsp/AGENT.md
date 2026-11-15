@@ -50,7 +50,7 @@ Surfaces:
 
 Always pushes a single combined list — empty list clears stale state. Spell column offsets may drift on lines containing TeX accent macros because `spell.NormalizeAccents` is not length-preserving (known limit, shared with the CLI spell pass).
 
-Before each spell pass the server calls `spellSess.Stale()`; if any tracked dict / ignore file changed on disk (e.g. via `el spell add` in another terminal), it `Reopen()`s the session so the next diagnostics reflect the new wordlist. Stat cost is six files per lint.
+Before each spell pass the server calls `spellSess.Stale()`; if any tracked dict file changed on disk (e.g. via `el spell add` in another terminal), it `Reopen()`s the session so the next diagnostics reflect the new wordlist. Stat cost is four files per lint.
 
 ## Code actions
 

@@ -10,23 +10,19 @@ import (
 	"strings"
 )
 
-// ResolveTarget returns the dict/ignore file path implied by flag combination.
-// isIgnore and isCommon are mutually exclusive (caller must validate). When
-// isIgnore=false and isCommon=false, lang is required and selects the
-// per-language dict; otherwise lang is ignored.
-func ResolveTarget(globalDir, auxDir, lang string, isGlobal, isIgnore, isCommon bool) (string, error) {
+// ResolveTarget returns the dict file path implied by the flags: the common
+// dict if isCommon, else the per-language dict for lang (required).
+func ResolveTarget(globalDir, auxDir, lang string, isGlobal, isCommon bool) (string, error) {
 	base := auxDir
 	if isGlobal {
 		base = globalDir
 	}
 	switch {
-	case isIgnore:
-		return filepath.Join(base, "spell", "ignore.txt"), nil
 	case isCommon:
 		return filepath.Join(base, "spell", "common.txt"), nil
 	default:
 		if lang == "" {
-			return "", fmt.Errorf("no spelling language configured (run `el config set spelling en_GB|en_US`, or use --common / --ignore)")
+			return "", fmt.Errorf("no spelling language configured (run `el config set spelling en_GB|en_US`, or use --common)")
 		}
 		return filepath.Join(base, "spell", lang+".txt"), nil
 	}

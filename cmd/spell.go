@@ -12,20 +12,19 @@ import (
 
 var (
 	spellGlobal bool
-	spellIgnore bool
 	spellCommon bool
 )
 
 var spellCmd = &cobra.Command{
 	Use:               "spell",
-	Short:             "Manage spell-check dictionaries and ignore lists",
+	Short:             "Manage spell-check dictionaries",
 	RunE:              func(_ *cobra.Command, _ []string) error { return fmt.Errorf("usage: el spell add|remove|list [...]") },
 	ValidArgsFunction: cobra.NoFileCompletions,
 }
 
 var spellAddCmd = &cobra.Command{
 	Use:               "add <token>...",
-	Short:             "Add words to a dict, or macros to the ignore list",
+	Short:             "Add words to a dict",
 	Args:              cobra.MinimumNArgs(1),
 	RunE:              runSpellAdd,
 	ValidArgsFunction: spellAddCompletion,
@@ -33,7 +32,7 @@ var spellAddCmd = &cobra.Command{
 
 var spellRemoveCmd = &cobra.Command{
 	Use:               "remove <token>...",
-	Short:             "Remove words from a dict, or macros from the ignore list",
+	Short:             "Remove words from a dict",
 	Args:              cobra.MinimumNArgs(1),
 	RunE:              runSpellRemove,
 	ValidArgsFunction: spellRemoveCompletion,
@@ -41,7 +40,7 @@ var spellRemoveCmd = &cobra.Command{
 
 var spellListCmd = &cobra.Command{
 	Use:               "list",
-	Short:             "Print contents of the resolved dict or ignore file",
+	Short:             "Print contents of the resolved dict",
 	Args:              cobra.NoArgs,
 	RunE:              runSpellList,
 	ValidArgsFunction: cobra.NoFileCompletions,
@@ -50,9 +49,7 @@ var spellListCmd = &cobra.Command{
 func init() {
 	for _, c := range []*cobra.Command{spellAddCmd, spellRemoveCmd, spellListCmd} {
 		c.Flags().BoolVar(&spellGlobal, "global", false, "Operate on the global file (instead of project-local)")
-		c.Flags().BoolVar(&spellIgnore, "ignore", false, "Operate on the macro ignore file (macros whose arguments are not spell-checked)")
 		c.Flags().BoolVar(&spellCommon, "common", false, "Operate on the language-agnostic common dict")
-		c.MarkFlagsMutuallyExclusive("ignore", "common")
 	}
 	spellCmd.AddCommand(spellAddCmd)
 	spellCmd.AddCommand(spellRemoveCmd)
@@ -63,11 +60,7 @@ func init() {
 // resolveSpellTarget validates flags and returns the target file path.
 func resolveSpellTarget(cmd *cobra.Command) (string, error) {
 	isGlobal, _ := cmd.Flags().GetBool("global")
-	isIgnore, _ := cmd.Flags().GetBool("ignore")
 	isCommon, _ := cmd.Flags().GetBool("common")
-	if isIgnore && isCommon {
-		return "", fmt.Errorf("--ignore and --common are mutually exclusive")
-	}
 
 	var auxDirAbs string
 	if !isGlobal {
@@ -87,7 +80,7 @@ func resolveSpellTarget(cmd *cobra.Command) (string, error) {
 	}
 
 	lang := ""
-	if !isIgnore && !isCommon {
+	if !isCommon {
 		cfg, err := loadConfig()
 		if err != nil {
 			return "", err
@@ -95,7 +88,7 @@ func resolveSpellTarget(cmd *cobra.Command) (string, error) {
 		lang = cfg.spelling()
 	}
 
-	return spell.ResolveTarget(globalDir, auxDirAbs, lang, isGlobal, isIgnore, isCommon)
+	return spell.ResolveTarget(globalDir, auxDirAbs, lang, isGlobal, isCommon)
 }
 
 func runSpellAdd(cmd *cobra.Command, args []string) error {
@@ -103,15 +96,12 @@ func runSpellAdd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	isIgnore, _ := cmd.Flags().GetBool("ignore")
 	added, err := spell.AddTokens(path, args)
 	if err != nil {
 		return err
 	}
-	if !isIgnore {
-		if root, err := findProjectRoot(); err == nil {
-			_ = spell.RemoveMisspellings(spell.MisspellingsPath(filepath.Join(root, auxDir)), args)
-		}
+	if root, err := findProjectRoot(); err == nil {
+		_ = spell.RemoveMisspellings(spell.MisspellingsPath(filepath.Join(root, auxDir)), args)
 	}
 	fmt.Printf("%s: added %d (of %d)\n", path, added, len(args))
 	return nil
@@ -145,11 +135,7 @@ func runSpellList(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func spellAddCompletion(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
-	isIgnore, _ := cmd.Flags().GetBool("ignore")
-	if isIgnore {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
+func spellAddCompletion(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	root, err := findProjectRoot()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp

@@ -23,7 +23,7 @@ func TestNormalizeAccents_ProsePipeline(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.src, func(t *testing.T) {
 			content := NormalizeAccents(tc.src)
-			runs := texscan.ProseRuns("f.tex", content, nil)
+			runs := texscan.ProseRuns("f.tex", content)
 			if len(runs) == 0 {
 				t.Fatalf("no prose runs for %q (normalized=%q)", tc.src, content)
 			}

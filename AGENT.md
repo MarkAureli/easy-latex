@@ -15,10 +15,10 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 | `internal/bib/` | Bib parsing, key gen, formatting, validation, Logger interface, retry logic |
 | `internal/term/` | Shared terminal detection (`IsTerminal`) + ANSI color codes (`Colors` struct, `Detect()`) |
 | `internal/envprobe/` | Generated `.sty` + parser: hooks env begin/end during the real compile to classify floats via TeX state |
-| `internal/texscan/` | Tex file scanner for bib declarations |
+| `internal/texscan/` | Tex file scanner (bib declarations, envs/cmds) and `Classify`: the shared per-byte classifier (prose/math/markup/opaque/verbatim) all prose-aware checks build on |
 | `internal/texaccent/` | TeX accent / standalone-letter macro regexes + pipeline shared by `bib` (ASCII keys) and `spell` (precomposed Unicode) |
 | `internal/pedantic/` | Pedantic checks: source-level + post-compile (pdfsavepos) |
-| `internal/spell/` | Hunspell-backed spell-check (en_GB / en_US) with layered dicts and ignore lists |
+| `internal/spell/` | Hunspell-backed spell-check (en_GB / en_US) with layered dicts |
 | `internal/lsp/` | Minimal LSP server (JSON-RPC over stdio, cite-key completions) |
 
 ## Bib processing
@@ -50,7 +50,7 @@ See `internal/bib/AGENT.md` for entry-type specs.
 | `cmd/config.agent.md` | `el config` flags |
 | `cmd/init.agent.md` | `el init` steps |
 | `cmd/lsp.agent.md` | `el lsp` (thin, see below) |
-| `cmd/spell.agent.md` | `el spell` add/remove/list dict and ignore files |
+| `cmd/spell.agent.md` | `el spell` add/remove/list dict files |
 | `internal/bib/AGENT.md` | Bib pipeline, entry types, validation, ISO 4 |
 | `internal/lsp/AGENT.md` | LSP protocol, completion trigger, JSON-RPC |
 | `internal/pedantic/AGENT.md` | Pedantic check system |

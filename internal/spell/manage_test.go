@@ -9,23 +9,21 @@ import (
 
 func TestResolveTarget(t *testing.T) {
 	cases := []struct {
-		name                         string
-		globalDir, auxDir, lang      string
-		isGlobal, isIgnore, isCommon bool
-		want                         string
-		wantErr                      bool
+		name                    string
+		globalDir, auxDir, lang string
+		isGlobal, isCommon      bool
+		want                    string
+		wantErr                 bool
 	}{
-		{"local lang", "/g", "/p/.el", "en_US", false, false, false, "/p/.el/spell/en_US.txt", false},
-		{"global lang", "/g", "/p/.el", "en_US", true, false, false, "/g/spell/en_US.txt", false},
-		{"local common", "/g", "/p/.el", "", false, false, true, "/p/.el/spell/common.txt", false},
-		{"global common", "/g", "/p/.el", "", true, false, true, "/g/spell/common.txt", false},
-		{"local ignore", "/g", "/p/.el", "", false, true, false, "/p/.el/spell/ignore.txt", false},
-		{"global ignore", "/g", "/p/.el", "", true, true, false, "/g/spell/ignore.txt", false},
-		{"missing lang errors", "/g", "/p/.el", "", false, false, false, "", true},
+		{"local lang", "/g", "/p/.el", "en_US", false, false, "/p/.el/spell/en_US.txt", false},
+		{"global lang", "/g", "/p/.el", "en_US", true, false, "/g/spell/en_US.txt", false},
+		{"local common", "/g", "/p/.el", "", false, true, "/p/.el/spell/common.txt", false},
+		{"global common", "/g", "/p/.el", "", true, true, "/g/spell/common.txt", false},
+		{"missing lang errors", "/g", "/p/.el", "", false, false, "", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := ResolveTarget(tc.globalDir, tc.auxDir, tc.lang, tc.isGlobal, tc.isIgnore, tc.isCommon)
+			got, err := ResolveTarget(tc.globalDir, tc.auxDir, tc.lang, tc.isGlobal, tc.isCommon)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("err=%v wantErr=%v", err, tc.wantErr)
 			}

@@ -24,7 +24,7 @@ type Config struct {
 	EnabledChecks []string         // static pedantic check names; empty = no linting
 	SpellLang     string           // hunspell lang (e.g. "en_GB"); empty disables spell
 	SpellAuxDir   string           // project .el dir for personal-dict scratch file
-	SpellPaths    spell.Paths      // layered dict + ignore-file locations
+	SpellPaths    spell.Paths      // layered dict locations
 }
 
 // Serve starts the LSP server, reading JSON-RPC from r and writing to w.

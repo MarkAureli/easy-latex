@@ -1,18 +1,16 @@
 # el spell (`spell.go`)
 
-Manage spell-check dictionaries and the macro ignore list (macros removed from the text whitelist). Subcommands
+Manage spell-check dictionaries. Subcommands
 write/read flat token files; `cmd/root.go:runSpellCheck` consumes them at
 compile/check time via `internal/spell`.
 
 ## Subcommands
 
 ```
-el spell add    <token>... [--global] [--ignore | --common]
-el spell remove <token>... [--global] [--ignore | --common]
-el spell list             [--global] [--ignore | --common]
+el spell add    <token>... [--global] [--common]
+el spell remove <token>... [--global] [--common]
+el spell list             [--global] [--common]
 ```
-
-`--ignore` and `--common` are mutually exclusive (cobra `MarkFlagsMutuallyExclusive` — so flag TAB-completion hides the conflicting one — plus an up-front check).
 
 ## Target resolution
 
@@ -22,8 +20,6 @@ el spell list             [--global] [--ignore | --common]
 | `--global` | `${globalDir}/spell/<lang>.txt` |
 | `--common` | `<repo>/.el/spell/common.txt` |
 | `--global --common` | `${globalDir}/spell/common.txt` |
-| `--ignore` | `<repo>/.el/spell/ignore.txt` |
-| `--global --ignore` | `${globalDir}/spell/ignore.txt` |
 
 `<lang>` resolved from merged `Config.Spelling`; the per-lang targets error if
 unset.
@@ -35,14 +31,11 @@ unset.
   User comments (`#`) and blank lines are NOT preserved.
 - **Add to dict** — appends new tokens; duplicates are no-ops.
 - **Remove from dict** — drops matching lines; missing tokens are no-ops.
-- **Ignore file** — plain token list, same add/remove semantics as dicts. A
-  listed macro is removed from the text whitelist (`spell.TextMacros`), so all
-  its args are skipped. Legacy `!token` lines are ignored by the loader.
 - Writes auto-create parent directories.
 
 ## Flow
 
-1. `resolveSpellTarget(cmd)` — flag-mutex check, `findProjectRoot()` + `chdir`
+1. `resolveSpellTarget(cmd)` — `findProjectRoot()` + `chdir`
    for non-global, `loadConfig()` for lang resolution, then
    `spell.ResolveTarget(...)`.
 2. Verb runner → `spell.AddTokens` / `spell.RemoveTokens` / `spell.ListTokens`.
@@ -55,9 +48,9 @@ Tokens already in `args` are filtered out so a second TAB doesn't repeat.
 
 `spellAddCompletion` reads the per-project misspellings cache via
 `spell.LoadMisspellings(spell.MisspellingsPath(<root>/.el))`. Returns no
-candidates when `--ignore` is set or when no project root is found. Tokens
+candidates when no project root is found. Tokens
 already in `args` are filtered. `runSpellAdd` calls `spell.RemoveMisspellings`
-for the added tokens after a successful add (non-`--ignore` only), so the next
+for the added tokens after a successful add, so the next
 TAB no longer offers them.
 
 ## Misspellings cache

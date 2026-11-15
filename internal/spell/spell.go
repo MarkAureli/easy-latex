@@ -26,18 +26,16 @@ type Diagnostic struct {
 	Suggestions []string
 }
 
-// Paths bundles dict and ignore-file locations to consult. Missing files are
+// Paths bundles dict file locations to consult. Missing files are
 // silently skipped at load time.
 type Paths struct {
 	GlobalLangDict   string
 	GlobalCommonDict string
 	LocalLangDict    string
 	LocalCommonDict  string
-	GlobalIgnore     string
-	LocalIgnore      string
 }
 
-// DefaultPaths returns the conventional dict/ignore paths for a given lang.
+// DefaultPaths returns the conventional dict paths for a given lang.
 // globalDir is typically the easy-latex global config dir; auxDir is the
 // project's `.el` directory.
 func DefaultPaths(globalDir, auxDir, lang string) Paths {
@@ -46,21 +44,18 @@ func DefaultPaths(globalDir, auxDir, lang string) Paths {
 		GlobalCommonDict: filepath.Join(globalDir, "spell", "common.txt"),
 		LocalLangDict:    filepath.Join(auxDir, "spell", lang+".txt"),
 		LocalCommonDict:  filepath.Join(auxDir, "spell", "common.txt"),
-		GlobalIgnore:     filepath.Join(globalDir, "spell", "ignore.txt"),
-		LocalIgnore:      filepath.Join(auxDir, "spell", "ignore.txt"),
 	}
 }
 
 // Session is a long-lived spell-check handle that owns a running hunspell
-// subprocess and a loaded ignore-macros set. Cheap to call Check repeatedly;
+// subprocess. Cheap to call Check repeatedly;
 // avoids the spawn-per-call cost incurred by Run. Callers MUST Close when done.
 //
 // Construction args are stashed so Reopen() can rebuild the session after an
 // external `el spell add` mutated the dict files (detected via Stale()).
 type Session struct {
-	hs        *Hunspell
-	ignoreSet map[string]bool
-	warn      io.Writer
+	hs   *Hunspell
+	warn io.Writer
 
 	lang   string
 	auxDir string
@@ -68,7 +63,7 @@ type Session struct {
 	mtimes map[string]time.Time // path → mtime at last (re)open; zero = absent
 }
 
-// NewSession launches hunspell and loads the layered ignore lists. Returns
+// NewSession launches hunspell with the merged layered dicts. Returns
 // (nil, nil) — with a warn-once message — when hunspell or its dict for lang
 // is unavailable. Returns a non-nil error only on filesystem failures the
 // caller should treat as fatal.
@@ -94,30 +89,28 @@ func NewSession(lang, auxDir string, paths Paths, warn io.Writer) (*Session, err
 		return nil, nil
 	}
 	return &Session{
-		hs:        hs,
-		ignoreSet: LoadIgnoreMacros(paths.GlobalIgnore, paths.LocalIgnore),
-		warn:      warn,
-		lang:      lang,
-		auxDir:    auxDir,
-		paths:     paths,
-		mtimes:    snapshotMtimes(paths),
+		hs:     hs,
+		warn:   warn,
+		lang:   lang,
+		auxDir: auxDir,
+		paths:  paths,
+		mtimes: snapshotMtimes(paths),
 	}, nil
 }
 
-// trackedFiles returns the six on-disk files whose mutation should invalidate
-// the session: layered dicts + ignore lists.
+// trackedFiles returns the on-disk files whose mutation should invalidate
+// the session: the layered dicts.
 func trackedFiles(p Paths) []string {
 	return []string{
 		p.GlobalLangDict, p.GlobalCommonDict,
 		p.LocalLangDict, p.LocalCommonDict,
-		p.GlobalIgnore, p.LocalIgnore,
 	}
 }
 
 // snapshotMtimes records mtimes for tracked files. Missing files are recorded
 // as the zero time so a later appearance counts as a change.
 func snapshotMtimes(p Paths) map[string]time.Time {
-	out := make(map[string]time.Time, 6)
+	out := make(map[string]time.Time, 4)
 	for _, f := range trackedFiles(p) {
 		if fi, err := os.Stat(f); err == nil {
 			out[f] = fi.ModTime()
@@ -179,17 +172,9 @@ func (s *Session) Check(files map[string][]string) []Diagnostic {
 	}
 	sort.Strings(paths)
 
-	contents := make(map[string]string, len(paths))
-	var defined []string
-	for _, path := range paths {
-		contents[path] = NormalizeAccents(strings.Join(files[path], "\n"))
-		defined = append(defined, texscan.DefinedMacros(contents[path])...)
-	}
-	textMacros := TextMacros(defined, s.ignoreSet)
-
 	var out []Diagnostic
 	for _, path := range paths {
-		runs := texscan.ProseRuns(path, contents[path], textMacros)
+		runs := texscan.ProseRuns(path, NormalizeAccents(strings.Join(files[path], "\n")))
 		for _, r := range runs {
 			misses, err := s.hs.CheckLine(r.Text)
 			if err != nil {
