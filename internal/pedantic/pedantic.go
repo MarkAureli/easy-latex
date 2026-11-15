@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
 
 // Diagnostic represents a single pedantic check violation.
@@ -107,4 +109,13 @@ func ValidateCheckNames(names []string) error {
 		}
 	}
 	return nil
+}
+
+// stripComments returns the comment-stripped body of every line.
+func stripComments(lines []string) []string {
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		out[i] = texscan.StripComment(l)
+	}
+	return out
 }

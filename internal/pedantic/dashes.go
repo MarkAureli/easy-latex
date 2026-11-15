@@ -3,7 +3,6 @@ package pedantic
 import (
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -28,17 +27,13 @@ const (
 )
 
 // checkDashes flags dash-style violations. WantRaw: true so we can preserve
-// comment tails verbatim while still computing region masks from the
-// comment-stripped body.
+// comment tails verbatim while classifying the comment-stripped body.
 func checkDashes(path string, lines []string) []Diagnostic {
-	stripped := make([]string, len(lines))
-	for i, l := range lines {
-		stripped[i] = texscan.StripComment(l)
-	}
-	mask := regionMask(stripped)
+	stripped := stripComments(lines)
+	classes := texscan.Classify(stripped)
 	var diags []Diagnostic
 	for i, body := range stripped {
-		fixed := applyDashRules(body, mask[i])
+		fixed := applyDashRules(body, classes[i])
 		if fixed != body {
 			col := firstByteDiff(body, fixed) + 1
 			diags = append(diags, Diagnostic{
@@ -53,16 +48,13 @@ func checkDashes(path string, lines []string) []Diagnostic {
 
 // fixDashes rewrites raw lines applying every rule.
 func fixDashes(path string, lines []string) ([]string, bool) {
-	stripped := make([]string, len(lines))
-	for i, l := range lines {
-		stripped[i] = texscan.StripComment(l)
-	}
-	mask := regionMask(stripped)
+	stripped := stripComments(lines)
+	classes := texscan.Classify(stripped)
 	changed := false
 	for i, raw := range lines {
 		body := stripped[i]
 		comment := raw[len(body):]
-		fixed := applyDashRules(body, mask[i])
+		fixed := applyDashRules(body, classes[i])
 		if fixed != body {
 			lines[i] = fixed + comment
 			changed = true
@@ -71,32 +63,45 @@ func fixDashes(path string, lines []string) ([]string, bool) {
 	return lines, changed
 }
 
-// applyDashRules processes one line by splitting into region spans and
-// applying rules per kind.
-func applyDashRules(line string, mask []regionKind) string {
+// dashSpan groups classes into the spans the dash rules distinguish.
+func dashSpan(c texscan.Class) int {
+	switch {
+	case c.IsProse():
+		return 0
+	case c == texscan.ClassMath:
+		return 1
+	default:
+		return 2 // markup, opaque, verbatim: untouched
+	}
+}
+
+// applyDashRules rewrites the prose and math spans of one line; everything
+// else (markup, options, arguments of non-prose commands, code, verbatim) is
+// left as is.
+func applyDashRules(line string, classes []texscan.Class) string {
 	if len(line) == 0 {
 		return line
 	}
 	var b strings.Builder
 	b.Grow(len(line))
 	start := 0
-	cur := mask[0]
+	cur := dashSpan(classes[0])
 	flush := func(end int) {
 		span := line[start:end]
 		switch cur {
-		case regText:
-			b.WriteString(rewriteTextSpan(span))
-		case regMath:
+		case 0:
+			b.WriteString(rewriteTextChunk(span))
+		case 1:
 			b.WriteString(rewriteMathSpan(span))
-		case regVerbatim:
+		default:
 			b.WriteString(span)
 		}
 	}
 	for i := 1; i < len(line); i++ {
-		if mask[i] != cur {
+		if k := dashSpan(classes[i]); k != cur {
 			flush(i)
 			start = i
-			cur = mask[i]
+			cur = k
 		}
 	}
 	flush(len(line))
@@ -117,191 +122,8 @@ var (
 	reWordHy   = regexp.MustCompile(`(\w) - (\w)`)        // spaced hyphen between words
 )
 
-// argSkipMacros names macros whose first brace argument should be left
-// untouched by every dash rule. Class and package names commonly contain
-// digit-hyphen-digit (e.g. `revtex4-2`) which would otherwise be rewritten
-// by rule 4. File-inclusion macros take paths.
-var argSkipMacros = map[string]bool{
-	"bibliographystyle":    true,
-	"cline":                true,
-	"documentclass":        true,
-	"orcid":                true,
-	"usepackage":           true,
-	"RequirePackage":       true,
-	"LoadClass":            true,
-	"LoadClassWithOptions": true,
-	"WarningFilter":        true,
-	"PassOptionsToClass":   true,
-	"PassOptionsToPackage": true,
-	"input":                true,
-	"include":              true,
-	"includeonly":          true,
-	"InputIfFileExists":    true,
-	"IfFileExists":         true,
-}
-
-// findSkipRanges returns half-open byte ranges of macro-argument bodies
-// (between matching `{` and `}`) for macros listed in argSkipMacros.
-// Optional `[...]` option blocks between macro name and `{` are tolerated.
-func findSkipRanges(s string) [][2]int {
-	var out [][2]int
-	i := 0
-	for i < len(s) {
-		if s[i] != '\\' {
-			i++
-			continue
-		}
-		j := i + 1
-		for j < len(s) && isASCIILetter(s[j]) {
-			j++
-		}
-		if j == i+1 {
-			i++
-			continue
-		}
-		name := s[i+1 : j]
-		k := j
-		for k < len(s) && s[k] == '[' {
-			depth := 1
-			k++
-			for k < len(s) && depth > 0 {
-				switch s[k] {
-				case '[':
-					depth++
-				case ']':
-					depth--
-				}
-				k++
-			}
-		}
-		if k >= len(s) || s[k] != '{' {
-			i = j
-			continue
-		}
-		start := k + 1
-		end := start
-		depth := 1
-		for end < len(s) {
-			if s[end] == '{' {
-				depth++
-			} else if s[end] == '}' {
-				depth--
-				if depth == 0 {
-					break
-				}
-			}
-			end++
-		}
-		if argSkipMacros[name] {
-			out = append(out, [2]int{start, end})
-		}
-		if end >= len(s) {
-			i = end
-		} else {
-			i = end + 1
-		}
-	}
-	return out
-}
-
-// findOptionSkipRanges returns half-open byte ranges of `[...]` option-block
-// contents immediately following any LaTeX command, interleaved with any
-// number of `{...}` argument groups (e.g. the `[t]` in
-// `\begin{tabular}[t]{cc}`, or `[p. 12-14]` in `\cite[p. 12-14]{key}`). Dash
-// rules ignore these ranges entirely, since option content (dimensions, page
-// ranges, positioning keys) is not prose or math.
-func findOptionSkipRanges(s string) [][2]int {
-	var out [][2]int
-	i := 0
-	for i < len(s) {
-		if s[i] != '\\' {
-			i++
-			continue
-		}
-		j := i + 1
-		for j < len(s) && isASCIILetter(s[j]) {
-			j++
-		}
-		if j == i+1 {
-			i++
-			continue
-		}
-		k := j
-		for k < len(s) {
-			switch s[k] {
-			case '[':
-				start := k + 1
-				end := start
-				depth := 1
-				for end < len(s) && depth > 0 {
-					switch s[end] {
-					case '[':
-						depth++
-					case ']':
-						depth--
-					}
-					end++
-				}
-				if depth == 0 {
-					out = append(out, [2]int{start, end - 1})
-				}
-				k = end
-			case '{':
-				depth := 1
-				k++
-				for k < len(s) && depth > 0 {
-					switch s[k] {
-					case '{':
-						depth++
-					case '}':
-						depth--
-					}
-					k++
-				}
-			default:
-				k = -1
-			}
-			if k < 0 {
-				break
-			}
-		}
-		if k < 0 {
-			i = j
-			continue
-		}
-		i = k
-	}
-	return out
-}
-
-// rewriteTextSpan applies rules 1,2,3b,4,5,6,7,8,9 with a fixpoint loop so
-// chained dashes (e.g. `1-2-3`, `a -- b -- c`) all collapse. Bodies of
-// argSkipMacros, and `[...]` command option blocks, are passed through
-// unchanged.
-func rewriteTextSpan(s string) string {
-	skips := append(findSkipRanges(s), findOptionSkipRanges(s)...)
-	if len(skips) == 0 {
-		return rewriteTextChunk(s)
-	}
-	sort.Slice(skips, func(a, b int) bool { return skips[a][0] < skips[b][0] })
-	var b strings.Builder
-	b.Grow(len(s))
-	last := 0
-	for _, sk := range skips {
-		if sk[1] <= last {
-			continue // fully nested in an earlier skip range
-		}
-		if sk[0] < last {
-			sk[0] = last // partial overlap: keep only the uncovered tail
-		}
-		b.WriteString(rewriteTextChunk(s[last:sk[0]]))
-		b.WriteString(s[sk[0]:sk[1]])
-		last = sk[1]
-	}
-	b.WriteString(rewriteTextChunk(s[last:]))
-	return b.String()
-}
-
+// rewriteTextChunk applies rules 1,2,3b,4,5,6,7,8,9 to a prose span with a
+// fixpoint loop so chained dashes (e.g. `1-2-3`, `a -- b -- c`) all collapse.
 func rewriteTextChunk(s string) string {
 	for range 8 {
 		prev := s

@@ -108,7 +108,8 @@ var environments = map[string]envMode{
 	"gather": envMath, "gather*": envMath, "multline": envMath, "multline*": envMath,
 	"eqnarray": envMath, "eqnarray*": envMath, "displaymath": envMath, "math": envMath,
 	"flalign": envMath, "flalign*": envMath, "alignat": envMath, "alignat*": envMath,
-	"tikzcd": envMath,
+	"tikzcd": envMath, "dmath": envMath, "dmath*": envMath, "dgroup": envMath, "dgroup*": envMath,
+	"darray": envMath, "darray*": envMath,
 
 	"verbatim": envVerbatim, "Verbatim": envVerbatim, "BVerbatim": envVerbatim,
 	"LVerbatim": envVerbatim, "lstlisting": envVerbatim, "minted": envVerbatim,
@@ -179,6 +180,23 @@ type await struct {
 	def       int  // \def: 1 = expect \name, 2 = parameters, then one opaque body
 }
 
+// crossesLines reports whether the pending parsing may continue on the next
+// line: only for a known command that still needs a mandatory argument
+// (\section + newline + {Title}). Groups on the next line after an unknown
+// command (\vfill + newline + {\small …}), after env args or after optional
+// arguments are not taken as arguments.
+func (aw *await) crossesLines() bool {
+	if aw.rest || aw.immediate || aw.node || aw.def > 0 {
+		return false
+	}
+	for _, a := range aw.args {
+		if !a.opt {
+			return true
+		}
+	}
+	return false
+}
+
 type lexer struct {
 	stack []frame
 	aw    *await
@@ -204,7 +222,7 @@ func Classify(lines []string) [][]Class {
 		if lx.top().mode == mVerb { // \verb cannot span lines
 			lx.pop()
 		}
-		if lx.aw != nil && lx.aw.immediate { // env args follow on the same line
+		if lx.aw != nil && !lx.aw.crossesLines() {
 			lx.aw = nil
 		}
 		res[li] = lx.out

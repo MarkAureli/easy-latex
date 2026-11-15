@@ -88,12 +88,13 @@ func TestProseRuns_NonTextMacroSkipsArgsAtAnyPosition(t *testing.T) {
 	for _, r := range runs {
 		all += r.Text + "\n"
 	}
-	for _, w := range []string{"opt", "one", "two", "three", "four", "five"} {
+	for _, w := range []string{"opt", "one", "two", "three", "four"} {
 		if strings.Contains(all, w) {
 			t.Errorf("arg %q leaked: %q", w, all)
 		}
 	}
-	if !strings.Contains(all, "Pre") || !strings.Contains(all, "post") {
+	// A group on the line after an argument is not taken as a further argument.
+	if !strings.Contains(all, "Pre") || !strings.Contains(all, "five") || !strings.Contains(all, "post") {
 		t.Errorf("prose dropped: %q", all)
 	}
 }

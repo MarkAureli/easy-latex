@@ -150,6 +150,17 @@ func TestClassify_MultiLineArgs(t *testing.T) {
 	}
 }
 
+func TestClassify_LineBreakEndsUnknownArgs(t *testing.T) {
+	src := []string{`\vfill`, `{\scriptsize Text}`, `\addtolength{\parskip}{1pt}`, `  {\large Name}`, `\section`, `{Title}`}
+	got := classOf(src, ClassText)
+	if got[1] != `____________ Text_` || got[3] != `  _______ Name_` {
+		t.Errorf("group after unknown command on next line: %q", got)
+	}
+	if h := classOf(src, ClassHeading); h[5] != `_Title_` {
+		t.Errorf("mandatory arg on next line: %q", h[5])
+	}
+}
+
 func TestClassify_ParagraphBreakEndsArgs(t *testing.T) {
 	src := []string{`\mycmd`, ``, `{group} text`}
 	got := classOf(src, ClassText)
