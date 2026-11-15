@@ -260,3 +260,42 @@ func TestClassifyMath_DelimitersOutside(t *testing.T) {
 		t.Errorf("\n got  %s\n want %s\n      %s", b.String(), want, src[0])
 	}
 }
+
+func TestAnalyze_LineContext(t *testing.T) {
+	src := []string{
+		`Text \footnote{Some`,   // 0: opens standalone group
+		`more text.}`,           // 1
+		`\begin{tabular}{ll}`,   // 2
+		`a & b`,                 // 3: cells
+		`\end{tabular}`,         // 4
+		`\hypersetup{`,          // 5: opens opaque group
+		`  hidelinks`,           // 6: inside it
+		`}`,                     // 7
+		`\draw (0,0) -- (1,1);`, // 8: outside tikz: running text
+		`\begin{tikzpicture}`,   // 9
+		`\draw (0,0) -- (1,1);`, // 10: code
+		`\end{tikzpicture}`,     // 11
+		`\\`,                    // 12
+		`[1em] after`,           // 13: optional arg of \\ on the next line
+	}
+	in := Analyze(src)
+	want := []struct {
+		end   Class
+		opens bool
+	}{
+		{ClassStandalone, true}, {ClassText, false},
+		{ClassCell, false}, {ClassCell, false}, {ClassText, false},
+		{ClassOpaque, true}, {ClassOpaque, false}, {ClassText, false},
+		{ClassText, false},
+		{ClassOpaque, false}, {ClassOpaque, false}, {ClassText, false},
+		{ClassText, false}, {ClassText, false},
+	}
+	for i, w := range want {
+		if in[i].End != w.end || in[i].OpensGroup != w.opens {
+			t.Errorf("line %d %q: End=%d OpensGroup=%v, want %d %v", i, src[i], in[i].End, in[i].OpensGroup, w.end, w.opens)
+		}
+	}
+	if got := proseOf(src[13], in[13].Classes); got != `_____ after` {
+		t.Errorf("\\\\[1em] on next line: %q", got)
+	}
+}

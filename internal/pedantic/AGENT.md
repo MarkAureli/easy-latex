@@ -46,17 +46,18 @@ All other prefixes — including bare labels, `eq:`/`fig:`/`tab:`/etc. abbreviat
 
 ## sentence-terminator implementation
 
-Convention: a source line ending is either a sentence end (must carry terminal punctuation) or one of a fixed set of special cases (exempt). Per-line, reusing `regionMask` + `blockTokens` from `block-on-newline`, plus two cross-line scans (`nonProseLines`, `braceGroupLines`) and a bounded lookahead.
+Convention: a source line ending is either a sentence end (must carry terminal punctuation) or one of a fixed set of special cases (exempt). Per-line over `texscan.Analyze` (per-byte classes + math flag, `End` context, `OpensGroup`), plus `blockTokens` from `block-on-newline`, the document-body scan and a bounded lookahead.
 
 Exempt (no check performed on the line):
 - Blank/comment-only lines
-- Outside the document body (`nonProseLines`): before `\begin{document}` / after `\end{document}` when the file has one; the whole file when it has none but contains `\usepackage`/`\RequirePackage`/`\documentclass` (`preambleOnlyTokens`, preamble fragment like `packages.tex`). Other included files are all body.
-- Strictly inside a `nonProseEnvs` env: `tabular`/`tabular*`/`tabularx`/`longtable`/`array`, `tikzpicture`, `quantikz`, `algorithm`/`algorithm*`/`algorithmic`, `thebibliography`, `IEEEkeywords`
-- Last non-whitespace byte outside `regText` (ends mid-math/mid-verbatim)
+- Outside the document body (`outsideBody`): before `\begin{document}` / after `\end{document}` when the file has one; the whole file when it has none but contains `\usepackage`/`\RequirePackage`/`\documentclass` (`preambleOnlyTokens`, preamble fragment like `packages.tex`). Other included files are all body.
+- Context: the line must start (previous line's `End`; inline math continued from the previous line also counts) and end (`End`) in running or standalone prose (`sentenceContext`). So headings incl. multi-line `\section{…` titles, `\item[…]`, `\author{…}`/`\affiliation{…}`, table/algorithm/bibliography cells, opaque multi-line args (`\tikzset{`, `\newcommand{\x}{`, `\IEEEauthorblockA{`, multi-line `[...]` options), TikZ code, math and verbatim are exempt; `\footnote{`/`\caption{`/`\thanks{` bodies are checked line by line.
+- `OpensGroup`: the line leaves a `{…}`/`[…]` group open (`…\footnote{`, `\caption{\label{x}`)
+- Last non-whitespace byte inside math or verbatim (ends mid-math/mid-verbatim)
 - Leading token `\begin`/`\end`, or in `sentenceExemptLeading` (`blockTokens` leading entries **except `\caption`/`\caption*`**, plus `\label`/`\index`)
-- Command-only line (`isCommandOnly`): only control sequences + `*`/`[...]`/`{...}` args, first command not in `proseCmds` — e.g. `\hypersetup{..}`, `\def\x{..}`, `\includegraphics[..]{..}`, `\cite[..]{..}`, bare `[1em]`. Covers user macros without listing them.
-- `braceGroupLines`: line starts inside a multi-line group owned by a non-prose command (`\author{`, `\IEEEauthorblockA{`, `\tikzset{`, `\newcommand{\x}{`; owner = last control word before `{`, looking past `*`, `[..]`, earlier `{..}` args; anonymous `{` inherits parent; exemption inherits into nested groups), or inside a multi-line `[...]` option group (`\begin{tcolorbox}[`), or the line itself leaves a group open (`…\footnote{`, `\caption{\label{x}`). Groups owned by `proseCmds` (`\caption`, `\footnote`, `\thanks`, `\marginpar`, `\emph`, `\text*`, `\underline`) are checked line by line.
-- Ends with `\\` or `\newline` (`hasTrailingLineBreakToken`)
+- Command-only line (`isCommandOnly`): no running/standalone prose and no math, only markup, opaque args and heading-like prose — e.g. `\hypersetup{..}`, `\def\x{..}`, `\includegraphics[..]{..}`, `\cite[..]{..}`, `\affiliation{..}`. Covers user macros (their args are opaque).
+- A line that is one `{…}` group (`isBracedLine`, e.g. sub-figure label `{\textbf{(a)} $K_4$}`)
+- Ends with `\\`, `\\*`, `\\[len]` or `\newline` (`hasTrailingLineBreakToken`)
 - Next relevant line (`nextLineContinuesSentence`, ≤5 lines, skips blank + command-only lines such as `\vspace`/`\label`/`{\fontsize..}`, and `lookaheadTransparentEnvs` openers: `\begin{widetext}`) opens `\[`, `$$`, a list env, a math env (`texscan.IsMathEnv`), `*subequations`, or a `theoremEnvNames` env (case-insensitive, star stripped) — the sentence continues through the block, whatever the line ends with.
 
 Terminal-punctuation search (`stripTrailingDecorations`): repeatedly strips trailing decoration commands (`\footnote{...}`, `\label{...}`, `\cite{...}` family, `\index{...}`, `\marginpar{...}`, `\qedhere`, star variants; `trailingDecoratorRe`) *only when non-empty content remains before them* (otherwise the decoration's argument is the line's content and stripping falls through to the generic-closer path, descending into it). Also strips a trailing run of closing brackets/quotes/braces (`)]"'}’”`). Allowed terminators: `.`, `?`, `!`, `:`, `…`, `\ldots`.
@@ -113,7 +114,7 @@ Injection: `compile.go` writes sty to `.el/`, sets `TEXINPUTS` to include aux di
 | `sentence_on_newline.go` | `sentence-on-newline` check + fix impl, `sentenceAbbrevs` set |
 | `eqref_tie.go` | `eqref-tie` check + fix impl, `findEqrefTieEdits`, `eqrefTieOK` |
 | `cite_tie.go` | `cite-tie` check + fix impl, `findCiteTieEdits` (reuses `eqrefTieOK` from `eqref_tie.go`) |
-| `sentence_terminator.go` | `sentence-terminator` check impl, `sentenceExemptLeading`, `proseCmds`, `nonProseEnvs`, `nonProseLines`, `braceGroupLines`, `isCommandOnly`, `stripTrailingDecorations`, `nextLineContinuesSentence` |
+| `sentence_terminator.go` | `sentence-terminator` check impl over `texscan.Analyze`, `sentenceExemptLeading`, `outsideBody`, `sentenceContext`, `isCommandOnly`, `isBracedLine`, `stripTrailingDecorations`, `nextLineContinuesSentence` |
 | `env_indent.go` | `env-indent` check + fix impl, `transparentEnvs` (verbatim envs via `texscan.IsVerbatimEnv`), `scanLineEvents` (per-line begin/end token list), `leadingContentPos`, `countBraces`, `nextDecision` state machine (env depth + brace depth) |
 | `unused_labels.go` | `unused-labels` check impl, `reLabelCall`/`reRefCall`/`reHyperref`, `ignoredLabelPrefixes` set, project-source phase |
 | `math_bare_word.go` | `math-bare-word` check impl over `texscan.Classify`, `isASCIILetter` |

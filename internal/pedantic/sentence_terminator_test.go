@@ -250,8 +250,8 @@ func TestSentenceTerminator_CommandOnlyAndOptionGroups(t *testing.T) {
 	lines := []string{
 		`\hypersetup{hidelinks}`,
 		`\def\arraystretch{1.5}`,
-		`\hspace*{0.45pt}`,
-		`[1em]`,
+		`\hspace*{0.45pt}\\`,
+		`[1em]`, // optional argument of \\ on the previous line
 		`\cite[Lemma 2.1]{key}`,
 		`\tikzset{`,
 		`    grow=down,`,
@@ -287,4 +287,21 @@ func TestSentenceTerminator_PreambleFragmentSkipped(t *testing.T) {
 		`\hfuzz=2pt`,
 	}
 	assertSentenceTerminatorLines(t, lines, nil)
+}
+
+func TestSentenceTerminator_HeadingsAndBreaks(t *testing.T) {
+	lines := []string{
+		`\begin{document}`,
+		`{\Large Some University}\\[1cm]`,
+		`\affiliation{Institute of Physics, Some University}`,
+		`\subsubsection{Methods you should create ---`,
+		`  \texttt{branching}-derived class}`,
+		`Text \footnote{A footnote that`,
+		`continues here}`,
+		`{\textbf{(a)} $K_4$}`,
+		`where $a +`,
+		`b$ holds`,
+		`\end{document}`,
+	}
+	assertSentenceTerminatorLines(t, lines, []int{7, 10})
 }

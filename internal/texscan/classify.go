@@ -183,20 +183,12 @@ type await struct {
 }
 
 // crossesLines reports whether the pending parsing may continue on the next
-// line: only for a known command that still needs a mandatory argument
-// (\section + newline + {Title}). Groups on the next line after an unknown
-// command (\vfill + newline + {\small …}), after env args or after optional
-// arguments are not taken as arguments.
+// line: only for a known command still expecting arguments (LaTeX skips the
+// line break when looking for them: \\ + newline + [1em], \section + newline
+// + {Title}). Groups on the next line after an unknown command (\vfill +
+// newline + {\small …}) or after env args are not taken as arguments.
 func (aw *await) crossesLines() bool {
-	if aw.rest || aw.immediate || aw.node || aw.def > 0 {
-		return false
-	}
-	for _, a := range aw.args {
-		if !a.opt {
-			return true
-		}
-	}
-	return false
+	return !aw.rest && !aw.immediate && !aw.node && aw.def == 0 && len(aw.args) > 0
 }
 
 type lexer struct {
@@ -220,16 +212,40 @@ func Classify(lines []string) [][]Class {
 // inside math — including markup and opaque arguments there (\alpha,
 // \text{…}) but not the math delimiters themselves ($, \[, \begin{equation}).
 func ClassifyMath(lines []string) ([][]Class, [][]bool) {
+	infos := Analyze(lines)
+	classes, maths := make([][]Class, len(infos)), make([][]bool, len(infos))
+	for i, in := range infos {
+		classes[i], maths[i] = in.Classes, in.Math
+	}
+	return classes, maths
+}
+
+// LineInfo is the classification of one line.
+type LineInfo struct {
+	Classes []Class // per byte
+	Math    []bool  // per byte: inside math (see ClassifyMath)
+	// End is the class of the innermost context still open at the end of the
+	// line: a prose class, ClassMath, ClassOpaque (inside an opaque argument,
+	// option list or graphics code) or ClassVerbatim.
+	End Class
+	// OpensGroup reports that a {…} or […] group opened on this line is still
+	// open at its end (the group's content continues on the next line).
+	OpensGroup bool
+}
+
+// Analyze classifies lines like Classify and adds per-line context.
+func Analyze(lines []string) []LineInfo {
 	lx := &lexer{stack: []frame{{mode: mText, class: ClassText}}}
-	res := make([][]Class, len(lines))
-	maths := make([][]bool, len(lines))
+	res := make([]LineInfo, len(lines))
 	for li, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			lx.paragraph()
 		}
 		lx.line, lx.out, lx.math, lx.i = line, make([]Class, len(line)), make([]bool, len(line)), 0
+		minLevel := lx.groupLevel()
 		for lx.i < len(line) {
 			lx.step()
+			minLevel = min(minLevel, lx.groupLevel())
 		}
 		if lx.top().mode == mVerb { // \verb cannot span lines
 			lx.pop()
@@ -237,9 +253,23 @@ func ClassifyMath(lines []string) ([][]Class, [][]bool) {
 		if lx.aw != nil && !lx.aw.crossesLines() {
 			lx.aw = nil
 		}
-		res[li], maths[li] = lx.out, lx.math
+		res[li] = LineInfo{Classes: lx.out, Math: lx.math, End: lx.top().class, OpensGroup: lx.groupLevel() > minLevel}
 	}
-	return res, maths
+	return res
+}
+
+// groupLevel is the current nesting of {…} / […] groups (argument frames and
+// plain groups; environments and math delimiters do not count).
+func (lx *lexer) groupLevel() int {
+	n := 0
+	for i := range lx.stack {
+		f := &lx.stack[i]
+		n += f.depth
+		if f.close == closeBrace || f.close == closeBrack || f.close == closeValue {
+			n++
+		}
+	}
+	return n
 }
 
 func (lx *lexer) top() *frame { return &lx.stack[len(lx.stack)-1] }

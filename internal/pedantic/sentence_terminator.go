@@ -36,17 +36,6 @@ func buildSentenceExemptLeading() map[string]bool {
 	return out
 }
 
-// proseCmds take a prose argument. A line made up solely of other commands
-// (and their arguments) is exempt, and so is the content of a multi-line brace
-// group opened by any other command (\author{, \tikzset{, \newcommand{\x}{, ...).
-var proseCmds = map[string]bool{
-	"\\caption": true, "\\caption*": true, "\\footnote": true, "\\thanks": true,
-	"\\marginpar": true, "\\emph": true, "\\text": true, "\\textbf": true,
-	"\\textit": true, "\\textsl": true, "\\textsc": true, "\\textup": true,
-	"\\textmd": true, "\\textrm": true, "\\textsf": true, "\\texttt": true,
-	"\\underline": true,
-}
-
 // theoremEnvNames are theorem-like environments a sentence may lead into
 // ("..., we obtain" + \begin{theorem}).
 var theoremEnvNames = map[string]bool{
@@ -63,17 +52,6 @@ var lookaheadTransparentEnvs = map[string]bool{"widetext": true}
 // no \begin{document} is an \input-ed preamble fragment (packages.tex, ...).
 var preambleOnlyTokens = []string{"\\usepackage", "\\RequirePackage", "\\documentclass"}
 
-// nonProseEnvs hold row/cell, drawing, pseudocode or reference-list content,
-// not prose, and are exempt line-by-line (the \begin/\end lines themselves are
-// already exempt as block tokens).
-var nonProseEnvs = map[string]bool{
-	"tabular": true, "tabular*": true, "tabularx": true,
-	"longtable": true, "array": true,
-	"tikzpicture": true, "quantikz": true,
-	"algorithm": true, "algorithm*": true, "algorithmic": true,
-	"thebibliography": true, "IEEEkeywords": true,
-}
-
 // trailingDecoratorRe matches a trailing decoration (footnote, label,
 // citation, ...) that doesn't itself carry the sentence's terminal
 // punctuation; it's stripped so the real preceding terminator can be found.
@@ -87,12 +65,21 @@ var trailingClosers = map[rune]bool{
 var listEnvNames = map[string]bool{"itemize": true, "enumerate": true, "description": true}
 
 func checkSentenceTerminator(path string, lines []string) []Diagnostic {
-	mask := regionMask(lines)
-	nonProse := nonProseLines(lines, mask)
-	groups := braceGroupLines(lines, mask)
+	info := texscan.Analyze(lines)
+	outside := outsideBody(lines, info)
 	var diags []Diagnostic
 	for li, line := range lines {
-		if nonProse[li] || groups[li].inExempt || groups[li].leftOpen {
+		in := info[li]
+		start := texscan.ClassText // context at the start of the line
+		if li > 0 {
+			start = info[li-1].End
+		}
+		// Only lines starting in running or standalone prose (or in inline math
+		// continued from the previous line) and ending in running or
+		// standalone prose can end a sentence: headings (also multi-line ones), table cells,
+		// opaque arguments, code, math and verbatim contexts are exempt, as
+		// are lines whose group (e.g. a \footnote{) continues on the next line.
+		if outside[li] || in.OpensGroup || !(sentenceContext(start) || start == texscan.ClassMath) || !sentenceContext(in.End) {
 			continue
 		}
 		body := strings.TrimRight(line, " \t")
@@ -100,7 +87,7 @@ func checkSentenceTerminator(path string, lines []string) []Diagnostic {
 			continue
 		}
 		lastIdx := len(body) - 1
-		if mask[li][lastIdx] != regText {
+		if in.Math[lastIdx] || in.Classes[lastIdx] == texscan.ClassVerbatim {
 			continue // ends mid-math/mid-verbatim: handled as its own unit
 		}
 		lead := leadingWS(body)
@@ -110,14 +97,14 @@ func checkSentenceTerminator(path string, lines []string) []Diagnostic {
 				continue
 			}
 		}
-		if hasTrailingLineBreakToken(body) || isCommandOnly(body[lead:]) {
+		if hasTrailingLineBreakToken(body) || isCommandOnly(in, body) || isBracedLine(body[lead:]) {
 			continue
 		}
 		core := stripTrailingDecorations(body)
 		if core == "" || endsWithTerminator(core) {
 			continue
 		}
-		if nextLineContinuesSentence(lines, li+1) {
+		if nextLineContinuesSentence(lines, info, li+1) {
 			continue // sentence continues through the display/list/theorem
 		}
 		diags = append(diags, Diagnostic{
@@ -129,12 +116,59 @@ func checkSentenceTerminator(path string, lines []string) []Diagnostic {
 	return diags
 }
 
-// nonProseLines reports, per line, whether it lies outside the document body
-// or strictly inside a nonProseEnvs environment. Outside the body means before
-// \begin{document} / after \end{document} when the file has one, or the whole
-// file when it has none but loads packages (a preamble fragment); other
-// included files are all body.
-func nonProseLines(lines []string, mask [][]regionKind) []bool {
+// isBracedLine reports whether s is a single {…} group, e.g. a sub-figure
+// label `{\textbf{(a)} $K_4$}`: set-off formatting, not a sentence.
+func isBracedLine(s string) bool {
+	if !strings.HasPrefix(s, "{") || !strings.HasSuffix(s, "}") {
+		return false
+	}
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i == len(s)-1
+			}
+		}
+	}
+	return false
+}
+
+// sentenceContext reports whether a line ending in context c can end a
+// sentence.
+func sentenceContext(c texscan.Class) bool {
+	return c == texscan.ClassText || c == texscan.ClassStandalone
+}
+
+// isCommandOnly reports whether line holds no running/standalone prose and no
+// math, only markup, opaque arguments and heading-like prose — e.g.
+// `\hypersetup{hidelinks}`, `\def\arraystretch{1.5}`, `\cite[Lemma 2]{key}`,
+// `{\fontsize{10}{12}\selectfont` or `\affiliation{Some University}`.
+func isCommandOnly(in texscan.LineInfo, line string) bool {
+	saw := false
+	for i := 0; i < len(line) && i < len(in.Classes); i++ {
+		c := in.Classes[i]
+		if line[i] == ' ' || line[i] == '\t' {
+			continue
+		}
+		if sentenceContext(c) || in.Math[i] || c == texscan.ClassMath {
+			return false
+		}
+		saw = true
+	}
+	return saw
+}
+
+// outsideBody reports, per line, whether it lies outside the document body:
+// before \begin{document} / after \end{document} when the file has one, or
+// the whole file when it has none but loads packages (a preamble fragment);
+// other included files are all body.
+func outsideBody(lines []string, info []texscan.LineInfo) []bool {
 	out := make([]bool, len(lines))
 	outside := false
 	for _, line := range lines {
@@ -151,188 +185,20 @@ func nonProseLines(lines []string, mask [][]regionKind) []bool {
 	if outside && !containsLine(lines, "\\begin{document}") {
 		return fillTrue(out)
 	}
-	depth := 0
 	for li, line := range lines {
-		out[li] = outside || depth > 0
-		i := 0
-		for i < len(line) {
-			if i < len(mask[li]) && mask[li][i] != regText {
-				i++
+		out[li] = outside
+		for i := 0; i < len(line); i++ {
+			if line[i] != '\\' || info[li].Math[i] || info[li].Classes[i] == texscan.ClassVerbatim {
 				continue
 			}
-			if line[i] != '\\' {
-				i++
-				continue
-			}
-			if name, n := matchBeginEnd(line, i, "begin"); n > 0 {
-				if name == "document" {
-					outside = false
-				} else if nonProseEnvs[name] {
-					depth++
-				}
-				i += n
-				continue
-			}
-			if name, n := matchBeginEnd(line, i, "end"); n > 0 {
-				if name == "document" {
-					outside = true
-				} else if nonProseEnvs[name] && depth > 0 {
-					depth--
-				}
-				i += n
-				continue
-			}
-			i++
-		}
-	}
-	return out
-}
-
-// braceLineInfo describes a line's position relative to multi-line brace
-// groups.
-type braceLineInfo struct {
-	inExempt bool // inside a group, opened on an earlier line, whose command is non-prose
-	leftOpen bool // opens a group that is still open at line end (content continues)
-}
-
-type braceGroup struct {
-	cmd    string
-	exempt bool
-	line   int
-	option bool // `[...]` group rather than `{...}`
-}
-
-func (g braceGroup) closer() byte {
-	if g.option {
-		return ']'
-	}
-	return '}'
-}
-
-// braceGroupLines tracks `{...}` groups across lines (text regions only,
-// escaped braces ignored), plus `[...]` option groups left open at line end.
-// A brace group's command is the control word directly before it, looking
-// past `*`, `[...]` optional args and earlier `{...}` args (so
-// `\newcommand{\x}{` belongs to \newcommand). A group is exempt when it, or
-// any enclosing group, belongs to a non-prose command; anonymous `{` groups
-// inherit from their parent. Multi-line option groups are always exempt.
-func braceGroupLines(lines []string, mask [][]regionKind) []braceLineInfo {
-	out := make([]braceLineInfo, len(lines))
-	var stack []braceGroup
-	for li, line := range lines {
-		out[li].inExempt = len(stack) > 0 && stack[len(stack)-1].exempt
-		pending := ""
-		i := 0
-		for i < len(line) {
-			if i < len(mask[li]) && mask[li][i] != regText {
-				i++
-				continue
-			}
-			parentExempt := len(stack) > 0 && stack[len(stack)-1].exempt
-			switch c := line[i]; c {
-			case '\\':
-				tok, n := nextTokenAt(line, i)
-				if n == 0 {
-					n = 1
-				}
-				if len(tok) > 1 && isLetter(tok[1]) {
-					pending = tok
-				} else {
-					pending = ""
-				}
-				i += n
-				continue
-			case '{':
-				exempt := parentExempt || (pending != "" && !proseCmds[pending])
-				stack = append(stack, braceGroup{cmd: pending, exempt: exempt, line: li})
-				pending = ""
-			case '}', ']':
-				if len(stack) > 0 && stack[len(stack)-1].closer() == c {
-					pending = stack[len(stack)-1].cmd
-					stack = stack[:len(stack)-1]
-				}
-			case '[':
-				if pending != "" {
-					if j := strings.IndexByte(line[i:], ']'); j >= 0 {
-						i += j + 1
-						continue
-					}
-					stack = append(stack, braceGroup{cmd: pending, exempt: true, line: li, option: true})
-					pending = ""
-				}
-			case '*', ' ', '\t':
-			default:
-				pending = ""
-			}
-			i++
-		}
-		for _, g := range stack {
-			if g.line == li {
-				out[li].leftOpen = true
-				break
+			if name, n := matchBeginEnd(line, i, "begin"); n > 0 && name == "document" {
+				outside = false
+			} else if name, n := matchBeginEnd(line, i, "end"); n > 0 && name == "document" {
+				outside = true
 			}
 		}
 	}
 	return out
-}
-
-// isCommandOnly reports whether s consists solely of control sequences and
-// their `*`/`[...]`/`{...}` arguments (plus whitespace), with a first command
-// that is not a proseCmds entry — e.g. `\hypersetup{hidelinks}`,
-// `\def\arraystretch{1.5}`, `\cite[Lemma 2]{key}`, or a bare `[1em]`.
-func isCommandOnly(s string) bool {
-	first := true
-	sawAny := false
-	for i := 0; i < len(s); {
-		switch s[i] {
-		case ' ', '\t', '*':
-			i++
-		case '\\':
-			tok, n := nextTokenAt(s, i)
-			if n == 0 {
-				return false
-			}
-			if first && proseCmds[tok] {
-				return false
-			}
-			first, sawAny = false, true
-			i += n
-		case '{', '[':
-			n := matchingGroupLen(s, i)
-			if n == 0 {
-				return false
-			}
-			sawAny = true
-			i += n
-		default:
-			return false
-		}
-	}
-	return sawAny
-}
-
-// matchingGroupLen returns the byte length of the balanced group opening at
-// s[i] (`{...}` or `[...]`), or 0 if it is not closed on this line.
-func matchingGroupLen(s string, i int) int {
-	open, close := s[i], byte('}')
-	if open == '[' {
-		close = ']'
-	}
-	depth := 0
-	for j := i; j < len(s); j++ {
-		switch s[j] {
-		case '\\':
-			j++
-		case open:
-			depth++
-		case close:
-			depth--
-			if depth == 0 {
-				return j - i + 1
-			}
-		}
-	}
-	return 0
 }
 
 func containsLine(lines []string, sub string) bool {
@@ -352,10 +218,17 @@ func fillTrue(b []bool) []bool {
 }
 
 // hasTrailingLineBreakToken reports whether body ends with a forced-break
-// token (\\ or \newline); the sentence continues past it, so no terminal
+// token (\\, \\*, \\[len] or \newline); the sentence continues past it, so no terminal
 // punctuation is required on this line.
 func hasTrailingLineBreakToken(body string) bool {
 	trimmed := strings.TrimRight(body, " \t")
+	// \\[1cm], \\*: the break's own arguments.
+	if strings.HasSuffix(trimmed, "]") {
+		if j := strings.LastIndexByte(trimmed, '['); j > 0 {
+			trimmed = strings.TrimRight(trimmed[:j], " \t")
+		}
+	}
+	trimmed = strings.TrimSuffix(trimmed, "*")
 	if strings.HasSuffix(trimmed, "\\\\") {
 		return true
 	}
@@ -412,7 +285,7 @@ func endsWithTerminator(s string) bool {
 // as \begin{widetext}, bounded) for a line opening a list, display math or a
 // theorem-like environment. The current line's sentence then
 // continues through that block, so it needs no terminator of its own.
-func nextLineContinuesSentence(lines []string, from int) bool {
+func nextLineContinuesSentence(lines []string, info []texscan.LineInfo, from int) bool {
 	for i := from; i < len(lines) && i < from+5; i++ {
 		body := strings.TrimSpace(lines[i])
 		if body == "" {
@@ -429,7 +302,7 @@ func nextLineContinuesSentence(lines []string, from int) bool {
 				strings.HasSuffix(name, "subequations") ||
 				theoremEnvNames[strings.ToLower(strings.TrimSuffix(name, "*"))]
 		}
-		if isCommandOnly(strings.TrimLeft(body, "{ \t")) {
+		if isCommandOnly(info[i], lines[i]) {
 			continue
 		}
 		return false
