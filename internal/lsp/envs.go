@@ -10,8 +10,9 @@ import (
 
 // refreshEnvTable rescans declarations in the project containing uri and
 // updates .el/envs.json (theorem flags, declared argument counts) and the
-// declared entries of .el/cmds.json. Usage-derived argument counts stay
-// compile-gated. Best effort; no-op outside an el project.
+// declared entries of .el/cmds.json (\providecommand only for new entries,
+// since the compile probe overrides it). Probe- and usage-derived argument
+// counts stay compile-gated. Best effort; no-op outside an el project.
 func refreshEnvTable(uri string) {
 	root := projectRoot(filepath.Dir(uriToPath(uri)))
 	if root == "" {
@@ -29,7 +30,13 @@ func refreshEnvTable(uri string) {
 	cmdPath := filepath.Join(root, ".el", "cmds.json")
 	cmds := texscan.LoadTable[int](cmdPath)
 	cmdsBefore := maps.Clone(cmds)
-	maps.Copy(cmds, texscan.ScanCmdDecls(files))
+	declared, provided := texscan.ScanCmdDecls(files)
+	for name, n := range declared {
+		// \providecommand yields to the compile probe; leave its entry alone.
+		if _, stored := cmds[name]; !provided[name] || !stored {
+			cmds[name] = n
+		}
+	}
 	_ = texscan.SaveTable(cmdPath, cmds, cmdsBefore)
 }
 

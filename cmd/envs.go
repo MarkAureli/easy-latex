@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/MarkAureli/easy-latex/internal/cmdprobe"
 	"github.com/MarkAureli/easy-latex/internal/envprobe"
 	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
@@ -26,14 +27,24 @@ func scanProjectEnvs(mainTex string) map[string]texscan.EnvInfo {
 }
 
 // updateCmdTable refreshes .el/cmds.json (command name -> mandatory argument
-// count) after a successful compile. Scanned entries overwrite stored ones;
-// commands no longer present are kept.
-func updateCmdTable(mainTex string) error {
+// count) after a successful compile, resolving each used or declared command
+// from declarations, the compile probe's log (see cmdprobe), the built-in
+// table and usage. Scanned entries overwrite stored ones; commands no longer
+// present are kept.
+func updateCmdTable(stem, mainTex string) error {
 	path := filepath.Join(auxDir, cmdsFile)
 	table := texscan.LoadTable[int](path)
 	before := maps.Clone(table)
-	maps.Copy(table, texscan.ScanCmds(projectTexFiles(mainTex)))
+	probed := cmdprobe.Parse(filepath.Join(auxDir, stem+cmdprobe.Ext))
+	maps.Copy(table, texscan.ScanCmds(projectTexFiles(mainTex), probed))
 	return texscan.SaveTable(path, table, before)
+}
+
+// writeCmdProbe writes the probe package for every command the project uses
+// or declares into the aux dir so the compile can inject it.
+func writeCmdProbe(mainTex string) error {
+	names := slices.Sorted(maps.Keys(texscan.ScanCmds(projectTexFiles(mainTex), nil)))
+	return os.WriteFile(filepath.Join(auxDir, cmdprobe.PkgName+".sty"), cmdprobe.Sty(names), 0644)
 }
 
 // writeEnvProbe writes the probe package for the scanned environments into the

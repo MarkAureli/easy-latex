@@ -61,7 +61,7 @@ func TestUpdateCmdTable(t *testing.T) {
 	if err := os.WriteFile("main.tex", []byte("\\frac{a}{b}\\frac{c}{d}\\emph{x}\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := updateCmdTable("main.tex"); err != nil {
+	if err := updateCmdTable("main", "main.tex"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(auxDir, cmdsFile))

@@ -83,7 +83,7 @@ func scanEnvFiles(texFiles []string) envScan {
 			if !ok {
 				continue
 			}
-			declared[text[m[2]:m[3]]] = documentSpecMandatory(spec)
+			declared[text[m[2]:m[3]]] = DocumentSpecMandatory(spec)
 		}
 		for _, m := range reNewTheorem.FindAllStringIndex(text, -1) {
 			pos := m[1]
@@ -206,9 +206,9 @@ func countArgGroups(text string, pos int) int {
 	}
 }
 
-// documentSpecMandatory counts mandatory arguments (m, v, r, R) in an xparse
+// DocumentSpecMandatory counts mandatory arguments (m, v, r, R) in an xparse
 // argument specification, ignoring brace-delimited defaults.
-func documentSpecMandatory(spec string) int {
+func DocumentSpecMandatory(spec string) int {
 	n := 0
 	for i := 0; i < len(spec); i++ {
 		switch spec[i] {

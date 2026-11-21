@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
+	"github.com/MarkAureli/easy-latex/internal/cmdprobe"
 	"github.com/MarkAureli/easy-latex/internal/envprobe"
 	"github.com/MarkAureli/easy-latex/internal/pedantic"
 	"github.com/MarkAureli/easy-latex/internal/term"
@@ -113,7 +114,7 @@ func runCompile(cmd *cobra.Command, args []string) error {
 
 	// Best effort: learn environment and command signatures for editor completion.
 	_ = updateEnvTable(r.stem, r.scannedEnvs)
-	_ = updateCmdTable(r.cfg.Main)
+	_ = updateCmdTable(r.stem, r.cfg.Main)
 
 	pdfName, err := r.copyPDF()
 	if err != nil {
@@ -194,6 +195,11 @@ func prepareCompile() (*compileRun, error) {
 		return nil, fmt.Errorf("cannot write env probe: %w", err)
 	}
 	r.injectStys = append(r.injectStys, envprobe.PkgName)
+	// Instrument the compile to learn command signatures (see cmdprobe).
+	if err := writeCmdProbe(cfg.Main); err != nil {
+		return nil, fmt.Errorf("cannot write cmd probe: %w", err)
+	}
+	r.injectStys = append(r.injectStys, cmdprobe.PkgName)
 	slices.Sort(r.injectStys)
 
 	engine, err := resolveEngine(cfg, compileEngine)

@@ -65,7 +65,14 @@ If `el init` was run before any `.bib` files existed, `el compile` discovers the
 
 After each successful compile, `el` also records every environment in `.el/envs.json`: how many mandatory `{...}` arguments it takes (from `\newenvironment`/`\NewDocumentEnvironment` declarations, and from how it is used in your sources) whether it is a float (determined by TeX itself: `el compile` loads a small generated helper package that observes each environment while your document compiles, so redefinitions by classes and packages are handled), and whether it is theorem-style (declared via `\newtheorem`, `\declaretheorem`, …; project `.sty`/`.cls` files are scanned too). Editors can use this to complete `\begin{tabular}` with the right number of `{}` groups, or `\begin{lemma}` with a label. Entries are refreshed on every successful compile, so a wrong guess corrects itself once a differing usage compiles. `el lsp` additionally refreshes the declaration-derived parts (theorem flags, declared argument counts) whenever a `.tex` file is saved, so a new `\newtheorem` takes effect without compiling.
 
-Similarly, `.el/cmds.json` records how many mandatory arguments each command takes (from `\newcommand`, `\def`, `\NewDocumentCommand`, `\DeclareMathOperator`, `\DeclarePairedDelimiter` declarations, otherwise the most common number of `{...}` groups seen after the command in your sources). Editors can complete `\frac{` with `{}{}`.
+Similarly, `.el/cmds.json` records how many mandatory arguments each command takes. The count comes from the first source that knows it:
+
+1. a declaration in your project (`\newcommand`, `\def`, `\NewDocumentCommand`, `\DeclareMathOperator`, `\DeclarePairedDelimiter`),
+2. TeX itself: `el compile` loads a small generated helper package that records each command's definition once all packages are loaded, so redefinitions by classes and packages are picked up (only standard LaTeX definition forms are understood; anything else is left to the next source),
+3. a built-in table of common LaTeX and package commands (`\frac`, `\sqrt`, `\mathbb`, `\section`, …),
+4. the most common number of `{...}` groups seen after the command in your sources.
+
+So `\frac` counts as 2 even if you always write `\frac12`. Editors can complete `\frac{` with `{}{}`.
 
 Up to two additional pdflatex passes run automatically if needed (e.g. when LaTeX reports "rerun"), allowing up to four total passes to stabilize cross-references and citations.
 
