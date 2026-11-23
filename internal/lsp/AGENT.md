@@ -8,7 +8,7 @@ Surfaces:
 - Label completion for `\ref`-like commands (`labels.go`): `\label{}` keys from the open buffer + files reachable via `\input`/`\include` (disk, or open buffer if tracked). `\eqref` only offers labels starting with `equation:`. Recomputed per request. Commands: `ref eqref autoref cref Cref vref Vref pageref nameref labelcref cpageref Cpageref` (starred/optional args ok). Checked before cite detection in `complete()`.
 - Env table refresh on `didSave` (`envs.go`): rescans `.tex`/`.sty`/`.cls` under the nearest `.el` project root and updates only declaration-derived parts of `.el/envs.json` (theorem flag, `\newenvironment`/`\NewDocumentEnvironment` arg counts) via `texscan.ScanEnvDecls`/`ApplyEnvDecls`, plus declared command arg counts in `.el/cmds.json` (`ScanCmdDecls`; `\providecommand`-only names only when not yet stored, since the compile probe overrides them). Probe/usage-derived arg counts stay compile-gated.
 - Static pedantic diagnostics (push on didOpen / didChange).
-- Pedantic context (`cmdtable.go`): `checkContext(path)` gives `RunSourceChecksText`/`RunSourceFixesText` the command arities of the file's project (`texscan.StoredCmdArgs` of `.el/cmds.json`, cached per root, reloaded on mtime change; built-in table outside a project). No project scan per keystroke; declarations arrive via the on-save cmds.json refresh.
+- Pedantic context (`cmdtable.go`): `checkContext(path)` gives `RunSourceChecksText`/`RunSourceFixesText` the command arities and math classes of the file's project (`texscan.StoredCmdArgs` of `.el/cmds.json`, `texscan.StoredMathClasses` of `.el/mathclass.json`; cached per root, reloaded when either mtime changes; built-in table outside a project). No project scan per keystroke; declarations arrive via the on-save cmds.json refresh.
 - Spell-check diagnostics (push on didOpen / didChange) when `cfg.SpellLang` set.
 - Code actions (autofix) for fixable static checks. Spell-check produces diagnostics only — no quickfix.
 
@@ -25,7 +25,7 @@ Surfaces:
 | `index.go` | `BuildItems()` — reads keys from the global bib cache |
 | `labels.go` | `detectRefPrefix`, `docLabels`, `completeRef` — label completion |
 | `server.go` | JSON-RPC loop, dispatch, completion, diagnostics, code action handlers |
-| `cmdtable.go` | `checkContext`: per-root cached command-arity context for pedantic checks |
+| `cmdtable.go` | `checkContext`: per-root cached command-arity + math-class context for pedantic checks |
 
 ## Protocol subset
 

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
 
 // Log lines as written by pdflatex (TeX Live 2026, amsmath + hyperref).
@@ -44,7 +46,7 @@ func TestParse(t *testing.T) {
 	if err := os.WriteFile(path, []byte(probeLog), 0644); err != nil {
 		t.Fatal(err)
 	}
-	got := Parse(path)
+	got, _ := Parse(path)
 	want := map[string]int{
 		"efoo": 2, "frac": 2, "label": 1, "nopt": 1, "plain": 3, "pl": 1,
 		"ropt": 1, "xfoo": 2, "xfoo*": 2,
@@ -60,8 +62,54 @@ func TestParse(t *testing.T) {
 			t.Errorf("%s should abort, got %d", k, n)
 		}
 	}
-	if len(Parse(filepath.Join(t.TempDir(), "missing"))) != 0 {
+	if args, classes := Parse(filepath.Join(t.TempDir(), "missing")); len(args)+len(classes) != 0 {
 		t.Error("missing file should yield empty result")
+	}
+}
+
+// Math symbol meanings as logged by pdflatex (amsmath) and lualatex
+// (unicode-math).
+const classLog = `le||\mathchar"3214
+cdot||\mathchar"2201
+alpha||\mathchar"10B
+langle||\protected macro:->\delimiter "426830A 
+lvert||\protected macro:->\delimiter 69640972 
+vert||\protected macro:->\delimiter "026A30C 
+colon||macro:->\protect \colon  
+colon|s|macro:->\nobreak \mskip 2mu\mathpunct {}\nonscript \mkern -\thinmuskip {:}
+neq||macro:->\protect \neq  
+neq|s|macro:->\not =
+iff||macro:->\DOTSB \;\Longleftrightarrow \;
+coloneqq||\protected macro:->\mathrel {\vcentcolon =}
+ule||\protected macro:->\leq 
+uin||the character ∈
+ulangle||\protected macro:->\Udelimiter 4\symoperators "027E8\scan_stop: 
+um||\Umathchar"2"0"002212
+sin||\protected macro:->\qopname \relax o{sin}
+frac||macro:#1#2->x
+`
+
+func TestParseClasses(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "x"+Ext)
+	if err := os.WriteFile(path, []byte(classLog), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, got := Parse(path)
+	want := map[string]texscan.MathClass{
+		"le": texscan.MathRel, "cdot": texscan.MathBin, "alpha": texscan.MathOrd,
+		"langle": texscan.MathOpen, "lvert": texscan.MathOpen, "vert": texscan.MathOrd,
+		"coloneqq": texscan.MathRel, "ule": texscan.MathRel, "uin": texscan.MathRel,
+		"ulangle": texscan.MathOpen, "um": texscan.MathBin,
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s: got %q, want %q", k, got[k], v)
+		}
+	}
+	for _, k := range []string{"colon", "neq", "iff", "sin", "frac"} {
+		if c, ok := got[k]; ok {
+			t.Errorf("%s should be unresolved, got %q", k, c)
+		}
 	}
 }
 

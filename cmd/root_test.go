@@ -58,3 +58,15 @@ func TestFindProjectRoot_NoProject(t *testing.T) {
 		t.Errorf("got %q, want it to contain %q", err.Error(), want)
 	}
 }
+
+func TestEnabledNamesRetired(t *testing.T) {
+	on, off := true, false
+	p := PedanticConfig{Checks: map[string]*bool{"math-bare-word": &on}}
+	if got := p.EnabledNames(); len(got) != 1 || got[0] != "math-token-spacing" {
+		t.Errorf("retired name: got %v", got)
+	}
+	p.Checks["math-token-spacing"] = &off
+	if got := p.EnabledNames(); len(got) != 0 {
+		t.Errorf("explicit new name should win: got %v", got)
+	}
+}

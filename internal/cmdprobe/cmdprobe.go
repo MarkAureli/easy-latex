@@ -76,12 +76,20 @@ func Sty(names []string) []byte {
 
 // Parse reads a probe log and returns the resolved mandatory-argument count
 // per command name (starred names included where the ltcmd spec has a leading
-// star). Unresolved commands are absent. A missing file yields an empty result.
-func Parse(path string) map[string]int {
+// star) and the math class of every symbol command it can classify (see
+// mathClass). Unresolved commands are absent. A missing file yields empty
+// results.
+func Parse(path string) (map[string]int, map[string]texscan.MathClass) {
+	meanings := readMeanings(path)
+	return resolveAll(meanings), classifyAll(meanings)
+}
+
+// readMeanings reads a probe log into name -> kind -> meaning.
+func readMeanings(path string) map[string]map[string]string {
 	meanings := map[string]map[string]string{}
 	f, err := os.Open(path)
 	if err != nil {
-		return map[string]int{}
+		return meanings
 	}
 	defer f.Close()
 	sc := bufio.NewScanner(f)
@@ -100,7 +108,7 @@ func Parse(path string) map[string]int {
 		}
 		meanings[name][kind] = meaning
 	}
-	return resolveAll(meanings)
+	return meanings
 }
 
 func resolveAll(meanings map[string]map[string]string) map[string]int {

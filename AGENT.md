@@ -14,6 +14,7 @@ CLI tool (`el`) for compiling LaTeX docs. Go project, module `github.com/MarkAur
 | `cmd/` | Cobra commands (`bib`, `check`, `compile`, `config`, `init`, `lsp`) |
 | `internal/bib/` | Bib parsing, key gen, formatting, validation, Logger interface, retry logic |
 | `internal/term/` | Shared terminal detection (`IsTerminal`) + ANSI color codes (`Colors` struct, `Detect()`) |
+| `.el/mathclass.json` | Symbol math classes `{name: ord/op/bin/rel/open/close/punct}` from the cmd probe, rewritten by `el compile`; read via `texscan.StoredMathClasses` (built-in overlay) |
 | `internal/cmdprobe/` | Generated `.sty` + parser: logs `\meaning` of every used/declared command at `begindocument/end` during the real compile; resolves arg counts through standard wrappers only |
 | `internal/envprobe/` | Generated `.sty` + parser: hooks env begin/end during the real compile to classify floats via TeX state |
 | `internal/texscan/` | Tex file scanner (bib declarations, envs/cmds) and `Classify`: the shared per-byte classifier (prose/math/markup/opaque/verbatim) all prose-aware checks build on |

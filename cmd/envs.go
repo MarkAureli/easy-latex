@@ -15,6 +15,8 @@ const envsFile = "envs.json"
 
 const cmdsFile = "cmds.json"
 
+const mathClassFile = "mathclass.json"
+
 // projectTexFiles lists the project's tex files reachable from mainTex plus all
 // sty and cls files.
 func projectTexFiles(mainTex string) []string {
@@ -30,14 +32,22 @@ func scanProjectEnvs(mainTex string) map[string]texscan.EnvInfo {
 // count) after a successful compile, resolving each used or declared command
 // from declarations, the compile probe's log (see cmdprobe), the built-in
 // table and usage. Scanned entries overwrite stored ones; commands no longer
-// present are kept.
+// present are kept. The math classes the probe resolved go to
+// .el/mathclass.json the same way.
 func updateCmdTable(stem, mainTex string) error {
 	path := filepath.Join(auxDir, cmdsFile)
 	table := texscan.LoadTable[int](path)
 	before := maps.Clone(table)
-	probed := cmdprobe.Parse(filepath.Join(auxDir, stem+cmdprobe.Ext))
+	probed, classes := cmdprobe.Parse(filepath.Join(auxDir, stem+cmdprobe.Ext))
 	maps.Copy(table, texscan.ScanCmds(projectTexFiles(mainTex), probed))
-	return texscan.SaveTable(path, table, before)
+	if err := texscan.SaveTable(path, table, before); err != nil {
+		return err
+	}
+	classPath := filepath.Join(auxDir, mathClassFile)
+	classTable := texscan.LoadTable[texscan.MathClass](classPath)
+	classBefore := maps.Clone(classTable)
+	maps.Copy(classTable, classes)
+	return texscan.SaveTable(classPath, classTable, classBefore)
 }
 
 // writeCmdProbe writes the probe package for every command the project uses

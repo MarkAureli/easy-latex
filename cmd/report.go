@@ -23,7 +23,10 @@ type checkReport struct {
 // (applying autofixes first when fix is set) and the spell-check.
 func runSourceChecks(cfg *Config, checks, texFiles []string, fix bool) (checkReport, error) {
 	var rep checkReport
-	ctx := &pedantic.Context{CmdArgs: texscan.ProjectCmdArgs(filepath.Join(auxDir, cmdsFile), projectTexFiles(cfg.Main))}
+	ctx := &pedantic.Context{
+		CmdArgs:     texscan.ProjectCmdArgs(filepath.Join(auxDir, cmdsFile), projectTexFiles(cfg.Main)),
+		MathClasses: texscan.StoredMathClasses(filepath.Join(auxDir, mathClassFile)),
+	}
 	if fix {
 		before := pedantic.RunSourceChecks(ctx, checks, texFiles)
 		if _, err := pedantic.RunSourceFixes(ctx, checks, texFiles); err != nil {

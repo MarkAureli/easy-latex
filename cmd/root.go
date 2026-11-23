@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/bib"
@@ -82,16 +81,18 @@ func (p PedanticConfig) Enabled(name string) bool {
 	return false
 }
 
-// EnabledNames returns sorted names of checks set to true.
+// EnabledNames returns sorted names of checks set to true. Retired names
+// count as their successor unless the successor is set explicitly.
 func (p PedanticConfig) EnabledNames() []string {
-	var out []string
+	set := map[string]bool{}
 	for name, v := range p.Checks {
-		if v != nil && *v {
-			out = append(out, name)
+		canon := pedantic.Canonical(name)
+		if v == nil || !*v || canon != name && p.Checks[canon] != nil {
+			continue
 		}
+		set[canon] = true
 	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(set))
 }
 
 // abbreviateJournals returns true when journal abbreviation is enabled.

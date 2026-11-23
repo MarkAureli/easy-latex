@@ -39,6 +39,22 @@ type Context struct {
 	// to their number of mandatory arguments. Commands absent from it are
 	// unknown. See texscan.ProjectCmdArgs / texscan.StoredCmdArgs.
 	CmdArgs map[string]int
+	// MathClasses maps symbol commands to their math class. Absent names
+	// are ordinary. See texscan.StoredMathClasses; nil means the built-in
+	// table.
+	MathClasses map[string]texscan.MathClass
+}
+
+// MathClass returns the math class of command name (ordinary if unknown).
+func (c *Context) MathClass(name string) texscan.MathClass {
+	table := texscan.BuiltinMathClasses
+	if c != nil && c.MathClasses != nil {
+		table = c.MathClasses
+	}
+	if cl, ok := table[name]; ok {
+		return cl
+	}
+	return texscan.MathOrd
 }
 
 // Args returns the number of mandatory arguments of command name and
@@ -98,9 +114,21 @@ func Register(c Check) {
 	registry[c.Name] = c
 }
 
-// Known returns true if name is a registered check.
+// renamed maps retired check names to the check that replaced them, so
+// existing configs keep working.
+var renamed = map[string]string{"math-bare-word": "math-token-spacing"}
+
+// Canonical returns the current name of check name (itself unless retired).
+func Canonical(name string) string {
+	if n, ok := renamed[name]; ok {
+		return n
+	}
+	return name
+}
+
+// Known returns true if name is a registered check or a retired name of one.
 func Known(name string) bool {
-	_, ok := registry[name]
+	_, ok := registry[Canonical(name)]
 	return ok
 }
 
@@ -116,7 +144,7 @@ func AllNames() []string {
 
 // Get returns the check for the given name.
 func Get(name string) (Check, bool) {
-	c, ok := registry[name]
+	c, ok := registry[Canonical(name)]
 	return c, ok
 }
 
