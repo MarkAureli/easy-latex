@@ -17,7 +17,7 @@ func TestNoTabs_Detector(t *testing.T) {
 		"\\end{verbatim}",   // 7
 		"after\tverbatim",   // 8: tab outside again
 	}
-	diags := checkNoTabs("t.tex", lines)
+	diags := checkNoTabs(nil, "t.tex", lines)
 	if len(diags) != 3 {
 		t.Fatalf("got %d diags, want 3: %v", len(diags), diags)
 	}
@@ -53,7 +53,7 @@ func TestNoTabs_Fixer(t *testing.T) {
 		"\\end{verbatim}",
 		"trail   % tab   here",
 	}
-	out, changed := fixNoTabs("t.tex", append([]string(nil), in...))
+	out, changed := fixNoTabs(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
@@ -66,7 +66,7 @@ func TestNoTabs_Fixer(t *testing.T) {
 
 func TestNoTabs_FixerNoChange(t *testing.T) {
 	in := []string{"clean line", "  spaces only", "\\begin{verbatim}", "foo\tbar", "\\end{verbatim}"}
-	_, changed := fixNoTabs("t.tex", append([]string(nil), in...))
+	_, changed := fixNoTabs(nil, "t.tex", append([]string(nil), in...))
 	if changed {
 		t.Error("expected changed=false (only verbatim tab present)")
 	}
@@ -75,7 +75,7 @@ func TestNoTabs_FixerNoChange(t *testing.T) {
 func TestNoTabs_ColumnAware(t *testing.T) {
 	in := []string{"ab\tcd"}
 	want := []string{"ab  cd"}
-	out, _ := fixNoTabs("t.tex", append([]string(nil), in...))
+	out, _ := fixNoTabs(nil, "t.tex", append([]string(nil), in...))
 	if out[0] != want[0] {
 		t.Errorf("got %q, want %q", out[0], want[0])
 	}
@@ -88,7 +88,7 @@ func TestRunSourceFixes_NoTabs(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
-	modified, err := RunSourceFixes([]string{"no-tabs"}, []string{path})
+	modified, err := RunSourceFixes(nil, []string{"no-tabs"}, []string{path})
 	if err != nil {
 		t.Fatal(err)
 	}

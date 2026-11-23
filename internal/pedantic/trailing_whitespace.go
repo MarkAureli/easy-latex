@@ -17,7 +17,7 @@ func init() {
 // text; for code-only lines, whitespace at the end of the code. Pre-comment
 // alignment whitespace (spaces between code and the `%` marker) is the domain
 // of single-spaces and is not considered trailing.
-func checkTrailingWhitespace(path string, lines []string) []Diagnostic {
+func checkTrailingWhitespace(_ *Context, path string, lines []string) []Diagnostic {
 	var diags []Diagnostic
 	for i, line := range lines {
 		end := trimRightWS(line)
@@ -34,7 +34,7 @@ func checkTrailingWhitespace(path string, lines []string) []Diagnostic {
 }
 
 // fixTrailingWhitespace strips trailing spaces and tabs from each raw line.
-func fixTrailingWhitespace(path string, lines []string) ([]string, bool) {
+func fixTrailingWhitespace(_ *Context, path string, lines []string) ([]string, bool) {
 	changed := false
 	for i, line := range lines {
 		end := trimRightWS(line)

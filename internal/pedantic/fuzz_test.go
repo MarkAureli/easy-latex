@@ -37,13 +37,13 @@ func TestChecksNoPanicOnRandomInput(t *testing.T) {
 				}()
 				cp := append([]string(nil), lines...)
 				if c.Source != nil {
-					c.Source("t.tex", cp)
+					c.Source(nil, "t.tex", cp)
 				}
 				if c.Fix != nil {
 					cp = append([]string(nil), lines...)
-					out, _ := c.Fix("t.tex", cp)
+					out, _ := c.Fix(nil, "t.tex", cp)
 					// idempotence/second-pass panic check
-					c.Fix("t.tex", append([]string(nil), out...))
+					c.Fix(nil, "t.tex", append([]string(nil), out...))
 				}
 				if c.ProjectSource != nil {
 					c.ProjectSource(map[string][]string{"t.tex": lines})

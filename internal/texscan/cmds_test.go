@@ -85,3 +85,30 @@ func TestScanCmdsProbedAndProvided(t *testing.T) {
 		t.Errorf("provided: %v", provided)
 	}
 }
+
+func TestStoredAndProjectCmdArgs(t *testing.T) {
+	dir := t.TempDir()
+	tbl := filepath.Join(dir, "cmds.json")
+	if err := os.WriteFile(tbl, []byte(`{"frac": 0, "sqrt": 3, "pkg": 2, "old": 1}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	stored := StoredCmdArgs(tbl)
+	if stored["frac"] != 2 || stored["sqrt"] != 3 || stored["pkg"] != 2 {
+		t.Errorf("stored: frac %d sqrt %d pkg %d", stored["frac"], stored["sqrt"], stored["pkg"])
+	}
+	if len(StoredCmdArgs(filepath.Join(dir, "missing"))) != len(BuiltinCmdArgs) {
+		t.Error("missing table should yield the built-in table")
+	}
+
+	src := "\\newcommand\\old[2]{}\n\\fresh{a}{b}\\pkg x\\frac12\n"
+	tex := filepath.Join(dir, "a.tex")
+	if err := os.WriteFile(tex, []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got := ProjectCmdArgs(tbl, []string{tex})
+	for name, want := range map[string]int{"old": 2, "fresh": 2, "pkg": 2, "frac": 2, "sqrt": 3} {
+		if got[name] != want {
+			t.Errorf("%s: got %d, want %d", name, got[name], want)
+		}
+	}
+}

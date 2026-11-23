@@ -22,7 +22,7 @@ func init() {
 
 // checkNoTabs flags tab characters outside verbatim regions. Lines are
 // comment-stripped by the runner; tabs inside comments are invisible here.
-func checkNoTabs(path string, lines []string) []Diagnostic {
+func checkNoTabs(_ *Context, path string, lines []string) []Diagnostic {
 	mask := regionMask(lines)
 	var diags []Diagnostic
 	for i, line := range lines {
@@ -42,7 +42,7 @@ func checkNoTabs(path string, lines []string) []Diagnostic {
 // fixNoTabs expands tabs to spaces using a column-aware tabstop of tabWidth.
 // Tabs inside verbatim regions are left untouched; tabs in comments are
 // rewritten.
-func fixNoTabs(path string, lines []string) ([]string, bool) {
+func fixNoTabs(_ *Context, path string, lines []string) ([]string, bool) {
 	stripped := make([]string, len(lines))
 	for i, l := range lines {
 		stripped[i] = texscan.StripComment(l)

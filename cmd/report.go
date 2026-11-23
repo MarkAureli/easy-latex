@@ -3,11 +3,13 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/MarkAureli/easy-latex/internal/pedantic"
 	"github.com/MarkAureli/easy-latex/internal/term"
+	"github.com/MarkAureli/easy-latex/internal/texscan"
 )
 
 // checkReport holds the pedantic and spelling results of el check / el compile.
@@ -21,15 +23,16 @@ type checkReport struct {
 // (applying autofixes first when fix is set) and the spell-check.
 func runSourceChecks(cfg *Config, checks, texFiles []string, fix bool) (checkReport, error) {
 	var rep checkReport
+	ctx := &pedantic.Context{CmdArgs: texscan.ProjectCmdArgs(filepath.Join(auxDir, cmdsFile), projectTexFiles(cfg.Main))}
 	if fix {
-		before := pedantic.RunSourceChecks(checks, texFiles)
-		if _, err := pedantic.RunSourceFixes(checks, texFiles); err != nil {
+		before := pedantic.RunSourceChecks(ctx, checks, texFiles)
+		if _, err := pedantic.RunSourceFixes(ctx, checks, texFiles); err != nil {
 			return rep, err
 		}
-		rep.ped = pedantic.RunSourceChecks(checks, texFiles)
+		rep.ped = pedantic.RunSourceChecks(ctx, checks, texFiles)
 		rep.fixed = diffDiagnostics(before, rep.ped)
 	} else {
-		rep.ped = pedantic.RunSourceChecks(checks, texFiles)
+		rep.ped = pedantic.RunSourceChecks(ctx, checks, texFiles)
 	}
 	spell, err := runSpellCheck(cfg, texFiles)
 	if err != nil {

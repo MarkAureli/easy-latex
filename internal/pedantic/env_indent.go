@@ -222,7 +222,7 @@ func nextDecision(line string, depth *int, stack *[]string, braceDepth *int) (ex
 	return (d + bd) * envIndentWidth, ancestorSkip
 }
 
-func checkEnvIndent(path string, lines []string) []Diagnostic {
+func checkEnvIndent(_ *Context, path string, lines []string) []Diagnostic {
 	var diags []Diagnostic
 	var stack []string
 	depth := 0
@@ -249,7 +249,7 @@ func checkEnvIndent(path string, lines []string) []Diagnostic {
 	return diags
 }
 
-func fixEnvIndent(path string, lines []string) ([]string, bool) {
+func fixEnvIndent(_ *Context, path string, lines []string) ([]string, bool) {
 	stripped := make([]string, len(lines))
 	for i, l := range lines {
 		stripped[i] = texscan.StripComment(l)

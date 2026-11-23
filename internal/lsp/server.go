@@ -63,7 +63,8 @@ type server struct {
 	docs          map[string]string // uri → full text
 	items         []completionItem
 	enabledChecks []string
-	spellSess     *spell.Session // nil = spell disabled
+	spellSess     *spell.Session      // nil = spell disabled
+	cmdTables     map[string]cmdTable // project root → cached .el/cmds.json overlay
 	w             io.Writer
 	shuttingDown  bool
 }
@@ -161,7 +162,7 @@ func (s *server) publishDiagnostics(uri string) {
 
 	// Pedantic: whole-line range.
 	if len(s.enabledChecks) > 0 {
-		for _, d := range pedantic.RunSourceChecksText(s.enabledChecks, path, text) {
+		for _, d := range pedantic.RunSourceChecksText(s.checkContext(path), s.enabledChecks, path, text) {
 			line := max(d.Line-1, 0)
 			lineText := ""
 			if line < len(rawLines) {
@@ -234,7 +235,7 @@ func (s *server) codeActions(p codeActionParams) []codeAction {
 		return nil
 	}
 	path := uriToPath(p.TextDocument.URI)
-	newText, changed := pedantic.RunSourceFixesText(s.enabledChecks, path, text)
+	newText, changed := pedantic.RunSourceFixesText(s.checkContext(path), s.enabledChecks, path, text)
 	if !changed {
 		return nil
 	}

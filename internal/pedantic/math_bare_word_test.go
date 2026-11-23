@@ -75,7 +75,7 @@ func TestCheckMathBareWord(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			diags := checkMathBareWord("test.tex", []string{tt.line})
+			diags := checkMathBareWord(nil, "test.tex", []string{tt.line})
 			if len(diags) != tt.count {
 				t.Errorf("got %d diagnostics, want %d\nline: %s\ndiags: %v",
 					len(diags), tt.count, tt.line, diags)

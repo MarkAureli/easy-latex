@@ -25,7 +25,7 @@ func TestEqrefTie_Detector(t *testing.T) {
 			stripped[i] = ""
 		}
 	}
-	diags := checkEqrefTie("t.tex", stripped)
+	diags := checkEqrefTie(nil, "t.tex", stripped)
 	var got []int
 	for _, d := range diags {
 		got = append(got, d.Line)
@@ -53,7 +53,7 @@ func TestEqrefTie_Fixer(t *testing.T) {
 		`\eqref{eq:a} stays.`,
 		`By~\eqref{eq:a} stays.`,
 	}
-	out, changed := fixEqrefTie("t.tex", append([]string(nil), in...))
+	out, changed := fixEqrefTie(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changes")
 	}
@@ -64,7 +64,7 @@ func TestEqrefTie_Fixer(t *testing.T) {
 			}
 		}
 	}
-	if _, changed := fixEqrefTie("t.tex", append([]string(nil), want...)); changed {
+	if _, changed := fixEqrefTie(nil, "t.tex", append([]string(nil), want...)); changed {
 		t.Error("fixer not idempotent")
 	}
 }

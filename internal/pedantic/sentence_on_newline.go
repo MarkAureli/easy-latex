@@ -26,7 +26,7 @@ var sentenceAbbrevs = map[string]bool{
 	"approx": true, "resp": true,
 }
 
-func checkSentenceOnNewline(path string, lines []string) []Diagnostic {
+func checkSentenceOnNewline(_ *Context, path string, lines []string) []Diagnostic {
 	mask := regionMask(lines)
 	var diags []Diagnostic
 	for li, line := range lines {
@@ -41,7 +41,7 @@ func checkSentenceOnNewline(path string, lines []string) []Diagnostic {
 	return diags
 }
 
-func fixSentenceOnNewline(path string, lines []string) ([]string, bool) {
+func fixSentenceOnNewline(_ *Context, path string, lines []string) ([]string, bool) {
 	stripped := make([]string, len(lines))
 	for i, l := range lines {
 		stripped[i] = texscan.StripComment(l)

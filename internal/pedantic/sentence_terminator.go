@@ -64,7 +64,7 @@ var trailingClosers = map[rune]bool{
 
 var listEnvNames = map[string]bool{"itemize": true, "enumerate": true, "description": true}
 
-func checkSentenceTerminator(path string, lines []string) []Diagnostic {
+func checkSentenceTerminator(_ *Context, path string, lines []string) []Diagnostic {
 	info := texscan.Analyze(lines)
 	outside := outsideBody(lines, info)
 	var diags []Diagnostic

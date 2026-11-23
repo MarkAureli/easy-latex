@@ -32,14 +32,33 @@ const (
 	PhasePostCompile                // runs after final pdflatex pass
 )
 
+// Context carries per-project data shared by source checks. A nil *Context is
+// valid and behaves like an empty one.
+type Context struct {
+	// CmdArgs maps command names (without backslash; starred names separate)
+	// to their number of mandatory arguments. Commands absent from it are
+	// unknown. See texscan.ProjectCmdArgs / texscan.StoredCmdArgs.
+	CmdArgs map[string]int
+}
+
+// Args returns the number of mandatory arguments of command name and
+// whether it is known.
+func (c *Context) Args(name string) (int, bool) {
+	if c == nil {
+		return 0, false
+	}
+	n, ok := c.CmdArgs[name]
+	return n, ok
+}
+
 // SourceCheckFunc checks source lines (comment-stripped) for a single file.
-type SourceCheckFunc func(path string, lines []string) []Diagnostic
+type SourceCheckFunc func(ctx *Context, path string, lines []string) []Diagnostic
 
 // SourceFixFunc rewrites raw source lines (NOT comment-stripped) for a single
 // file. Returns the new lines and true when modifications were made, or the
 // input slice and false when no change is needed. Implementations are
 // responsible for being comment-aware where relevant.
-type SourceFixFunc func(path string, lines []string) ([]string, bool)
+type SourceFixFunc func(ctx *Context, path string, lines []string) ([]string, bool)
 
 // ProjectSourceCheckFunc inspects every tex file in the project at once.
 // files maps path → comment-stripped lines. Read-only; no autofix.

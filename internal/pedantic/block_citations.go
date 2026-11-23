@@ -15,7 +15,7 @@ func init() {
 	})
 }
 
-func checkBlockCitations(path string, lines []string) []Diagnostic {
+func checkBlockCitations(_ *Context, path string, lines []string) []Diagnostic {
 	var diags []Diagnostic
 	for i, line := range lines {
 		lineNo := i + 1

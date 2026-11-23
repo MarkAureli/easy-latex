@@ -18,7 +18,7 @@ func init() {
 
 // checkSingleSpaces flags runs of 2+ consecutive spaces past the leading
 // whitespace of each line. Lines are comment-stripped by the runner.
-func checkSingleSpaces(path string, lines []string) []Diagnostic {
+func checkSingleSpaces(_ *Context, path string, lines []string) []Diagnostic {
 	var diags []Diagnostic
 	for i, line := range lines {
 		if col := findMultiSpace(line); col >= 0 {
@@ -34,7 +34,7 @@ func checkSingleSpaces(path string, lines []string) []Diagnostic {
 
 // fixSingleSpaces collapses 2+ spaces to one in the non-comment body of each
 // line. Leading whitespace and comment tail are preserved verbatim.
-func fixSingleSpaces(path string, lines []string) ([]string, bool) {
+func fixSingleSpaces(_ *Context, path string, lines []string) ([]string, bool) {
 	changed := false
 	for i, line := range lines {
 		body := texscan.StripComment(line)

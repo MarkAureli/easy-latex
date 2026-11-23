@@ -11,7 +11,7 @@ import (
 
 // RunSourceChecks runs all enabled source-level checks (per-file and
 // project-scoped) on the given tex files.
-func RunSourceChecks(checkNames, texFiles []string) []Diagnostic {
+func RunSourceChecks(ctx *Context, checkNames, texFiles []string) []Diagnostic {
 	var perFile, project []Check
 	for _, name := range checkNames {
 		c, ok := Get(name)
@@ -38,7 +38,7 @@ func RunSourceChecks(checkNames, texFiles []string) []Diagnostic {
 			if c.WantRaw {
 				lines = raw
 			}
-			all = append(all, c.Source(path, lines)...)
+			all = append(all, c.Source(ctx, path, lines)...)
 		}
 	}
 	for _, c := range project {
@@ -115,7 +115,7 @@ func HasFixableChecks(checkNames []string) bool {
 // RunSourceChecksText runs all enabled source-level checks on the given text
 // for diagnostic reporting. path is recorded in the diagnostics' File field.
 // Project-scoped checks see only this single file.
-func RunSourceChecksText(checkNames []string, path, text string) []Diagnostic {
+func RunSourceChecksText(ctx *Context, checkNames []string, path, text string) []Diagnostic {
 	var perFile, project []Check
 	for _, name := range checkNames {
 		c, ok := Get(name)
@@ -143,7 +143,7 @@ func RunSourceChecksText(checkNames []string, path, text string) []Diagnostic {
 		if c.WantRaw {
 			lines = raw
 		}
-		all = append(all, c.Source(path, lines)...)
+		all = append(all, c.Source(ctx, path, lines)...)
 	}
 	if len(project) > 0 {
 		files := map[string][]string{path: stripped}
@@ -157,7 +157,7 @@ func RunSourceChecksText(checkNames []string, path, text string) []Diagnostic {
 
 // RunSourceFixesText applies all enabled fixable checks to text and returns
 // the rewritten text plus a changed flag. Pure (no disk I/O).
-func RunSourceFixesText(checkNames []string, path, text string) (string, bool) {
+func RunSourceFixesText(ctx *Context, checkNames []string, path, text string) (string, bool) {
 	var fixes []Check
 	for _, name := range checkNames {
 		if c, ok := Get(name); ok && c.Fix != nil {
@@ -170,7 +170,7 @@ func RunSourceFixesText(checkNames []string, path, text string) (string, bool) {
 	lines := strings.Split(text, "\n")
 	changed := false
 	for _, c := range fixes {
-		if newLines, did := c.Fix(path, lines); did {
+		if newLines, did := c.Fix(ctx, path, lines); did {
 			lines = newLines
 			changed = true
 		}
@@ -183,7 +183,7 @@ func RunSourceFixesText(checkNames []string, path, text string) (string, bool) {
 
 // RunSourceFixes applies all enabled fixable checks to texFiles in-place.
 // Returns sorted list of paths that were actually modified.
-func RunSourceFixes(checkNames, texFiles []string) ([]string, error) {
+func RunSourceFixes(ctx *Context, checkNames, texFiles []string) ([]string, error) {
 	var fixes []Check
 	for _, name := range checkNames {
 		if c, ok := Get(name); ok && c.Fix != nil {
@@ -202,7 +202,7 @@ func RunSourceFixes(checkNames, texFiles []string) ([]string, error) {
 		lines := strings.Split(string(data), "\n")
 		changed := false
 		for _, c := range fixes {
-			if newLines, did := c.Fix(path, lines); did {
+			if newLines, did := c.Fix(ctx, path, lines); did {
 				lines = newLines
 				changed = true
 			}

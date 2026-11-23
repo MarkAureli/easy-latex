@@ -22,7 +22,7 @@ func isASCIILetter(b byte) bool {
 // texscan.Classify). Command names are markup, and the arguments of text and
 // font wrappers, labels and lengths (\text{…}, \mathrm{…}, \label{…}, …) are
 // not math, so they are never flagged.
-func checkMathBareWord(path string, lines []string) []Diagnostic {
+func checkMathBareWord(_ *Context, path string, lines []string) []Diagnostic {
 	var diags []Diagnostic
 	for li, cs := range texscan.Classify(lines) {
 		line := lines[li]

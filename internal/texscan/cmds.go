@@ -1,6 +1,7 @@
 package texscan
 
 import (
+	"maps"
 	"os"
 	"regexp"
 	"strconv"
@@ -183,4 +184,37 @@ func ResolveCmd(name string, declared map[string]int, provided map[string]bool, 
 		return n
 	}
 	return usage[name]
+}
+
+// storedCmdArgs returns the non-zero entries of the command table at path
+// (.el/cmds.json). Zeros are skipped like unresolved probe results: a table
+// written before the built-in layer existed may hold usage counts such as
+// frac: 0 from \frac12, and a 0 never leads to an action anyway.
+func storedCmdArgs(path string) map[string]int {
+	out := map[string]int{}
+	for name, n := range LoadTable[int](path) {
+		if n > 0 {
+			out[name] = n
+		}
+	}
+	return out
+}
+
+// StoredCmdArgs returns BuiltinCmdArgs overlaid by the non-zero entries of the
+// command table at path. A missing file yields the built-in table alone.
+// Cheap; used by el lsp, whose on-save refresh keeps declarations in the table.
+func StoredCmdArgs(path string) map[string]int {
+	out := maps.Clone(BuiltinCmdArgs)
+	maps.Copy(out, storedCmdArgs(path))
+	return out
+}
+
+// ProjectCmdArgs returns the full command table for checks run by el check /
+// el compile: StoredCmdArgs overlaid by ScanCmds over texFiles, with the stored
+// entries standing in for the probe layer. Fresh declarations thus win and
+// commands new since the last compile get usage counts.
+func ProjectCmdArgs(path string, texFiles []string) map[string]int {
+	out := StoredCmdArgs(path)
+	maps.Copy(out, ScanCmds(texFiles, storedCmdArgs(path)))
+	return out
 }

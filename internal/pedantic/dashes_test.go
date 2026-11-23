@@ -12,7 +12,7 @@ func TestDashes_Fixer_Unicode(t *testing.T) {
 		{"$− 5$", "$- 5$"},           // unicode minus in math → -
 	}
 	for _, c := range cases {
-		out, _ := fixDashes("t.tex", []string{c.in})
+		out, _ := fixDashes(nil, "t.tex", []string{c.in})
 		if out[0] != c.want {
 			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
 		}
@@ -29,7 +29,7 @@ func TestDashes_Fixer_NumericRanges(t *testing.T) {
 		{"a 1-2-3 b", "a 1--2--3 b"},
 	}
 	for _, c := range cases {
-		out, _ := fixDashes("t.tex", []string{c.in})
+		out, _ := fixDashes(nil, "t.tex", []string{c.in})
 		if out[0] != c.want {
 			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
 		}
@@ -43,7 +43,7 @@ func TestDashes_Fixer_HyphenCollapse(t *testing.T) {
 		{"a -------- b", "a---b"},
 	}
 	for _, c := range cases {
-		out, _ := fixDashes("t.tex", []string{c.in})
+		out, _ := fixDashes(nil, "t.tex", []string{c.in})
 		if out[0] != c.want {
 			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
 		}
@@ -58,7 +58,7 @@ func TestDashes_Fixer_EmDashSpacing(t *testing.T) {
 		{"foo---bar", "foo---bar"},
 	}
 	for _, c := range cases {
-		out, _ := fixDashes("t.tex", []string{c.in})
+		out, _ := fixDashes(nil, "t.tex", []string{c.in})
 		if out[0] != c.want {
 			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
 		}
@@ -76,7 +76,7 @@ func TestDashes_Fixer_EnDashBetweenWords(t *testing.T) {
 		{"a -- b -- c", "a---b---c"}, // chained
 	}
 	for _, c := range cases {
-		out, _ := fixDashes("t.tex", []string{c.in})
+		out, _ := fixDashes(nil, "t.tex", []string{c.in})
 		if out[0] != c.want {
 			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
 		}
@@ -92,7 +92,7 @@ func TestDashes_Fixer_SpacedHyphenWords(t *testing.T) {
 		{"mother-in-law", "mother-in-law"},
 	}
 	for _, c := range cases {
-		out, _ := fixDashes("t.tex", []string{c.in})
+		out, _ := fixDashes(nil, "t.tex", []string{c.in})
 		if out[0] != c.want {
 			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
 		}
@@ -110,7 +110,7 @@ func TestDashes_Fixer_SkipMath(t *testing.T) {
 		{"\\(x - y\\)", "\\(x - y\\)"},
 	}
 	for _, c := range cases {
-		out, _ := fixDashes("t.tex", []string{c.in})
+		out, _ := fixDashes(nil, "t.tex", []string{c.in})
 		if out[0] != c.want {
 			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
 		}
@@ -123,7 +123,7 @@ func TestDashes_Fixer_SkipVerbatim(t *testing.T) {
 		"foo - bar 1-2 — baz",
 		"\\end{verbatim}",
 	}
-	out, changed := fixDashes("t.tex", append([]string(nil), in...))
+	out, changed := fixDashes(nil, "t.tex", append([]string(nil), in...))
 	if changed {
 		t.Errorf("verbatim modified: %v", out)
 	}
@@ -134,7 +134,7 @@ func TestDashes_Fixer_SkipComment(t *testing.T) {
 	// that would otherwise trigger rules.
 	in := []string{"foo - bar % see 10-20 in pp."}
 	want := []string{"foo---bar % see 10-20 in pp."}
-	out, changed := fixDashes("t.tex", append([]string(nil), in...))
+	out, changed := fixDashes(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected change")
 	}
@@ -150,7 +150,7 @@ func TestDashes_Detector(t *testing.T) {
 		"$a - b$",    // ok (math)
 		"pp. 10-20",  // violation
 	}
-	diags := checkDashes("t.tex", lines)
+	diags := checkDashes(nil, "t.tex", lines)
 	if len(diags) != 2 {
 		t.Fatalf("got %d diags, want 2: %v", len(diags), diags)
 	}
@@ -170,7 +170,7 @@ func TestDashes_Fixer_SkipMacroArgs(t *testing.T) {
 		{"\\documentclass{revtex4-2} pp. 10-20", "\\documentclass{revtex4-2} pp. 10--20"},
 	}
 	for _, c := range cases {
-		out, _ := fixDashes("t.tex", []string{c.in})
+		out, _ := fixDashes(nil, "t.tex", []string{c.in})
 		if out[0] != c.want {
 			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
 		}
@@ -190,7 +190,7 @@ func TestDashes_Fixer_SkipCommandOptions(t *testing.T) {
 		{"\\foo[\\input{a-1}]{b} pp. 10-20", "\\foo[\\input{a-1}]{b} pp. 10--20"},
 	}
 	for _, c := range cases {
-		out, _ := fixDashes("t.tex", []string{c.in})
+		out, _ := fixDashes(nil, "t.tex", []string{c.in})
 		if out[0] != c.want {
 			t.Errorf("input %q: got %q, want %q", c.in, out[0], c.want)
 		}
@@ -208,7 +208,7 @@ func TestDashes_NoOpClean(t *testing.T) {
 		"raw -- text 1-2",
 		"\\end{verbatim}",
 	}
-	_, changed := fixDashes("t.tex", append([]string(nil), in...))
+	_, changed := fixDashes(nil, "t.tex", append([]string(nil), in...))
 	if changed {
 		t.Error("expected no change for clean input")
 	}

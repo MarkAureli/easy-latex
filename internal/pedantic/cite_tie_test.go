@@ -26,7 +26,7 @@ func TestCiteTie_Detector(t *testing.T) {
 			stripped[i] = ""
 		}
 	}
-	diags := checkCiteTie("t.tex", stripped)
+	diags := checkCiteTie(nil, "t.tex", stripped)
 	var got []int
 	for _, d := range diags {
 		got = append(got, d.Line)
@@ -54,7 +54,7 @@ func TestCiteTie_Fixer(t *testing.T) {
 		`\cite{a} stays.`,
 		`By~\cite{a} stays.`,
 	}
-	out, changed := fixCiteTie("t.tex", append([]string(nil), in...))
+	out, changed := fixCiteTie(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changes")
 	}
@@ -65,7 +65,7 @@ func TestCiteTie_Fixer(t *testing.T) {
 			}
 		}
 	}
-	if _, changed := fixCiteTie("t.tex", append([]string(nil), want...)); changed {
+	if _, changed := fixCiteTie(nil, "t.tex", append([]string(nil), want...)); changed {
 		t.Error("fixer not idempotent")
 	}
 }

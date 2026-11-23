@@ -27,7 +27,7 @@ func TestCheckBlockCitations(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			diags := checkBlockCitations("test.tex", []string{tt.line})
+			diags := checkBlockCitations(nil, "test.tex", []string{tt.line})
 			if len(diags) != tt.count {
 				t.Errorf("got %d diagnostics, want %d\ndiags: %v", len(diags), tt.count, diags)
 			}

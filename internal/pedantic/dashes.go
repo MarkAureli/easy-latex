@@ -28,7 +28,7 @@ const (
 
 // checkDashes flags dash-style violations. WantRaw: true so we can preserve
 // comment tails verbatim while classifying the comment-stripped body.
-func checkDashes(path string, lines []string) []Diagnostic {
+func checkDashes(_ *Context, path string, lines []string) []Diagnostic {
 	stripped := stripComments(lines)
 	classes := texscan.Classify(stripped)
 	var diags []Diagnostic
@@ -47,7 +47,7 @@ func checkDashes(path string, lines []string) []Diagnostic {
 }
 
 // fixDashes rewrites raw lines applying every rule.
-func fixDashes(path string, lines []string) ([]string, bool) {
+func fixDashes(_ *Context, path string, lines []string) ([]string, bool) {
 	stripped := stripComments(lines)
 	classes := texscan.Classify(stripped)
 	changed := false

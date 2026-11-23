@@ -67,7 +67,7 @@ func findEqrefTieEdits(line string, mask []regionKind) []eqrefTieEdit {
 	}
 }
 
-func checkEqrefTie(path string, lines []string) []Diagnostic {
+func checkEqrefTie(_ *Context, path string, lines []string) []Diagnostic {
 	mask := regionMask(lines)
 	var diags []Diagnostic
 	for li, line := range lines {
@@ -85,7 +85,7 @@ func checkEqrefTie(path string, lines []string) []Diagnostic {
 // fixEqrefTie replaces the whitespace before each flagged \eqref with `~`
 // (inserting one when \eqref is glued to the preceding character). Comment
 // tails are preserved verbatim.
-func fixEqrefTie(path string, lines []string) ([]string, bool) {
+func fixEqrefTie(_ *Context, path string, lines []string) ([]string, bool) {
 	stripped := make([]string, len(lines))
 	for i, l := range lines {
 		stripped[i] = texscan.StripComment(l)

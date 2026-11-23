@@ -17,7 +17,7 @@ func TestBlockOnNewline_Detector(t *testing.T) {
 		`Some text\\`,                     // line 8: \\ at end of line → no flag
 		`Para break\newline`,              // line 9: \newline at end of line → no flag
 	}
-	diags := checkBlockOnNewline("t.tex", lines)
+	diags := checkBlockOnNewline(nil, "t.tex", lines)
 	wantLines := []int{1, 2, 4, 5}
 	if len(diags) != len(wantLines) {
 		t.Fatalf("got %d diags, want %d: %+v", len(diags), len(wantLines), diags)
@@ -38,7 +38,7 @@ func TestBlockOnNewline_MathSkipped(t *testing.T) {
 		`    g(x) \coloneqq c. \\`,
 		`\end{align}`,
 	}
-	diags := checkBlockOnNewline("t.tex", lines)
+	diags := checkBlockOnNewline(nil, "t.tex", lines)
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags inside math, got %d: %+v", len(diags), diags)
 	}
@@ -50,7 +50,7 @@ func TestBlockOnNewline_VerbatimSkipped(t *testing.T) {
 		`text \section{X} more`, // would normally flag, but inside verbatim
 		`\end{verbatim}`,
 	}
-	diags := checkBlockOnNewline("t.tex", lines)
+	diags := checkBlockOnNewline(nil, "t.tex", lines)
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags inside verbatim, got %d: %+v", len(diags), diags)
 	}
@@ -74,7 +74,7 @@ func TestBlockOnNewline_Fixer(t *testing.T) {
 		`clean line`,
 		`At end\\`,
 	}
-	out, changed := fixBlockOnNewline("t.tex", append([]string(nil), in...))
+	out, changed := fixBlockOnNewline(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
@@ -91,7 +91,7 @@ func TestBlockOnNewline_FixerPreservesComment(t *testing.T) {
 		`\section{A}`,
 		`\section{B} % trailing comment`,
 	}
-	out, changed := fixBlockOnNewline("t.tex", append([]string(nil), in...))
+	out, changed := fixBlockOnNewline(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
@@ -106,7 +106,7 @@ func TestBlockOnNewline_EndVerbatimMidLineFlagged(t *testing.T) {
 		`raw text`,
 		`\end{verbatim} trailing text`,
 	}
-	diags := checkBlockOnNewline("t.tex", lines)
+	diags := checkBlockOnNewline(nil, "t.tex", lines)
 	// `\end{verbatim}` is at column 0 — allowed even though "trailing text"
 	// follows on the same line (the env closer is leading, not trailing).
 	if len(diags) != 0 {
@@ -118,7 +118,7 @@ func TestBlockOnNewline_EndVerbatimMidLineFlagged(t *testing.T) {
 		`raw`,
 		`text \end{verbatim}`,
 	}
-	diags2 := checkBlockOnNewline("t.tex", lines2)
+	diags2 := checkBlockOnNewline(nil, "t.tex", lines2)
 	if len(diags2) != 1 || diags2[0].Line != 3 {
 		t.Errorf("expected 1 diag on line 3, got %+v", diags2)
 	}
@@ -130,7 +130,7 @@ func TestBlockOnNewline_NoFalsePositiveAtIndent(t *testing.T) {
 		`\begin{document}`,
 		`\end{document}`,
 	}
-	diags := checkBlockOnNewline("t.tex", lines)
+	diags := checkBlockOnNewline(nil, "t.tex", lines)
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags, got %d: %+v", len(diags), diags)
 	}
@@ -145,7 +145,7 @@ func TestBlockOnNewline_BraceGroupAllowed(t *testing.T) {
 		`{\begin{itemize}}`,
 		`  { \section{Foo}}`,
 	}
-	diags := checkBlockOnNewline("t.tex", lines)
+	diags := checkBlockOnNewline(nil, "t.tex", lines)
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags, got %d: %+v", len(diags), diags)
 	}

@@ -56,7 +56,7 @@ func findCiteTieEdits(line string, mask []regionKind) []citeTieEdit {
 	return edits
 }
 
-func checkCiteTie(path string, lines []string) []Diagnostic {
+func checkCiteTie(_ *Context, path string, lines []string) []Diagnostic {
 	mask := regionMask(lines)
 	var diags []Diagnostic
 	for li, line := range lines {
@@ -74,7 +74,7 @@ func checkCiteTie(path string, lines []string) []Diagnostic {
 // fixCiteTie replaces the whitespace before each flagged cite command with
 // `~` (inserting one when the command is glued to the preceding character).
 // Comment tails are preserved verbatim.
-func fixCiteTie(path string, lines []string) ([]string, bool) {
+func fixCiteTie(_ *Context, path string, lines []string) ([]string, bool) {
 	stripped := make([]string, len(lines))
 	for i, l := range lines {
 		stripped[i] = texscan.StripComment(l)

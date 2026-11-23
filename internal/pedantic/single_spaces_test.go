@@ -16,7 +16,7 @@ func TestSingleSpaces_Detector(t *testing.T) {
 		"\t\tindented with tab", // 6: leading tab ignored
 		"\\definecolor{x}     ", // 7: trailing alignment WS ignored
 	}
-	diags := checkSingleSpaces("t.tex", lines)
+	diags := checkSingleSpaces(nil, "t.tex", lines)
 	if len(diags) != 2 {
 		t.Fatalf("got %d diags, want 2: %v", len(diags), diags)
 	}
@@ -42,7 +42,7 @@ func TestSingleSpaces_Fixer(t *testing.T) {
 		"foo bar baz",
 		"\\foo bar     ", // body collapses, trailing run preserved
 	}
-	out, changed := fixSingleSpaces("t.tex", append([]string(nil), in...))
+	out, changed := fixSingleSpaces(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
@@ -61,10 +61,10 @@ func TestSingleSpaces_AlignmentTerminators(t *testing.T) {
 		"    citecolor   = PineGreen,",
 		"a   & b   & c \\\\",
 	}
-	if diags := checkSingleSpaces("t.tex", in); len(diags) != 0 {
+	if diags := checkSingleSpaces(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
-	out, changed := fixSingleSpaces("t.tex", append([]string(nil), in...))
+	out, changed := fixSingleSpaces(nil, "t.tex", append([]string(nil), in...))
 	if changed {
 		t.Errorf("expected no change, got:\n%q", out)
 	}
@@ -72,7 +72,7 @@ func TestSingleSpaces_AlignmentTerminators(t *testing.T) {
 
 func TestSingleSpaces_FixerNoChange(t *testing.T) {
 	in := []string{"clean line", "  indented", "% comment  only"}
-	_, changed := fixSingleSpaces("t.tex", append([]string(nil), in...))
+	_, changed := fixSingleSpaces(nil, "t.tex", append([]string(nil), in...))
 	if changed {
 		t.Error("expected changed=false for clean input (comment-only spaces ignored)")
 	}
@@ -85,7 +85,7 @@ func TestRunSourceFixes_SingleSpaces(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
-	modified, err := RunSourceFixes([]string{"single-spaces"}, []string{path})
+	modified, err := RunSourceFixes(nil, []string{"single-spaces"}, []string{path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestRunSourceFixes_NoOpWhenClean(t *testing.T) {
 	if err := os.WriteFile(path, []byte("clean line\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	modified, err := RunSourceFixes([]string{"single-spaces"}, []string{path})
+	modified, err := RunSourceFixes(nil, []string{"single-spaces"}, []string{path})
 	if err != nil {
 		t.Fatal(err)
 	}

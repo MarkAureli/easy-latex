@@ -19,7 +19,7 @@ func TestTrailingWhitespace_Detector(t *testing.T) {
 		"% bare comment   ",  // 9: trailing in pure-comment line
 		"x",                  // 10: clean
 	}
-	diags := checkTrailingWhitespace("t.tex", lines)
+	diags := checkTrailingWhitespace(nil, "t.tex", lines)
 	wantLines := []int{2, 3, 4, 6, 8, 9}
 	if len(diags) != len(wantLines) {
 		t.Fatalf("got %d diags, want %d: %v", len(diags), len(wantLines), diags)
@@ -36,7 +36,7 @@ func TestTrailingWhitespace_Detector(t *testing.T) {
 
 func TestTrailingWhitespace_PreCommentAlignmentNotFlagged(t *testing.T) {
 	lines := []string{"code   % comment"}
-	if diags := checkTrailingWhitespace("t.tex", lines); len(diags) != 0 {
+	if diags := checkTrailingWhitespace(nil, "t.tex", lines); len(diags) != 0 {
 		t.Errorf("pre-comment alignment must not be flagged: %v", diags)
 	}
 }
@@ -62,7 +62,7 @@ func TestTrailingWhitespace_Fixer(t *testing.T) {
 		"",
 		"",
 	}
-	out, changed := fixTrailingWhitespace("t.tex", append([]string(nil), in...))
+	out, changed := fixTrailingWhitespace(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
@@ -75,7 +75,7 @@ func TestTrailingWhitespace_Fixer(t *testing.T) {
 
 func TestTrailingWhitespace_FixerNoChange(t *testing.T) {
 	in := []string{"a", "b   c", "code   % comment", ""}
-	_, changed := fixTrailingWhitespace("t.tex", append([]string(nil), in...))
+	_, changed := fixTrailingWhitespace(nil, "t.tex", append([]string(nil), in...))
 	if changed {
 		t.Error("expected changed=false")
 	}
@@ -88,7 +88,7 @@ func TestRunSourceFixes_TrailingWhitespace(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
-	modified, err := RunSourceFixes([]string{"no-trailing-whitespace"}, []string{path})
+	modified, err := RunSourceFixes(nil, []string{"no-trailing-whitespace"}, []string{path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestRunSourceChecks_TrailingWhitespace_RawLines(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
-	diags := RunSourceChecks([]string{"no-trailing-whitespace"}, []string{path})
+	diags := RunSourceChecks(nil, []string{"no-trailing-whitespace"}, []string{path})
 	if len(diags) != 1 {
 		t.Fatalf("got %d diags, want 1: %v", len(diags), diags)
 	}

@@ -9,7 +9,7 @@ func TestSentenceTerminator_Basic(t *testing.T) {
 		`Is this a question`,              // flag
 		`Great, it works!`,                // ok
 	}
-	diags := checkSentenceTerminator("t.tex", lines)
+	diags := checkSentenceTerminator(nil, "t.tex", lines)
 	wantLines := []int{2, 3}
 	if len(diags) != len(wantLines) {
 		t.Fatalf("got %d diags, want %d: %+v", len(diags), len(wantLines), diags)
@@ -34,7 +34,7 @@ func TestSentenceTerminator_ExemptLeadingTokens(t *testing.T) {
 		`\hline`,
 		`\title{My Document}`,
 	}
-	diags := checkSentenceTerminator("t.tex", lines)
+	diags := checkSentenceTerminator(nil, "t.tex", lines)
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags, got %d: %+v", len(diags), diags)
 	}
@@ -45,7 +45,7 @@ func TestSentenceTerminator_CaptionChecked(t *testing.T) {
 		`\caption{Results for various settings without a period}`,
 		`\caption{Results for various settings with a period.}`,
 	}
-	diags := checkSentenceTerminator("t.tex", lines)
+	diags := checkSentenceTerminator(nil, "t.tex", lines)
 	if len(diags) != 1 || diags[0].Line != 1 {
 		t.Fatalf("got %+v, want single diag on line 1", diags)
 	}
@@ -56,7 +56,7 @@ func TestSentenceTerminator_CaptionWithTrailingLabel(t *testing.T) {
 		`\caption{Results for various settings.}\label{fig:results}`,
 		`\caption{Results for various settings}\label{fig:results2}`,
 	}
-	diags := checkSentenceTerminator("t.tex", lines)
+	diags := checkSentenceTerminator(nil, "t.tex", lines)
 	if len(diags) != 1 || diags[0].Line != 2 {
 		t.Fatalf("got %+v, want single diag on line 2", diags)
 	}
@@ -71,7 +71,7 @@ func TestSentenceTerminator_TrailingFootnoteAndCite(t *testing.T) {
 		`\footnote{This standalone footnote lacks a period}`, // flag: checks inside
 		`\footnote{This standalone footnote has a period.}`,  // ok
 	}
-	diags := checkSentenceTerminator("t.tex", lines)
+	diags := checkSentenceTerminator(nil, "t.tex", lines)
 	wantLines := []int{1, 3, 5}
 	if len(diags) != len(wantLines) {
 		t.Fatalf("got %d diags, want %d: %+v", len(diags), len(wantLines), diags)
@@ -182,7 +182,7 @@ func TestSentenceTerminator_MultiLineBraceGroups(t *testing.T) {
 
 func assertSentenceTerminatorLines(t *testing.T, lines []string, wantLines []int) {
 	t.Helper()
-	diags := checkSentenceTerminator("t.tex", lines)
+	diags := checkSentenceTerminator(nil, "t.tex", lines)
 	if len(diags) != len(wantLines) {
 		t.Fatalf("got %d diags, want %d: %+v", len(diags), len(wantLines), diags)
 	}
@@ -200,7 +200,7 @@ func TestSentenceTerminator_TrailingLineBreakExempt(t *testing.T) {
 		`Some forced break \newline`,
 		`continues here too.`,
 	}
-	diags := checkSentenceTerminator("t.tex", lines)
+	diags := checkSentenceTerminator(nil, "t.tex", lines)
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags, got %d: %+v", len(diags), diags)
 	}
@@ -216,7 +216,7 @@ func TestSentenceTerminator_MathAndVerbatimSkipped(t *testing.T) {
 		`\end{verbatim}`,
 		`Inline math ends the line $a = b$`, // flag: real text after math needs punctuation
 	}
-	diags := checkSentenceTerminator("t.tex", lines)
+	diags := checkSentenceTerminator(nil, "t.tex", lines)
 	if len(diags) != 1 || diags[0].Line != 7 {
 		t.Fatalf("got %+v, want single diag on line 7", diags)
 	}
@@ -229,7 +229,7 @@ func TestSentenceTerminator_TabularExempt(t *testing.T) {
 		`Total & 42`,
 		`\end{tabular}`,
 	}
-	diags := checkSentenceTerminator("t.tex", lines)
+	diags := checkSentenceTerminator(nil, "t.tex", lines)
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags, got %d: %+v", len(diags), diags)
 	}
@@ -240,7 +240,7 @@ func TestSentenceTerminator_EllipsisAllowed(t *testing.T) {
 		`And so on\ldots`,
 		`And so on…`,
 	}
-	diags := checkSentenceTerminator("t.tex", lines)
+	diags := checkSentenceTerminator(nil, "t.tex", lines)
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags, got %d: %+v", len(diags), diags)
 	}

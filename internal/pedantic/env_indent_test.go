@@ -26,7 +26,7 @@ func TestEnvIndent_NestedItemize(t *testing.T) {
 		`\end{itemize}`,
 		`\end{document}`,
 	}
-	out, changed := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, changed := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
@@ -47,7 +47,7 @@ func TestEnvIndent_DocumentBodyFlush(t *testing.T) {
 		`Hello world`,
 		`\end{document}`,
 	}
-	out, changed := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, changed := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
@@ -71,7 +71,7 @@ func TestEnvIndent_MathEnvIndents(t *testing.T) {
 		`\end{equation}`,
 		`\end{document}`,
 	}
-	out, _ := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, _ := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	if !reflect.DeepEqual(out, want) {
 		t.Errorf("got:\n%q\nwant:\n%q", out, want)
 	}
@@ -86,7 +86,7 @@ func TestEnvIndent_VerbatimUntouched(t *testing.T) {
 		`\end{verbatim}`,
 		`\end{document}`,
 	}
-	out, _ := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, _ := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	// body of verbatim and \end{verbatim} preserved exactly
 	if out[2] != `   weird  spacing  here` {
 		t.Errorf("verbatim body line modified: %q", out[2])
@@ -114,7 +114,7 @@ func TestEnvIndent_DisplayMathBrackets(t *testing.T) {
 		`\]`,
 		`\end{document}`,
 	}
-	out, _ := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, _ := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	if !reflect.DeepEqual(out, want) {
 		t.Errorf("got:\n%q\nwant:\n%q", out, want)
 	}
@@ -135,7 +135,7 @@ func TestEnvIndent_TabsInLeadingWSNormalized(t *testing.T) {
 		`\end{itemize}`,
 		`\end{document}`,
 	}
-	out, changed := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, changed := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
@@ -161,7 +161,7 @@ func TestEnvIndent_CommentOnlyLineIndented(t *testing.T) {
 		`\end{itemize}`,
 		`\end{document}`,
 	}
-	out, _ := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, _ := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	if !reflect.DeepEqual(out, want) {
 		t.Errorf("got:\n%q\nwant:\n%q", out, want)
 	}
@@ -177,7 +177,7 @@ func TestEnvIndent_BlankLinesUntouched(t *testing.T) {
 		`\end{itemize}`,
 		`\end{document}`,
 	}
-	out, _ := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, _ := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	if out[2] != `` {
 		t.Errorf("blank line modified: %q", out[2])
 	}
@@ -196,7 +196,7 @@ func TestEnvIndent_Detector(t *testing.T) {
 		`\end{itemize}`,               // line 6: depth 0, ok
 		`\end{document}`,              // line 7: ok
 	}
-	diags := checkEnvIndent("t.tex", lines)
+	diags := checkEnvIndent(nil, "t.tex", lines)
 	wantLines := []int{3, 5}
 	if len(diags) != len(wantLines) {
 		t.Fatalf("got %d diags, want %d: %+v", len(diags), len(wantLines), diags)
@@ -215,11 +215,11 @@ func TestEnvIndent_MultilineBraceArg(t *testing.T) {
 		`    arrows`,
 		`}`,
 	}
-	out, changed := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, changed := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	if changed {
 		t.Errorf("expected no change, got:\n%q", out)
 	}
-	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+	if diags := checkEnvIndent(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
 }
@@ -230,7 +230,7 @@ func TestEnvIndent_MultilineBraceArgWrongIndent(t *testing.T) {
 		`colorlinks = true,`,
 		`}`,
 	}
-	diags := checkEnvIndent("t.tex", in)
+	diags := checkEnvIndent(nil, "t.tex", in)
 	if len(diags) != 1 || diags[0].Line != 2 {
 		t.Errorf("expected 1 diag on line 2, got: %+v", diags)
 	}
@@ -239,7 +239,7 @@ func TestEnvIndent_MultilineBraceArgWrongIndent(t *testing.T) {
 		`    colorlinks = true,`,
 		`}`,
 	}
-	out, changed := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, changed := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
@@ -257,7 +257,7 @@ func TestEnvIndent_NewcommandWithBracketArg(t *testing.T) {
 		`}`,
 		`\makeatother`,
 	}
-	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+	if diags := checkEnvIndent(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
 }
@@ -270,7 +270,7 @@ func TestEnvIndent_NestedBraces(t *testing.T) {
 		`    }`,
 		`}`,
 	}
-	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+	if diags := checkEnvIndent(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
 }
@@ -286,7 +286,7 @@ func TestEnvIndent_BraceInsideEnv(t *testing.T) {
 		`\end{itemize}`,
 		`\end{document}`,
 	}
-	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+	if diags := checkEnvIndent(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
 }
@@ -297,7 +297,7 @@ func TestEnvIndent_EscapedBracesIgnored(t *testing.T) {
 		`a \{ b \} c`,
 		`d`,
 	}
-	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+	if diags := checkEnvIndent(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
 }
@@ -310,7 +310,7 @@ func TestEnvIndent_SquareBracketsNotTracked(t *testing.T) {
 		`stuff happens.`,
 		`More stuff.`,
 	}
-	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+	if diags := checkEnvIndent(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
 }
@@ -321,7 +321,7 @@ func TestEnvIndent_CommentedBraceIgnored(t *testing.T) {
 		`foo % opens here {`,
 		`bar`,
 	}
-	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+	if diags := checkEnvIndent(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
 }
@@ -337,7 +337,7 @@ func TestEnvIndent_BraceWrappedEndBody(t *testing.T) {
 		`{\end{subequations}}`,
 		`after`,
 	}
-	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+	if diags := checkEnvIndent(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
 }
@@ -355,7 +355,7 @@ func TestEnvIndent_InlineCasesInsideAlign(t *testing.T) {
 		`\end{align}`,
 		`after`,
 	}
-	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+	if diags := checkEnvIndent(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
 }
@@ -366,7 +366,7 @@ func TestEnvIndent_TwoBeginsOnOneLine(t *testing.T) {
 		`        body`,
 		`\end{inner}\end{outer}`,
 	}
-	if diags := checkEnvIndent("t.tex", in); len(diags) != 0 {
+	if diags := checkEnvIndent(nil, "t.tex", in); len(diags) != 0 {
 		t.Errorf("expected no diags, got: %+v", diags)
 	}
 }
@@ -379,7 +379,7 @@ func TestEnvIndent_PreambleAtDepthZero(t *testing.T) {
 		`Body.`,
 		`\end{document}`,
 	}
-	out, changed := fixEnvIndent("t.tex", append([]string(nil), in...))
+	out, changed := fixEnvIndent(nil, "t.tex", append([]string(nil), in...))
 	if changed {
 		t.Errorf("expected no change, got:\n%q", out)
 	}

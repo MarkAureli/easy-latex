@@ -97,7 +97,7 @@ var blockTokens = map[string]blockKind{
 	"\\cmidrule":   blockLeading,
 }
 
-func checkBlockOnNewline(path string, lines []string) []Diagnostic {
+func checkBlockOnNewline(_ *Context, path string, lines []string) []Diagnostic {
 	mask := regionMask(lines)
 	var diags []Diagnostic
 	for li, line := range lines {
@@ -112,7 +112,7 @@ func checkBlockOnNewline(path string, lines []string) []Diagnostic {
 	return diags
 }
 
-func fixBlockOnNewline(path string, lines []string) ([]string, bool) {
+func fixBlockOnNewline(_ *Context, path string, lines []string) ([]string, bool) {
 	stripped := make([]string, len(lines))
 	for i, l := range lines {
 		stripped[i] = texscan.StripComment(l)

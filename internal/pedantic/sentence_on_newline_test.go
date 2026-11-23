@@ -15,7 +15,7 @@ func TestSentenceOnNewline_Detector(t *testing.T) {
 		`Foo? Then Bar!`,                // line 6: ? → flag (capital after)
 		`Foo. bar continues`,            // line 7: lowercase after → no flag
 	}
-	diags := checkSentenceOnNewline("t.tex", lines)
+	diags := checkSentenceOnNewline(nil, "t.tex", lines)
 	wantLines := []int{1, 6}
 	if len(diags) != len(wantLines) {
 		t.Fatalf("got %d diags, want %d: %+v", len(diags), len(wantLines), diags)
@@ -32,7 +32,7 @@ func TestSentenceOnNewline_MathSkipped(t *testing.T) {
 		`Inline $f(x). G(x)$ stays inline`, // mid-math sentence → skip
 		`Display \[ a. B \] outside`,       // mid-display sentence → skip
 	}
-	diags := checkSentenceOnNewline("t.tex", lines)
+	diags := checkSentenceOnNewline(nil, "t.tex", lines)
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags inside math, got %d: %+v", len(diags), diags)
 	}
@@ -44,7 +44,7 @@ func TestSentenceOnNewline_VerbatimSkipped(t *testing.T) {
 		`Foo. Bar would normally flag`,
 		`\end{verbatim}`,
 	}
-	diags := checkSentenceOnNewline("t.tex", lines)
+	diags := checkSentenceOnNewline(nil, "t.tex", lines)
 	if len(diags) != 0 {
 		t.Errorf("expected 0 diags inside verbatim, got %d: %+v", len(diags), diags)
 	}
@@ -64,7 +64,7 @@ func TestSentenceOnNewline_Fixer(t *testing.T) {
 		`See e.g. Foo and Mr. Smith.`,
 		`Done.`,
 	}
-	out, changed := fixSentenceOnNewline("t.tex", append([]string(nil), in...))
+	out, changed := fixSentenceOnNewline(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
@@ -81,7 +81,7 @@ func TestSentenceOnNewline_FixerPreservesComment(t *testing.T) {
 		`Foo.`,
 		`Bar baz. % tail`,
 	}
-	out, changed := fixSentenceOnNewline("t.tex", append([]string(nil), in...))
+	out, changed := fixSentenceOnNewline(nil, "t.tex", append([]string(nil), in...))
 	if !changed {
 		t.Fatal("expected changed=true")
 	}
