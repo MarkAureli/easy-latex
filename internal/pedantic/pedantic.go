@@ -114,21 +114,9 @@ func Register(c Check) {
 	registry[c.Name] = c
 }
 
-// renamed maps retired check names to the check that replaced them, so
-// existing configs keep working.
-var renamed = map[string]string{"math-bare-word": "math-token-spacing"}
-
-// Canonical returns the current name of check name (itself unless retired).
-func Canonical(name string) string {
-	if n, ok := renamed[name]; ok {
-		return n
-	}
-	return name
-}
-
-// Known returns true if name is a registered check or a retired name of one.
+// Known returns true if name is a registered check.
 func Known(name string) bool {
-	_, ok := registry[Canonical(name)]
+	_, ok := registry[name]
 	return ok
 }
 
@@ -144,7 +132,7 @@ func AllNames() []string {
 
 // Get returns the check for the given name.
 func Get(name string) (Check, bool) {
-	c, ok := registry[Canonical(name)]
+	c, ok := registry[name]
 	return c, ok
 }
 
