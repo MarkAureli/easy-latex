@@ -43,6 +43,33 @@ var notUnits = map[string]bool{
 	"bigm": true, "Bigm": true, "biggm": true, "Biggm": true,
 }
 
+// textAccentSymbols are the control-symbol text accents (\"o, \'e, …), each
+// taking one argument. In tabbing, \' \` and \= are tab commands instead.
+var textAccentSymbols = map[byte]bool{'\'': true, '`': true, '^': true, '"': true, '~': true, '=': true, '.': true}
+
+const tabbingSymbols = "'`="
+
+// textAccentWords are letter-named text accents (\c c, \v s); like the symbol
+// accents they are only braced in prose, where they cannot be a math macro of
+// the same name.
+var textAccentWords = map[string]bool{"c": true, "v": true, "H": true, "u": true, "b": true, "d": true, "t": true, "r": true, "k": true}
+
+// zeroArgUnits are argument-free text letters that commonly form an
+// accent's argument (\'\i) even when the project table does not list them.
+var zeroArgUnits = map[string]bool{
+	"i": true, "j": true, "ae": true, "AE": true, "oe": true, "OE": true,
+	"aa": true, "AA": true, "o": true, "O": true, "l": true, "L": true, "ss": true,
+}
+
+// argKind selects how arguments are read.
+type argKind uint8
+
+const (
+	kindScript argKind = iota // ^ and _: one math field, any single token
+	kindMacro                 // macro: optional [...] skipped, no punctuation
+	kindAccent                // text accent: no options, no punctuation
+)
+
 // braceEdit replaces line[start:end] (optional whitespace plus a bare
 // argument token) by repl ("{token}").
 type braceEdit struct {
@@ -53,11 +80,21 @@ type braceEdit struct {
 
 // braceScanner finds bare arguments in one comment-stripped line.
 type braceScanner struct {
-	ctx  *Context
-	line string
-	cls  []texscan.Class
+	ctx     *Context
+	line    string
+	cls     []texscan.Class
+	math    []bool // byte lies in math (texscan.ClassifyMath)
+	tabbing bool   // inside a tabbing environment
 }
 
+// accentSymbol reports whether the control symbol at i (a backslash) is a text
+// accent here.
+func (s *braceScanner) accentSymbol(i int) bool {
+	if i+1 >= len(s.line) || !textAccentSymbols[s.line[i+1]] {
+		return false
+	}
+	return !s.tabbing || strings.IndexByte(tabbingSymbols, s.line[i+1]) < 0
+}
 
 // arity returns the mandatory-argument count of command name (0 if unknown).
 func (s *braceScanner) arity(name string) (int, bool) {
@@ -117,21 +154,22 @@ func (s *braceScanner) group(p int, open, close byte) int {
 
 // args scans n mandatory arguments starting at pos (right after a command or
 // a script character). Braced arguments are kept; bare ones become edits.
-// Optional [...] arguments are skipped for macros. ok is false when an
+// Optional [...] arguments are skipped for macros; accents only take prose
+// arguments. ok is false when an
 // argument is missing on this line or cannot be braced safely; the caller
 // then leaves the whole construct alone.
-func (s *braceScanner) args(pos, n int, macro bool) (edits []braceEdit, end int, ok bool) {
+func (s *braceScanner) args(pos, n int, kind argKind) (edits []braceEdit, end int, ok bool) {
 	for k := 0; k < n; {
 		p := s.skipBlanks(pos)
 		if p >= len(s.line) {
 			return nil, 0, false
 		}
-		if c := s.cls[p]; c == texscan.ClassOpaque || c == texscan.ClassVerbatim {
-			return nil, 0, false
+		if c := s.cls[p]; c == texscan.ClassOpaque || c == texscan.ClassVerbatim || kind == kindAccent && s.math[p] && !c.IsProse() {
+			return nil, 0, false // accents: text only (\text{\"o} in math is text)
 		}
 		switch s.line[p] {
 		case '[':
-			if !macro {
+			if kind != kindMacro {
 				break
 			}
 			e := s.group(p, '[', ']')
@@ -149,9 +187,14 @@ func (s *braceScanner) args(pos, n int, macro bool) (edits []braceEdit, end int,
 			k++
 			continue
 		}
-		unit, e, ok := s.unit(p, macro)
+		unit, e, ok := s.unit(p, kind)
 		if !ok {
 			return nil, 0, false
+		}
+		if endsInControlWord(s.line[p:e]) {
+			// TeX swallowed the blanks after \i in \'\i ez; once braced
+			// (\'{\i}ez) they would become a visible space.
+			e = s.skipBlanks(e)
 		}
 		edits = append(edits, braceEdit{start: pos, end: e, repl: "{" + unit + "}"})
 		pos = e
@@ -163,8 +206,9 @@ func (s *braceScanner) args(pos, n int, macro bool) (edits []braceEdit, end int,
 // unit returns the normalised text and end of the single-token argument at
 // p: a control sequence together with its own (recursively braced)
 // arguments, a macro parameter, one ASCII letter or digit, one UTF-8
-// character, or (for scripts only) one other ASCII character.
-func (s *braceScanner) unit(p int, macro bool) (string, int, bool) {
+// character, or (for scripts only) one other ASCII character. A text accent
+// symbol counts as a control sequence with one argument (\textbf\"o).
+func (s *braceScanner) unit(p int, kind argKind) (string, int, bool) {
 	c := s.line[p]
 	switch {
 	case c == '\\':
@@ -175,6 +219,9 @@ func (s *braceScanner) unit(p int, macro bool) (string, int, bool) {
 			if strings.IndexByte("\\ ", s.line[p+1]) >= 0 {
 				return "", 0, false
 			}
+			if s.accentSymbol(p) {
+				return s.withArgs(p, p+2, 1, kindAccent)
+			}
 			return s.line[p : p+2], p + 2, true
 		}
 		name, end := s.csName(p)
@@ -182,17 +229,17 @@ func (s *braceScanner) unit(p int, macro bool) (string, int, bool) {
 			return "", 0, false
 		}
 		n, known := s.arity(name)
-		if !known {
+		if !known && !zeroArgUnits[name] {
 			return "", 0, false // might consume more tokens
 		}
 		if n == 0 {
 			return s.line[p:end], end, true
 		}
-		edits, e, ok := s.args(end, n, true)
-		if !ok {
-			return "", 0, false
+		k := kindMacro
+		if textAccentWords[name] {
+			k = kindAccent
 		}
-		return applyBraceEdits(s.line[p:e], edits, p), e, true
+		return s.withArgs(p, end, n, k)
 	case c == '#':
 		if p+1 < len(s.line) && s.line[p+1] >= '1' && s.line[p+1] <= '9' {
 			return s.line[p : p+2], p + 2, true
@@ -203,10 +250,30 @@ func (s *braceScanner) unit(p int, macro bool) (string, int, bool) {
 	case c >= utf8.RuneSelf:
 		_, size := utf8.DecodeRuneInString(s.line[p:])
 		return s.line[p : p+size], p + size, true
-	case macro || strings.IndexByte("{}$&%^_~", c) >= 0 || c < ' ':
+	case kind != kindScript || strings.IndexByte("{}$&%^_~", c) >= 0 || c < ' ':
 		return "", 0, false
 	}
 	return s.line[p : p+1], p + 1, true
+}
+
+// endsInControlWord reports whether unit ends with a control word (\alpha),
+// after which TeX ignores blanks.
+func endsInControlWord(unit string) bool {
+	j := len(unit)
+	for j > 0 && isASCIILetter(unit[j-1]) {
+		j--
+	}
+	return j < len(unit) && j > 0 && unit[j-1] == '\\' && (j < 2 || unit[j-2] != '\\')
+}
+
+// withArgs returns the unit consisting of the command at p..end plus its n
+// arguments, bare ones braced.
+func (s *braceScanner) withArgs(p, end, n int, kind argKind) (string, int, bool) {
+	edits, e, ok := s.args(end, n, kind)
+	if !ok {
+		return "", 0, false
+	}
+	return applyBraceEdits(s.line[p:e], edits, p), e, true
 }
 
 // edits returns the non-overlapping brace edits of the line, in order.
@@ -226,6 +293,11 @@ func (s *braceScanner) edits() []braceEdit {
 		switch c := s.line[i]; c {
 		case '\\':
 			if i+1 < len(s.line) && !isASCIILetter(s.line[i+1]) {
+				if s.cls[i] == texscan.ClassMarkup && s.accentSymbol(i) {
+					if es, _, ok := s.args(i+2, 1, kindAccent); ok {
+						add(es, `argument of \`+s.line[i+1:i+2])
+					}
+				}
 				i++ // control symbol (\$, \^, \\, …)
 				continue
 			}
@@ -236,7 +308,11 @@ func (s *braceScanner) edits() []braceEdit {
 			}
 			if s.cls[i] == texscan.ClassMarkup && !verbatimArgCmds[name] {
 				if n, _ := s.arity(name); n > 0 {
-					if es, _, ok := s.args(end, n, true); ok {
+					kind := kindMacro
+					if textAccentWords[name] {
+						kind = kindAccent
+					}
+					if es, _, ok := s.args(end, n, kind); ok {
 						add(es, `argument of \`+name)
 					}
 				}
@@ -254,7 +330,7 @@ func (s *braceScanner) edits() []braceEdit {
 			if c == '_' {
 				what = "subscript"
 			}
-			if es, _, ok := s.args(i+1, 1, false); ok {
+			if es, _, ok := s.args(i+1, 1, kindScript); ok {
 				add(es, what)
 			}
 		}
@@ -284,10 +360,19 @@ func applyBraceEdits(text string, edits []braceEdit, off int) string {
 }
 
 func bracedArgEdits(ctx *Context, stripped []string) [][]braceEdit {
-	classes := texscan.Classify(stripped)
+	classes, maths := texscan.ClassifyMath(stripped)
 	out := make([][]braceEdit, len(stripped))
+	tabbing := false
 	for i, line := range stripped {
-		out[i] = (&braceScanner{ctx: ctx, line: line, cls: classes[i]}).edits()
+		// A line opening or closing tabbing counts as inside (conservative).
+		opens := strings.Contains(line, `\begin{tabbing}`)
+		out[i] = (&braceScanner{ctx: ctx, line: line, cls: classes[i], math: maths[i], tabbing: tabbing || opens}).edits()
+		if opens {
+			tabbing = true
+		}
+		if strings.Contains(line, `\end{tabbing}`) {
+			tabbing = false
+		}
 	}
 	return out
 }

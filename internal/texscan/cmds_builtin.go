@@ -35,6 +35,10 @@ var BuiltinCmdArgs = map[string]int{
 	"phantom": 1, "hphantom": 1, "vphantom": 1, "smash": 1,
 	"mathclap": 1, "mathllap": 1, "mathrlap": 1, "clap": 1, "llap": 1, "rlap": 1,
 
+	// Letter-named text accents (\c c, \v s); the symbol accents (\"o) are
+	// not command names and are handled by the braced-args check directly.
+	"c": 1, "v": 1, "H": 1, "u": 1, "b": 1, "d": 1, "t": 1, "r": 1, "k": 1,
+
 	// Boxes and colour.
 	"mbox": 1, "makebox": 1, "fbox": 1, "framebox": 1, "parbox": 2,
 	"raisebox": 2, "scalebox": 2, "resizebox": 3, "rotatebox": 2,

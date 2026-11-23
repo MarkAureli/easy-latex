@@ -39,6 +39,15 @@ func TestBracedArgs_Fix(t *testing.T) {
 		{`\section*A`, `\section*{A}`},
 		{`$\xfoo* a[b] c$`, `$\xfoo*{a}[b]{c}$`},
 		{`$x$ % \frac12 in a comment`, `$x$ % \frac12 in a comment`},
+		// Text accents.
+		{`Schr\"odinger, G\" odel, Erd\H os`, `Schr\"{o}dinger, G\"{o}del, Erd\H{o}s`},
+		{"\\'e \\`a \\^o \\~n \\=a \\.z \\c c \\v s \\u g \\k a \\r a", "\\'{e} \\`{a} \\^{o} \\~{n} \\={a} \\.{z} \\c{c} \\v{s} \\u{g} \\k{a} \\r{a}"},
+		{`Ni\'\i ez \'ä`, `Ni\'{\i}ez \'{ä}`},
+		{`\textbf\ae x and \textbf\" o x`, `\textbf{\ae}x and \textbf{\"{o}} x`},
+		{`$x^\alpha b$`, `$x^{\alpha}b$`},
+		{`\textbf\"o and \emph{\'e}`, `\textbf{\"{o}} and \emph{\'{e}}`},
+		{`\section{Schr\"odinger}`, `\section{Schr\"{o}dinger}`},
+		{`$\text{G\"odel}$`, `$\text{G\"{o}del}$`},
 	}
 	for _, c := range cases {
 		got, _ := fixBracedArgs(bracedCtx(), "t.tex", []string{c.in})
@@ -52,14 +61,18 @@ func TestBracedArgs_LeftAlone(t *testing.T) {
 	for _, in := range []string{
 		`\url|a_b| \verb|x^2| \label{a_b} \includegraphics{fig_1}`,
 		`$\not= \left( x \right) \big( a^{\left(} $`,
-		`$a^^M$ \^o \$x^2`,
-		`$x^\unknown a$`,              // unknown command might take more tokens
-		`$\frac{1}$`,                  // second argument on the next line
-		`\textbf|x|`,                  // punctuation is never a macro argument
-		`\newcommand\R{\mathbb R}`,    // definition bodies are opaque
-		`\def\foo#1{\hat#1}`,          //
-		`$\text{a_b x^2}$`,            // prose inside math
-		`$x^{\frac12}$ is fixed, $y$`, // (nested: only \frac)
+		`$a^^M$ \$x^2`,
+		`G\"{o}del, Ma\~{n}ana, \'{\i}, \c{c}`, // already braced
+		`$\d x \b v \v s$`,                     // letter accents only in prose
+		"\\begin{tabbing} A \\= B \\' C \\` D", // tabbing: \= \' \` are tab commands
+		`\"[x] \'$x$`,                          // no options, punctuation or math``
+		`$x^\unknown a$`,                       // unknown command might take more tokens
+		`$\frac{1}$`,                           // second argument on the next line
+		`\textbf|x|`,                           // punctuation is never a macro argument
+		`\newcommand\R{\mathbb R}`,             // definition bodies are opaque
+		`\def\foo#1{\hat#1}`,                   //
+		`$\text{a_b x^2}$`,                     // prose inside math
+		`$x^{\frac12}$ is fixed, $y$`,          // (nested: only \frac)
 	} {
 		lines := []string{in}
 		diags := checkBracedArgs(bracedCtx(), "t.tex", lines)
@@ -103,7 +116,7 @@ func TestBracedArgs_Idempotent(t *testing.T) {
 }
 
 func TestBracedArgs_RandomIdempotent(t *testing.T) {
-	toks := []string{`$`, `\[`, `\]`, `^`, `_`, `{`, `}`, `[`, `]`, ` `, `a`, `1`, `+`, `*`, `ä`, `\frac`, `\mathbb`, `\sqrt`, `\hat`, `\alpha`, `\text`, `\textbf`, `\section*`, `\xfoo*`, `\left(`, `\right)`, `\not`, `\unknown`, `\,`, `\\`, `%`, `\url|`, `|`}
+	toks := []string{`$`, `\[`, `\]`, `^`, `_`, `{`, `}`, `[`, `]`, ` `, `a`, `1`, `+`, `*`, `ä`, `\frac`, `\mathbb`, `\sqrt`, `\hat`, `\alpha`, `\text`, `\textbf`, `\section*`, `\xfoo*`, `\left(`, `\right)`, `\not`, `\unknown`, `\,`, `\\`, `%`, `\url|`, `|`, `\"`, "\\'", `\i`, `\c`, `\begin{tabbing}`, `\end{tabbing}`, `\textbf`, `x`}
 	rng := rand.New(rand.NewSource(7))
 	for it := 0; it < 20000; it++ {
 		var b strings.Builder
