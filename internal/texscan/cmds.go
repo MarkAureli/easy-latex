@@ -200,12 +200,18 @@ func storedCmdArgs(path string) map[string]int {
 	return out
 }
 
-// StoredCmdArgs returns BuiltinCmdArgs overlaid by the non-zero entries of the
-// command table at path. A missing file yields the built-in table alone.
-// Cheap; used by el lsp, whose on-save refresh keeps declarations in the table.
+// StoredCmdArgs returns BuiltinCmdArgs overlaid by the command table at path,
+// except that a stored 0 never overrides a built-in count. A missing file
+// yields the built-in table alone. Stored zeros are kept otherwise so that
+// argument-free commands (\alpha) are known. Cheap; used by el lsp, whose
+// on-save refresh keeps declarations in the table.
 func StoredCmdArgs(path string) map[string]int {
 	out := maps.Clone(BuiltinCmdArgs)
-	maps.Copy(out, storedCmdArgs(path))
+	for name, n := range LoadTable[int](path) {
+		if _, builtin := out[name]; n > 0 || !builtin {
+			out[name] = n
+		}
+	}
 	return out
 }
 
